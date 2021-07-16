@@ -46,29 +46,33 @@ template(name="applicationLayout")
       .container
         .row
           .col-lg-12.text-center
-            h2 About
+            h2 roborally
             hr.star-light
+            p
+            | &nbsp;
         .row
-          .col-lg-4.col-lg-offset-2
+          .col-lg-12.text-center
             p
-              | This is an unofficial fansite!
-          .col-lg-4
-            p
-              | Based on Marcel Panse work at www.roborally.com.
+              | Based on Marcel Panse's work at
               br
-              | Get the source on
-              a(href='https://github.com/blinkingnoise/roborally').btn.btn-primary.btn-lg GitHub
-          .row
-            .col-lg-12.text-center
-              h2 Version
-              hr.star-light
-              .row
-                .col-lg-4.col-lg-offset-2
-                  p
-                    | #{appVersion}
-                .col.lg-4
-                  p
-                   a(href='https://github.com/blinkingnoise/roborally/commits/master', target="_blank").btn.btn-primary.btn-lg change log
+              | www.roborally.com
+            p
+            | &nbsp;
+        .row
+          .col-lg-12.text-center
+            h3 Version
+            hr.star-light
+            p
+            | #{appVersion}
+            p
+            | &nbsp;
+        .row
+          .col-lg-12.text-center
+            h3 Source
+            hr.star-light
+            p
+            a(href='https://github.com/ben-morin/roborally').btn.btn-primary.btn-lg GitHub
+            a(href='https://github.com/ben-morin/roborally/commits/master', target="_blank").btn.btn-primary.btn-lg change log
   // Footer
   #fb-root
   footer.text-center

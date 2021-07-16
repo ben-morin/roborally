@@ -9,22 +9,21 @@ services:
       - 27017
     networks:
       - rrnet
-
+  
   roborally:
     restart: unless-stopped
-    build: .
-    image: dev/roborally
+    image: ben-morin/roborally
     container_name: roborally
     ports:
-      - 3000:3000
+        - 3000:3000
     depends_on:
-      - mongo
+        - mongo
     environment:
-      - MONGO_URL=mongodb://mongo:27017/roborally
-      - ROOT_URL=http://localhost:3000
+        - MONGO_URL=mongodb://mongo:27017/roborally
+        - ROOT_URL=http://localhost:3000
     networks:
-      - rrnet
-
+        - rrnet
+    
 networks:
   rrnet:
     driver: bridge

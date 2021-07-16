@@ -4,7 +4,9 @@
   "description": "RoboRally\r =========",
   "main": "client/main.js",
   "dependencies": {
-    "@babel/runtime": "^7.12.13"
+    "@babel/runtime": "^7.12.13",
+    "bcrypt": "^5.0.1",
+    "caniuse-lite": "^1.0.30001244"
   },
   "devDependencies": {},
   "scripts": {
@@ -12,12 +14,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/blinkingnoise/roborally.git"
+    "url": "git+https://github.com/ben-morin/roborally.git"
   },
   "author": "",
   "license": "GPL-2.0",
   "bugs": {
-    "url": "https://github.com/blinkingnoise/roborally/issues"
+    "url": "https://github.com/ben-morin/roborally/issues"
   },
-  "homepage": "https://github.com/blinkingnoise/roborally#readme"
+  "homepage": "https://github.com/ben-morin/roborally#readme"
 }
