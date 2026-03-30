@@ -1,0 +1,40 @@
+$grid-breakpoints: (
+        xs: 0,
+        md: 768px,
+        lg: 992px,
+        xl: 1200px,
+);
+
+$container-max-widths: (
+        md: 767px,
+        lg: 991px,
+        xl: 1199px,
+);
+
+$nav-bg-color: #2c3e50;
+$nav-fg-color: #ecf0f1;
+
+$nav-link-color: rgba(255, 255, 255, 0.55);
+$nav-link-hover: rgba(255, 255, 255, 0.75);
+$nav-additional-link-color: #596595;
+$nav-additional-link-hover: #7580ac;
+$nav-additional-link-box-shadow: 0 0 0 0.25rem rgba(51, 122, 183, 0.25);
+
+$main-bg-color: #70B9B0;
+$main-fg-color: #fff;
+
+$footer-bg-color: #233140;
+
+$primary: #337ab7;
+$danger: #8F1402;
+
+$small-text-color: #aaa;
+
+$checkpoint-color: #336699;
+$checkpoint-visited: #449d44;
+
+$countdown-bg-color: #780300;
+$finish-bg-color: #aa0500;
+
+$tile-size: 50px;
+$preview-tile-size: 24px;

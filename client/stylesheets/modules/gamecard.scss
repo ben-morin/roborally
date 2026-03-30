@@ -1,0 +1,251 @@
+@use "sass:math";
+
+$card-height: math.div(153, 99);
+
+.gamecard {
+  width: 20%;
+  aspect-ratio: 99 / 153;
+  margin: 1% 0;
+  display: inline-block;
+  vertical-align: top;
+  background-size: 100%;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .2s ease-in-out;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &.step-forward {
+    background-image: url('/cards/f1.png');
+  }
+
+  &.step-forward-2 {
+    background-image: url('/cards/f2.png');
+  }
+
+  &.step-forward-3 {
+    background-image: url('/cards/f3.png');
+  }
+
+  &.turn-right {
+    background-image: url('/cards/r.png');
+  }
+
+  &.turn-left {
+    background-image: url('/cards/l.png');
+  }
+
+  &.step-backward {
+    background-image: url('/cards/b.png');
+  }
+
+  &.u-turn {
+    background-image: url('/cards/u.png');
+  }
+
+  &.empty {
+    width: 19%;
+    margin-left: 0.5%;
+    margin-right: 0.5%;
+    border: 1px dashed #e3e3e3;
+    border-radius: 5px;
+    opacity: 0.7;
+  }
+
+  &.powerdown {
+    width: 19%;
+    margin-left: 0.5%;
+    margin-right: 0.5%;
+    border: 2px solid #000;
+    background: #e3e3e3;
+    border-radius: 5px;
+    opacity: 0.7;
+
+    .fa {
+      color: #b40a24;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1rem;
+    }
+  }
+
+  &.announce-move {
+    position: absolute;
+    overflow: visible;
+    aspect-ratio: 99 / 153;
+  }
+
+  &.covered {
+    width: 19%;
+    /* margin-left: 1%; */
+    border: 1px solid #e3e3e3;
+    border-radius: 5px;
+    background-color: #000;
+    opacity: 0.7;
+  }
+
+  &.random {
+    width: 19%;
+    margin-left: 0.5%;
+    margin-right: 0.5%;
+    border: 1px solid #e3e3e3;
+    border-radius: 5px;
+    background-color: #780300;
+  }
+
+  &.damage {
+    width: 19%;
+    margin-left: 0.5%;
+    margin-right: 0.5%;
+    border: 1px dashed #e3e3e3;
+    border-radius: 5px;
+    opacity: 0.7;
+    background-color: #777;
+    background-image: url('/damage-token.png');
+    background-repeat: no-repeat;
+    background-position: center center;
+
+    &:hover {
+      transform: none;
+    }
+  }
+
+  &.locked {
+    &:hover {
+      transform: none;
+    }
+  }
+
+  .priority-wrapper {
+    position: absolute;
+    top: 7%;
+    right: 9%;
+    width: 45%;
+    height: 15%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: inline-size;
+  }
+
+  span.priority {
+    font-size: 31cqi;
+    color: #e5d839;
+    line-height: 1;
+  }
+
+  img.locked {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  &.selected {
+    background: #449d44;
+  }
+}
+
+.smallhand {
+  text-align: center;
+  clear: both;
+  margin-bottom: 1rem;
+
+  .gamecard {
+    &:hover {
+      transform: none;
+    }
+
+    width: 13%;
+    margin-left: 1%;
+
+    span.priority {
+      font-size: 18cqi;
+    }
+  }
+}
+
+.hand {
+  margin-bottom: 1rem;
+}
+
+.playing {
+  margin-bottom: 1rem;
+}
+
+.badge-wrapper {
+  flex-basis: 100%;
+}
+
+h5.player-status {
+  text-align: center;
+  font-weight: 400;
+  font-size: 100%;
+  margin: 0.5rem 0;
+}
+.play-buttons {
+    margin-bottom: 1em;
+
+  a {
+    margin-bottom: 0.5em;
+  }
+}
+
+.fa-heart, .fa-heart-o {
+  color: #B40A24;
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.next-checkpoint {
+  width: 20%;
+  font-size: 16px;
+  text-align: left;
+
+  img.finish {
+    display: inline-block;
+    background: none;
+    width: 35px;
+    height: 35px;
+    margin: 0;
+  }
+
+  .checkpoint {
+    background-color: #336699;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    text-align: center;
+    display: inline-block;
+  }
+}
+
+.option-cards h6 {
+  font-size: 80%;
+}
+
+.option-cards {
+  margin-bottom: 1rem;
+}
+
+.option-card {
+  text-size: 80%;
+  display: inline-block;
+  padding: 5px;
+  margin-left: 10px;
+  border: 1px solid #fff;
+}
+
+.player-robot {
+}
+
+.other-robot {
+  margin: 0.5em 0;
+  padding: 0.5em 0;
+  background-color: rgba(200, 200, 200, .05);
+  border-radius: 20px;
+}

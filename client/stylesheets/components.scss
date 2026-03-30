@@ -1,0 +1,103 @@
+@import "variables.scss";
+
+.btn:focus,
+.btn:active,
+.btn.active {
+  outline: 0;
+}
+
+hr.star-light,
+hr.star-well {
+  margin: 0.5em auto -0.5em;
+  padding: 0;
+  max-width: 250px;
+  border: 0;
+  border-top: solid 5px;
+  text-align: center;
+}
+
+hr.star-light:after,
+hr.star-well:after {
+  content: "\2605";
+  display: inline-block;
+  position: relative;
+  top: -.8em;
+  padding: 0 1.25em;
+  font-family: sans-serif;
+  font-size: 2em;
+}
+
+hr.star-light {
+  border-color: $main-fg-color;
+
+  &:after {
+    color: $main-fg-color;
+    background-color: $main-bg-color;
+  }
+}
+
+hr.star-well {
+  color: $main-fg-color;
+  border-color: $main-fg-color;
+
+  &:after {
+    color: $main-fg-color;
+    background-color: $nav-bg-color;
+  }
+}
+
+#login-buttons {
+  padding-top: 15px;
+  padding-bottom: 15px;
+  padding-left: 15px;
+}
+
+.navbar-dark #login-buttons {
+  #login-dropdown-list {
+    top: 100%;
+    margin-top: 1em;
+  }
+
+  a.login-close-text {
+    display: none;
+  }
+
+  a {
+    color: $nav-link-color;
+
+    &:hover,
+    &:focus {
+      color: $nav-link-hover;
+    }
+  }
+
+  .login-button-white {
+    color: #333;
+    background-color: #fff;
+    border-color: #ccc;
+    font-weight: 400;
+
+    &:hover {
+      color: #333;
+      background-color: #e6e6e6;
+      border-color: #adadad;
+      font-weight: 400;
+    }
+  }
+}
+
+#login-buttons .additional-link-container {
+  a {
+    color: $nav-additional-link-color;
+
+    &:hover,
+    &:focus {
+      color: $nav-additional-link-hover;
+    }
+
+    &:focus-visible {
+      outline: 0;
+      box-shadow: $nav-additional-link-box-shadow;
+    }
+  }
+}

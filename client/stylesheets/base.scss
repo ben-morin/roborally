@@ -1,0 +1,51 @@
+@import "variables.scss";
+
+body {
+  overflow-x: scroll;
+  font-size: 14px;
+  line-height: 1.42857143;
+  background-color: $nav-bg-color;
+}
+
+p {
+  font-size: 20px;
+}
+
+p.small {
+  font-size: 16px;
+}
+
+a {
+  text-decoration: none;
+}
+
+a,
+a:hover,
+a:focus,
+a:active,
+a.active {
+  outline: 0;
+  color: $main-bg-color;
+}
+
+h1,
+h2,
+h3 {
+  text-transform: uppercase;
+  font-family: Montserrat, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  margin-top: 1em;
+}
+
+.form-control::placeholder {
+  color: $small-text-color;
+}
+
+.tutorial {
+  margin: 5px 0;
+}
+
+.custom-wrapper {
+  width: 100%;
+  min-width: 768px;
+}

@@ -1,0 +1,40 @@
+services:
+  mongo:
+    restart: unless-stopped
+    image: mongo:7.0
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - rrnet
+
+  roborally:
+    restart: unless-stopped
+    image: yieldtoben/roborally:3.4.0
+    container_name: roborally
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/roborally
+      - ROOT_URL=http://localhost:3000
+#      - MAIL_URL=smtp://user:password@mailhost:port
+      - >
+        METEOR_SETTINGS={
+          "ALLOWED_EMAILS": [],
+          "ALLOWED_DOMAINS": [],
+          "VERIFY_EMAILS": false,
+          "MAIL_FROM": ""
+      }
+    networks:
+      - rrnet
+
+volumes:
+  mongo-data:
+
+networks:
+  rrnet:
+    driver: bridge

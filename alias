@@ -1,0 +1,2 @@
+alias clean='rm -rf _build .meteor/local'
+alias cleanx='rm -rf _build .meteor/local node_modules package-lock.json'

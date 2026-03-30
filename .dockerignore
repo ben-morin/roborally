@@ -1,0 +1,16 @@
+**/.DS_Store
+.idea/**
+*.iml
+workspace.code-workspace
+**/node_modules/**
+**/.meteor/local
+npm-debug.log
+*.local.json
+*.local.md
+settings-dev.json
+
+.gitignore
+.git
+Dockerfile
+Dockerfile.dev
+docker-compose-dev.yml

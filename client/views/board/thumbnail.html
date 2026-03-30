@@ -1,0 +1,8 @@
+<template name="thumbnail">
+  <h4>{{board.title}}</h4>
+  <div class="pointer board-thumbnail {{extra_class}}" id="{{board.name}}" style="width: {{width}}px; height: {{height}}px;">
+    {{> _tiles rows=board.tiles show_start=board.max_player}}
+  </div>
+  <span class="players">Players: {{board.min_player}} - {{board.max_player}}</span>
+  <span class="length">Length: {{board.length}}</span>
+</template>

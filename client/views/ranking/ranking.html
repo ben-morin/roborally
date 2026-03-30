@@ -1,0 +1,18 @@
+<template name="ranking">
+  <div class="chat card card-body">
+      <div class="highscores">
+        <h2>Most games played</h2>
+        <hr class="star-well">
+        {{#each mostPlayed}}
+          <p>{{rank}}. {{name}} ({{value}})</p>
+        {{/each}}
+        <br>
+        <h2>Most games won</h2>
+        <hr class="star-well">
+        {{#each mostWon}}
+          <p>{{rank}}. {{name}} ({{value}})</p>
+        {{/each}}
+        <br>
+      </div>
+  </div>
+</template>

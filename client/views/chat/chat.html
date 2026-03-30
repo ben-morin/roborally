@@ -1,0 +1,35 @@
+<template name="chat">
+  <div class="chat card card-body">
+    <h3>Chat</h3>
+    <hr class="star-well">
+    <div class="messages">
+      {{#each messages}}
+        {{#if author}}
+          <div>[{{timeToStr submitted}}] {{author}}: {{message}}</div>
+        {{else}}
+          <div class="system">[{{timeToStr submitted}}] {{message}}</div>
+        {{/if}}
+      {{/each}}
+    </div>
+  </div>
+  <form class="d-flex justify-content-center m-2" role="form">
+    <div class="me-2">
+      <input type="hidden" name="gameId" value="{{gameId}}">
+      <input class="form-control form-control-lg" name="message" type="text" value="" placeholder="Enter a message">
+    </div>
+    <input class="btn btn-primary btn-lg" type="submit" value="Send">
+  </form>
+  {{#if gameEnded}}
+    <div class="exit">
+      <a class="btn btn-danger cancel">Close game</a>
+    </div>
+  {{else if inGame}}
+    <div class="exit">
+      <a class="btn btn-danger cancel">Leave game</a>
+    </div>
+  {{else if viewingGame}}
+    <div class="exit">
+      <a class="btn btn-danger cancel">Close game</a>
+    </div>
+  {{/if}}
+</template>
