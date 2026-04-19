@@ -46,7 +46,6 @@ htmljs@2.0.1
 id-map@1.2.0
 inter-process-messaging@0.1.2
 jquery@3.0.2
-launch-screen@2.0.1
 less@4.1.1
 linto:fontawesome@4.2.6
 localstorage@1.2.1
@@ -58,8 +57,6 @@ minifier-js@3.1.0
 minimongo@2.0.5
 mizzao:timesync@1.0.0-beta.1
 mizzao:user-status@2.0.0-rc.2
-mobile-experience@1.1.2
-mobile-status-bar@1.1.1
 modern-browsers@0.2.3
 modules@0.20.3
 modules-runtime@0.13.2
