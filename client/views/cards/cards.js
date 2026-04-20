@@ -207,6 +207,28 @@ Template.cards.helpers({
   }
 });
 
+Template.card.onRendered(function () {
+  const instance = this;
+  const update = () => {
+    const card = instance.find('.gamecard');
+    if (card) {
+      card.style.setProperty('--card-w', card.offsetWidth + 'px');
+    }
+  };
+  update();
+  const card = instance.find('.gamecard');
+  if (card && typeof ResizeObserver !== 'undefined') {
+    instance._cardResizeObserver = new ResizeObserver(update);
+    instance._cardResizeObserver.observe(card);
+  }
+});
+
+Template.card.onDestroyed(function () {
+  if (this._cardResizeObserver) {
+    this._cardResizeObserver.disconnect();
+  }
+});
+
 Template.card.helpers({
   emptyCard: function () {
     return this.type === 'empty';
