@@ -10,9 +10,9 @@ Meteor.methods({
       throw new Meteor.Error(303, 'Name cannot be empty.');
     }
     var author = getUsername(user);
-    // pick out the whitelisted keys
 
-    var game = _.extend(_.pick(postAttributes, 'name'), {
+    var game = {
+      name: postAttributes.name,
       userId: user._id,
       author: author,
       submitted: new Date().getTime(),
@@ -25,7 +25,7 @@ Meteor.methods({
       waitingForRespawn: [],
       announce: false,
       cardsToPlay: []
-    });
+    };
     var board_id = BoardBox.getBoardId(game.name);
     if (board_id >= 0)
       game.boardId = board_id;
@@ -206,12 +206,13 @@ Meteor.methods({
       throw new Meteor.Error(401, "You need to login to post messages");
 
     var author = getUsername(user);
-    // pick out the whitelisted keys
-    var message = _.extend(_.pick(postAttributes, 'message', 'gameId'), {
+    var message = {
+      message: postAttributes.message,
+      gameId: postAttributes.gameId,
       userId: user._id,
       author: author,
       submitted: new Date().getTime()
-    });
+    };
     await Chat.insertAsync(message);
   },
   

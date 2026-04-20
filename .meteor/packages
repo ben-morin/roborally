@@ -21,7 +21,6 @@ accounts-password@3.2.2
 mizzao:user-status@2.0.0-rc.2
 linto:fontawesome
 session@1.2.2
-underscore
 fourseven:scss
 coffeescript@2.7.0
 
@@ -31,6 +30,6 @@ mrt:moment
 jquery@3.0.2
 ostrio:flow-router-extra
 email
-mizzao:timesync@1.0.0-beta.1
-quave:synced-cron
+mizzao:timesync@1.0.0-beta.2
+quave:synced-cron@2.4.0
 ben-morin:synced-cron-global
