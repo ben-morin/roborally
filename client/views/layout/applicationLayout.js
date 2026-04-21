@@ -11,17 +11,13 @@ Template.applicationLayout.helpers({
     return user != null;
   },
   appHash: function () {
-    var hash = Meteor.gitCommitHash;
+    const hash = Meteor.gitCommitHash;
     if (typeof hash !== 'undefined' && hash)
       return hash;
     else
       return '';
   },
-  appVersion:  function () {
-    var version = Meteor.release;
-    if (typeof version !== 'undefined' && version)
-      return version.split('@')[1];
-    else
-      return 'development';
+  appVersion: function () {
+    return Meteor.settings.public?.appVersion || 'development';
   },
 });

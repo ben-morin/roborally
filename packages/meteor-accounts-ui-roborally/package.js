@@ -1,7 +1,7 @@
 Package.describe({
   name: 'ben-morin:accounts-ui-roborally',
   summary: 'RoboRally-styled login widgets',
-  version: '1.7.2',
+  version: '1.0.0',
 });
 
 Package.onUse(function(api) {

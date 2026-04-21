@@ -16,5 +16,6 @@ WORKDIR /usr/app
 ENV PORT=3000
 EXPOSE $PORT
 
-ENTRYPOINT ["entrypoint.sh"]
-CMD [ "meteor", "run" ]
+ENTRYPOINT ["/usr/app/entrypoint.sh"]
+CMD [ "meteor", "npm", "run", "dev" ]
+

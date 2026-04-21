@@ -17,6 +17,7 @@ COPY . /usr/app
 
 RUN npm install
 RUN mkdir /tmp/app && meteor build --allow-superuser --directory /tmp/app
+RUN node -p "require('/usr/app/package.json').version" > /tmp/app/bundle/APP_VERSION
 RUN npm prune --production
 RUN cd /tmp/app/bundle/programs/server && npm install --production
 
