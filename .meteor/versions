@@ -5,9 +5,9 @@ autoupdate@2.0.1
 babel-compiler@7.13.0
 babel-runtime@1.5.2
 base64@1.0.13
-ben-morin:accounts-ui-roborally@1.7.2
-ben-morin:flow-router-global@3.12.1
-ben-morin:synced-cron-global@2.3.0
+ben-morin:accounts-ui-roborally@1.0.0
+ben-morin:flow-router-global@1.0.0
+ben-morin:synced-cron-global@1.0.0
 binary-heap@1.0.12
 blaze@3.0.2
 blaze-hot@2.0.0
@@ -46,7 +46,6 @@ htmljs@2.0.1
 id-map@1.2.0
 inter-process-messaging@0.1.2
 jquery@3.0.2
-launch-screen@2.0.1
 less@4.1.1
 linto:fontawesome@4.2.6
 localstorage@1.2.1
@@ -56,10 +55,8 @@ meteor-base@1.5.2
 minifier-css@2.0.1
 minifier-js@3.1.0
 minimongo@2.0.5
-mizzao:timesync@1.0.0-beta.1
+mizzao:timesync@1.0.0-beta.2
 mizzao:user-status@2.0.0-rc.2
-mobile-experience@1.1.2
-mobile-status-bar@1.1.1
 modern-browsers@0.2.3
 modules@0.20.3
 modules-runtime@0.13.2
@@ -74,7 +71,7 @@ observe-sequence@2.0.0
 ordered-dict@1.2.0
 ostrio:flow-router-extra@3.12.1
 promise@1.0.0
-quave:synced-cron@2.3.0
+quave:synced-cron@2.4.0
 random@1.2.2
 rate-limit@1.1.2
 react-fast-refresh@0.3.0
@@ -98,7 +95,6 @@ templating-runtime@2.0.1
 templating-tools@2.0.0
 tracker@1.3.4
 typescript@5.9.3
-underscore@1.6.4
 url@1.3.5
 webapp@2.1.0
 webapp-hashing@1.1.2

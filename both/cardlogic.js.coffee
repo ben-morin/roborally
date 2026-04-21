@@ -63,7 +63,6 @@ class @CardLogic
           chosenCards: chosenCards
 
     console.log player.name + ": returned cards, new total: "+deck.cards.length
-    deck.cards = _.shuffle(deck.cards)
     await Deck.upsertAsync({gameId: game._id}, deck)
 
   @dealCardsAsync: (game, player) ->
@@ -77,7 +76,7 @@ class @CardLogic
     #grab card from deck, so it can't be handed out twice
     if nrOfNewCards > 0
       handCards.push deck.cards.pop() for i in [1..nrOfNewCards]
-    console.log(player.name + ': handCards ' + handCards.length)
+    console.log player.name + ": hand cards " + handCards.length + ", new total: "+deck.cards.length
 
     await Cards.updateAsync {playerId: player._id},
       $set:
@@ -150,7 +149,7 @@ class @CardLogic
       if card<0 || !found
         if availableCards.length > 0
           # grab card from hand
-          cardIdFromHand = availableCards.splice(_.random(0, availableCards.length-1), 1)[0]
+          cardIdFromHand = availableCards.splice(Math.floor(Math.random() * availableCards.length), 1)[0]
           console.warn("Handing out random card", cardIdFromHand)
           submittedCards[i] = cardIdFromHand
           player.cards[i] = CardLogic.RANDOM

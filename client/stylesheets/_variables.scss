@@ -38,3 +38,19 @@ $finish-bg-color: #aa0500;
 
 $tile-size: 50px;
 $preview-tile-size: 24px;
+
+@mixin media-up($name) {
+  $min: map-get($grid-breakpoints, $name);
+  @if $min and $min != 0 {
+    @media (min-width: $min) { @content; }
+  } @else {
+    @content;
+  }
+}
+
+@mixin media-down($name) {
+  $max: map-get($grid-breakpoints, $name);
+  @if $max and $max != 0 {
+    @media (max-width: $max - 1px) { @content; }
+  }
+}

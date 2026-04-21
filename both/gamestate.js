@@ -67,10 +67,12 @@ GameState = {
   };
 
   async function playDealPhase(game) {
-    var dealCards;
     var players = await game.playersAsync();
+    var playersToDeal = [];
+
+    // Phase 1: Update player states and return all cards to deck
     for (var player of players) {
-      dealCards = player.lives > 0;
+      var dealCards = player.lives > 0;
       player.playedCardsCnt = 0;
       player.submitted = false;
       if (player.hasOptionCard('circuit_breaker') && player.damage >= 3) {
@@ -95,9 +97,22 @@ GameState = {
       await Players.updateAsync(player._id, player);
       await CardLogic.discardCardsAsync(game, player);
       if (dealCards) {
-        await CardLogic.dealCardsAsync(game, player);
+        playersToDeal.push(player);
       }
     }
+
+    // Phase 2: Shuffle the deck once after all cards are returned
+    var deck = await game.getDeckAsync();
+    console.log("Shuffling deck with " + deck.cards.length + " cards");
+    deck.cards = shuffle(deck.cards);
+    await Deck.upsertAsync({gameId: game._id}, deck);
+
+    // Phase 3: Deal cards to all eligible players (randomized order)
+    playersToDeal = shuffle(playersToDeal);
+    for (var player of playersToDeal) {
+      await CardLogic.dealCardsAsync(game, player);
+    }
+
     await game.setGamePhaseAsync(GameState.PHASE.PROGRAM);
     var notPoweredDownCnt = await Players.find({gameId: game._id, submitted: false}).countAsync();
     if (notPoweredDownCnt === 0) {
@@ -217,7 +232,7 @@ GameState = {
         game.cardsToPlay.push(card);
       }
     }
-    game.cardsToPlay = _.sortBy(game.cardsToPlay, 'cardId').reverse();  // cardId has same order as card priority
+    game.cardsToPlay.sort(function (a, b) { return b.cardId - a.cardId; });  // cardId has same order as card priority
     await Games.updateAsync(game._id, {
       $set: {
         cardsToPlay: game.cardsToPlay

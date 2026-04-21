@@ -29,7 +29,7 @@ services:
           "ALLOWED_DOMAINS": [],
           "VERIFY_EMAILS": false,
           "MAIL_FROM": ""
-      }
+        }
     volumes:
       - .:/usr/app
     networks:

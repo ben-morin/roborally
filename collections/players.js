@@ -199,7 +199,7 @@ var player = {
 Players = new Meteor.Collection('players', {
   transform: function (doc) {
     var newInstance = Object.create(player);
-    return  _.extend(newInstance, doc);
+    return Object.assign(newInstance, doc);
   }
 });
 

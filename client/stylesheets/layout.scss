@@ -16,14 +16,12 @@ header {
   }
 }
 
-@media(min-width: 768px) {
+@include media-up(md) {
   header .container {
     padding-top: 150px;
     padding-bottom: 100px;
   }
-}
 
-@media(min-width: 768px) {
   .fixed-top {
     padding: 25px 0;
     -webkit-transition: padding .3s;
@@ -81,7 +79,7 @@ section {
   }
 }
 
-@media(max-width: 767px) {
+@include media-down(md) {
   section {
     padding: 75px 0;
   }

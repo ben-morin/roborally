@@ -1,3 +1,7 @@
+Meteor.settings = Meteor.settings || {};
+Meteor.settings.public = Meteor.settings.public || {};
+Meteor.settings.public.appVersion = process.env.APP_VERSION || process.env.npm_package_version || 'development';
+
 SyncedCron.config({ log: false });
 
 SyncedCron.add({

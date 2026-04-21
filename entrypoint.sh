@@ -1,7 +1,13 @@
 #!/usr/bin/env sh
 set -e
 
-# application version...
+# application version
+if [ -f /usr/app/APP_VERSION ]; then
+    export APP_VERSION=$(cat /usr/app/APP_VERSION)
+elif [ -f /usr/app/package.json ]; then
+    export APP_VERSION=$(node -p "require('/usr/app/package.json').version")
+fi
+echo "APP_VERSION=$APP_VERSION"
 
 
 # Path to your settings file within the container

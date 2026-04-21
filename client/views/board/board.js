@@ -70,7 +70,7 @@ Template.board.helpers({
     return getGame();
   },
   inGame: function () {
-    return _.some(getPlayers(), function (player) {
+    return getPlayers().some(function (player) {
       return player.userId === Meteor.userId();
     });
   },

@@ -59,7 +59,7 @@ game =
     return {
       gameId: @_id,
       cards: [0..deckSize-1]
-      optionCards: _.shuffle([0..CardLogic._option_deck.length-1])
+      optionCards: shuffle([0..CardLogic._option_deck.length-1])
       discardedOptionCards: []
     }
   startAnnounceAsync: ->
@@ -94,7 +94,7 @@ game =
 @Games = new Meteor.Collection('games',
   transform: (doc) ->
     newInstance = Object.create(game)
-    return  _.extend(newInstance, doc)
+    return Object.assign(newInstance, doc)
 )
 
 Games.allow

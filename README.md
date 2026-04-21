@@ -37,7 +37,7 @@ services:
 
   roborally:
     restart: unless-stopped
-    image: yieldtoben/roborally:3.4.0
+    image: yieldtoben/roborally:latest
     container_name: roborally
     ports:
       - 3000:3000
