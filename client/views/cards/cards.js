@@ -216,12 +216,25 @@ Template.card.onRendered(function () {
       card.style.setProperty('--card-w', card.offsetWidth + 'px');
     }
   };
-  update();
-  const card = instance.find('.gamecard');
-  if (card && typeof ResizeObserver !== 'undefined') {
-    instance._cardResizeObserver = new ResizeObserver(update);
-    instance._cardResizeObserver.observe(card);
-  }
+
+  // Re-bind on every data context change: the {{#if emptyCard}} branches emit
+  // distinct .gamecard elements, so flipping between empty and chosen swaps
+  // the DOM node out from under any prior measurement and observer.
+  instance.autorun(() => {
+    Template.currentData();
+    Tracker.afterFlush(() => {
+      if (instance._cardResizeObserver) {
+        instance._cardResizeObserver.disconnect();
+        instance._cardResizeObserver = null;
+      }
+      update();
+      const card = instance.find('.gamecard');
+      if (card && typeof ResizeObserver !== 'undefined') {
+        instance._cardResizeObserver = new ResizeObserver(update);
+        instance._cardResizeObserver.observe(card);
+      }
+    });
+  });
 });
 
 Template.card.onDestroyed(function () {
