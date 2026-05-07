@@ -407,12 +407,23 @@ GameState = {
     var selectOptions = [];
     var x = player.start.x;
     var y = player.start.y;
-    for (var dx = -1; dx <= 1; ++dx) {
-      for (var dy = -1; dy <= 1; dy++) {
-        if (game.board().onBoard(x + dx, y + dy) &&
-            !await game.isPlayerOnTileAsync(x + dx, y + dy) &&
-            game.board().getTile(x + dx, y + dy).type !== Tile.VOID) {
-          selectOptions.push({x: x + dx, y: y + dy});
+    var board = game.board();
+    // House rule: the base game says "adjacent space" (radius 1). If every
+    // adjacent square is a pit, off-board, or occupied, expand outward ring
+    // by ring until at least one valid square is found, capped at the board's
+    // longer dimension so the loop always terminates.
+    var maxR = Math.max(board.width, board.height);
+    for (var r = 1; r <= maxR && selectOptions.length === 0; ++r) {
+      for (var dx = -r; dx <= r; ++dx) {
+        for (var dy = -r; dy <= r; ++dy) {
+          // For r > 1, only consider the new ring (skip inner squares
+          // already evaluated at smaller radii).
+          if (r > 1 && Math.max(Math.abs(dx), Math.abs(dy)) < r) continue;
+          if (board.onBoard(x + dx, y + dy) &&
+              !await game.isPlayerOnTileAsync(x + dx, y + dy) &&
+              board.getTile(x + dx, y + dy).type !== Tile.VOID) {
+            selectOptions.push({x: x + dx, y: y + dy});
+          }
         }
       }
     }
