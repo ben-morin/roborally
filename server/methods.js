@@ -216,26 +216,6 @@ Meteor.methods({
     await Chat.insertAsync(message);
   },
   
-  selectCard: async function(gameId, card, index) {
-    var player = await Players.findOneAsync({gameId: gameId, userId: Meteor.userId()});
-    if (index < player.notLockedCnt())
-      await player.chooseCardAsync(card, index);
-    return await player.getChosenCardsAsync();
-  },
-  
-  deselectCard: async function(gameId, index) {
-    var player = await Players.findOneAsync({gameId: gameId, userId: Meteor.userId()});
-    if (index < player.notLockedCnt())
-      await player.unchooseCardAsync(index);
-    return await player.getChosenCardsAsync();
-  },
-  
-  deselectAllCards: async function(gameId) {
-    var player = await Players.findOneAsync({gameId: gameId, userId: Meteor.userId()});
-    for (i = 0; i < player.notLockedCnt(); i++)
-      await player.unchooseCardAsync(i);
-  },
-
   isEmailAvailable: function() {
     return !!process.env.EMAIL_URL || Meteor.isDevelopment;
   },

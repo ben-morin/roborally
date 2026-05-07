@@ -47,7 +47,7 @@ var player = {
     if (cards[index] === CardLogic.EMPTY)
       inc = 1;
     cards[index] = card;
-    console.log("update chosen cards", index, card);
+    if (Meteor.isServer) console.log("update chosen cards", index, card);
     await Cards.updateAsync({playerId: this._id}, {
       $set:{chosenCards:cards},
     });
