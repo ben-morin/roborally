@@ -41,7 +41,8 @@ Template.cards.helpers({
         cards.push(CardLogic.DAMAGE);
       }
     }
-    return addUIData(cards, true, false, false, getPlayer().game().playerCnt());
+    var chosenIds = new Set(getChosenCards().filter(function (id) { return id !== CardLogic.EMPTY; }));
+    return addUIData(cards, true, false, false, getPlayer().game().playerCnt(), chosenIds);
   },
   showCards: function () {
     var game = getGame();
@@ -323,44 +324,31 @@ Template.playerStatus.helpers({
 
 Template.card.events({
   'click .available': function (e) {
+    if (this.chosen) return;
+    var player = getPlayer();
+    if (player.submitted) return;
     var currentSlot = getSlotIndex();
-    if ($(e.currentTarget).css("opacity") === "1" && isEmptySlot(currentSlot)) {
-      $(e.currentTarget).css("opacity", "0.3");
-      Session.set("selectedSlot", getNextEmptySlotIndex(currentSlot));
+    if (!isEmptySlot(currentSlot)) return;
 
-      var player = getPlayer();
-      console.log('Chosen count: ', getChosenCnt());
-      if (!player.submitted) {
-        chooseCard(player.gameId, this.cardId, currentSlot);
-        setEmptySlot(currentSlot, false);
-        console.log("choose card ", this.cardId, ' for slot ', getSlotIndex());
+    Session.set("selectedSlot", getNextEmptySlotIndex(currentSlot));
+    chooseCard(player.gameId, this.cardId, currentSlot);
+    console.log("choose card ", this.cardId, ' for slot ', currentSlot);
 
-        if (player.isPoweredDown()) {
-          Meteor.callAsync('togglePowerDown', player.gameId).then(function (powerState) {
-            $(".playBtn").toggleClass("disabled", !allowSubmit());
-          }, function (error) {
-            modalAlert(error.reason);
-          });
-        }
-      } else {
-        $(e.currentTarget).css("opacity", "1");
-        Session.set("selectedSlot", currentSlot);
-      }
+    if (player.isPoweredDown()) {
+      Meteor.callAsync('togglePowerDown', player.gameId).then(function (powerState) {
+        $(".playBtn").toggleClass("disabled", !allowSubmit());
+      }, function (error) {
+        modalAlert(error.reason);
+      });
     }
-
   },
   'click .played': function (e) {
-    if (!isEmptySlot(this.slot) && this.class.indexOf("locked") == -1) {
-      setEmptySlot(this.slot, true);
-      var player = getPlayer();
-      if (!player.submitted) {
-        unchooseCard(player.gameId, this.slot);
-        $('.available.' + this.cardId).css("opacity", "1");
-        Session.set("selectedSlot", this.slot);
-      } else {
-        setEmptySlot(this.slot, false);
-      }
-    }
+    if (this.locked) return;
+    if (isEmptySlot(this.slot)) return;
+    var player = getPlayer();
+    if (player.submitted) return;
+    unchooseCard(player.gameId, this.slot);
+    Session.set("selectedSlot", this.slot);
   },
   'click .empty': function (e) {
     if (!getPlayer().submitted) {
@@ -379,11 +367,6 @@ Template.cards.events({
     if (!game) return;
     Meteor.callAsync('togglePowerDown', game._id).then(function (powerState) {
       if (powerState === GameLogic.OFF) {
-        getChosenCards().forEach(function (item) {
-          if (item.type !== 'empty') {
-            $('.available.' + item.cardId).show();
-          }
-        });
         unchooseAllCards(getPlayer());
       }
       $(".playBtn").toggleClass("disabled", !allowSubmit());
@@ -415,7 +398,6 @@ function unchooseCard(gameId, slot) {
 
 function unchooseAllCards(player) {
   Session.set("selectedSlot", 0);
-  initEmptySlots();
   Meteor.callAsync('deselectAllCards', player.gameId).catch(function (error) {
     modalAlert(error.reason);
   });
@@ -426,47 +408,36 @@ function getChosenCnt() {
 }
 
 function getSlotIndex() {
-  return Session.get("selectedSlot") || 0;
-}
-
-function initEmptySlots() {
-  var emptySlots = [];
-  var emptyCnt = GameLogic.CARD_SLOTS - getLockedCnt();
-  for (var i = 0; i < GameLogic.CARD_SLOTS; i++) {
-    emptySlots.push(i < emptyCnt);
+  var slot = Session.get("selectedSlot");
+  if (slot == null) {
+    return getFirstEmptySlotIndex();
   }
-  Session.set("emptySlots", emptySlots);
-}
-
-function getEmptySlots() {
-  if (!Session.get("emptySlots")) {
-    initEmptySlots();
-  }
-  return Session.get("emptySlots");
+  return slot;
 }
 
 function isEmptySlot(index) {
-  return getEmptySlots()[index];
+  return getChosenCards()[index] === CardLogic.EMPTY;
 }
 
-function setEmptySlot(index, value) {
-  var slots = getEmptySlots();
-  slots[index] = value;
-  Session.set("emptySlots", slots);
-}
-
-function getNextEmptySlotIndex(currentSlot) {
-  var emptySlots = getEmptySlots();
-  for (var j = currentSlot + 1; j < currentSlot + GameLogic.CARD_SLOTS; j++) {
-    if (emptySlots[j % GameLogic.CARD_SLOTS]) {
-      return j % GameLogic.CARD_SLOTS;
+function getFirstEmptySlotIndex() {
+  var chosen = getChosenCards();
+  for (var i = 0; i < GameLogic.CARD_SLOTS; i++) {
+    if (chosen[i] === CardLogic.EMPTY) {
+      return i;
     }
   }
   return 0;
 }
 
-function getLockedCnt() {
-  return getPlayer().lockedCnt();
+function getNextEmptySlotIndex(currentSlot) {
+  var chosen = getChosenCards();
+  for (var j = currentSlot + 1; j < currentSlot + GameLogic.CARD_SLOTS; j++) {
+    var k = j % GameLogic.CARD_SLOTS;
+    if (chosen[k] === CardLogic.EMPTY) {
+      return k;
+    }
+  }
+  return 0;
 }
 
 function allowSubmit() {
@@ -478,15 +449,13 @@ function submitCards(game) {
   $(document).find('.right-panel .card').removeClass('countdown').removeClass('finish');
   Meteor.callAsync('playCards', game._id).then(function () {
     Session.set("selectedSlot", 0);
-    Session.set("emptySlots", false);
   }, function (error) {
     Session.set("selectedSlot", 0);
-    Session.set("emptySlots", false);
     modalAlert(error.reason);
   });
 }
 
-function addUIData(cards, available, locked, selectable, numberOfPlayers) {
+function addUIData(cards, available, locked, selectable, numberOfPlayers, chosenIds) {
   var uiCards = [];
   cards.forEach(function (card, i) {
     var cardProp = {
@@ -517,6 +486,10 @@ function addUIData(cards, available, locked, selectable, numberOfPlayers) {
             if (locked && i >= GameLogic.CARD_SLOTS - locked) {
               cardProp.class += " locked";
               cardProp.locked = true;
+            }
+            if (available && chosenIds && chosenIds.has(card)) {
+              cardProp.class += " chosen";
+              cardProp.chosen = true;
             }
             cardProp.type = ct.name;
           } else {

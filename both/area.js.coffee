@@ -147,6 +147,9 @@ class @Area
       @addStart 2,0, 'up'
       @addStart 3,0, 'up'
   @course:
+    test_pit: () ->
+      @setVoid 1,3
+
     test: () ->
       @setVoid 1,1
       @setRoller 0,3, 'ur'

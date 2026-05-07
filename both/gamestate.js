@@ -409,7 +409,9 @@ GameState = {
     var y = player.start.y;
     for (var dx = -1; dx <= 1; ++dx) {
       for (var dy = -1; dy <= 1; dy++) {
-        if (!await game.isPlayerOnTileAsync(x + dx, y + dy) && game.board().getTile(x + dx, y + dy).type !== Tile.VOID) {
+        if (game.board().onBoard(x + dx, y + dy) &&
+            !await game.isPlayerOnTileAsync(x + dx, y + dy) &&
+            game.board().getTile(x + dx, y + dy).type !== Tile.VOID) {
           selectOptions.push({x: x + dx, y: y + dy});
         }
       }

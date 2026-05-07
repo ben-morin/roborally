@@ -149,6 +149,10 @@ $card-height: math.div(153, 99);
   &.selected {
     background: #449d44;
   }
+
+  &.chosen {
+    opacity: 0.3;
+  }
 }
 
 .smallhand {

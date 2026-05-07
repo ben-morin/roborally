@@ -63,15 +63,21 @@ class @BoardBox
       board.addCheckpoint(0, 0)
       board.addCheckpoint(0, 11)
       return board
-    test2: () ->
+    test3: () ->
       board = new Board('test',1,4,4,5)
       board.addRallyArea('test')
       board.addStartArea('test',0,4)
       board.addCheckpoint(3,0)
       board.addCheckpoint(0,0)
       return board
+    test2: () ->
+      board = new Board('test',1,4,4,5)
+      board.addStartArea('test',0,4)
+      board.addCheckpoint(3,0)
+      return board
     test: () ->
       board = new Board('test',1,4,4,5)
+      board.addRallyArea('test_pit')
       board.addStartArea('test',0,4)
       board.addCheckpoint(3,0)
       return board
