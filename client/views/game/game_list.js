@@ -6,7 +6,7 @@ Template.gameList.helpers({
     return Games.find({winner: null, started: true}, {sort: {submitted: -1}});
   },
   endedGames: function() {
-    return Games.find({winner: {$exists: true}}, {sort: {submitted: -1}});
+    return Games.find({winner: {$exists: true}}, {sort: {stopped: -1}});
   }
 });
 
