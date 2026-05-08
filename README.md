@@ -14,7 +14,7 @@ confusion with the original Meteor 1 and 2 versions.
 
 Goals of this project:
 
- - use the latest Meteor release (3.4.0 as of March 2026)
+ - use the latest Meteor release (3.4.1 as of May 2026)
  - modernize the codebase and update dependencies
  - stabilize gameplay
  - run in docker
