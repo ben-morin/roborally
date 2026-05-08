@@ -25,7 +25,7 @@
     </div>
   {{else if inGame}}
     <div class="exit">
-      <a class="btn btn-danger cancel">Leave game</a>
+      <a class="btn btn-danger cancel {{leaveDisabledClass}}" title="{{leaveDisabledTitle}}">Leave game</a>
     </div>
   {{else if viewingGame}}
     <div class="exit">

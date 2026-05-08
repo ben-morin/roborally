@@ -18,12 +18,28 @@ Template.chat.helpers({
     var game = Games.findOne(gameId);
     return game && game.gamePhase === GameState.PHASE.ENDED;
   },
+  leaveDisabledClass: function () {
+    return canLeaveActiveGame() ? '' : 'disabled';
+  },
+  leaveDisabledTitle: function () {
+    return canLeaveActiveGame() ? '' : 'You can only leave during the program phase';
+  },
 
   timeToStr: function (time) {
     return moment(new Date(time)).format("L LT");
   }
 
 });
+
+function canLeaveActiveGame() {
+  var gameId = FlowRouter.getParam('_id');
+  if (!gameId) return true;
+  var game = Games.findOne(gameId);
+  if (!game) return true;
+  if (!game.started) return true;
+  if (game.gamePhase === GameState.PHASE.ENDED) return true;
+  return game.gamePhase === GameState.PHASE.PROGRAM;
+}
 
 Template.chat.events({
   'submit form': function (event) {
@@ -41,7 +57,8 @@ Template.chat.events({
       });
     }
   },
-  'click .cancel': async function () {
+  'click .cancel': async function (e) {
+    if ($(e.currentTarget).hasClass('disabled')) return;
     var gameId = FlowRouter.getParam('_id') || "global";
     var game = Games.findOne(gameId);
     var inGame = Players.findOne({gameId: gameId, userId: Meteor.userId(), robotId: {$ne: null}});

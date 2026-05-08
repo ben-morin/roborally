@@ -91,6 +91,13 @@ Meteor.methods({
     if (!game)
       throw new Meteor.Error(401, "Game id not found!");
 
+    if (game.started && game.gamePhase !== GameState.PHASE.ENDED && game.gamePhase !== GameState.PHASE.PROGRAM) {
+      var stillPlaying = await Players.findOneAsync({gameId: game._id, userId: user._id});
+      if (stillPlaying) {
+        throw new Meteor.Error(403, "You can only leave during the program phase");
+      }
+    }
+
     var author = getUsername(user);
     console.log('User ' + author + ' leaving game ' + gameId);
 
