@@ -51,7 +51,7 @@ GameState = {
         if (game.waitingForRespawn.length > 0) {
           await Games.updateAsync(game._id, {
             $set: {
-              watingForRespawn: game.waitingForRespawn.reverse(),
+              waitingForRespawn: game.waitingForRespawn.reverse(),
               gamePhase: GameState.PHASE.RESPAWN
             }
           });
