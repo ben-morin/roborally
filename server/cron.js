@@ -40,7 +40,7 @@ SyncedCron.add({
     const liveGames = await Games.find({ started: true, winner: { $exists: false } }).fetchAsync();
     for (const game of liveGames) {
       const players = await Players.find({ gameId: game._id }).fetchAsync();
-      let numPlayers = players.length;
+      const numPlayers = players.length;
       let playersOnline = 0;
       let lastManStanding = null;
 

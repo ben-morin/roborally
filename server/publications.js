@@ -3,7 +3,7 @@ Meteor.publish('games', function () {
 });
 
 Meteor.publish('chat', async function (gameId) {
-  var size = Math.max(0, (await Chat.find({ gameId: gameId }).countAsync()) - 100);
+  const size = Math.max(0, (await Chat.find({ gameId: gameId }).countAsync()) - 100);
   return Chat.find({ gameId: gameId }, { skip: size });
 });
 
