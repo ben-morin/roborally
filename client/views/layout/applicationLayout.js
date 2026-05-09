@@ -1,7 +1,10 @@
 Template.applicationLayout.onRendered(function () {
   // Closes the Responsive Menu on Menu Item Click
-  $('.navbar-collapse ul li a').click(function () {
-    $('.navbar-toggler:visible').click();
+  document.querySelectorAll('.navbar-collapse ul li a').forEach((link) => {
+    link.addEventListener('click', () => {
+      const toggler = document.querySelector('.navbar-toggler');
+      if (toggler && toggler.offsetParent !== null) toggler.click();
+    });
   });
 });
 

@@ -20,7 +20,7 @@ Template.gameItemPostForm.events({
   'submit form': function (event) {
     event.preventDefault();
     const game = {
-      name: $(event.target).find('[name=name]').val(),
+      name: event.target.elements.name.value,
     };
 
     Meteor.callAsync('createGame', game).then(
