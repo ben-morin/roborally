@@ -24,15 +24,15 @@ GameState = {
 };
 
 (function (scope) {
-  var _NEXT_PHASE_DELAY = 250;
-  var _ANNOUNCE_NEXT_PHASE = 1000;
-  var _ANNOUNCE_CARD_TIME = 1750; // match to .fadeInAndOut duration in game.scss
-  var _EXECUTE_CARD_TIME = 1000;
+  const _NEXT_PHASE_DELAY = 250;
+  const _ANNOUNCE_NEXT_PHASE = 1000;
+  const _ANNOUNCE_CARD_TIME = 1750; // match to .fadeInAndOut duration in game.scss
+  const _EXECUTE_CARD_TIME = 1000;
 
   // game phases:
 
   scope.nextGamePhaseAsync = async function (gameId) {
-    var game = await Games.findOneAsync(gameId);
+    const game = await Games.findOneAsync(gameId);
     await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
     switch (game.gamePhase) {
       case GameState.PHASE.IDLE:
@@ -69,12 +69,12 @@ GameState = {
   };
 
   async function playDealPhase(game) {
-    var players = await game.playersAsync();
-    var playersToDeal = [];
+    const players = await game.playersAsync();
+    let playersToDeal = [];
 
     // Phase 1: Update player states and return all cards to deck
-    for (var player of players) {
-      var dealCards = player.lives > 0;
+    for (const player of players) {
+      let dealCards = player.lives > 0;
       player.playedCardsCnt = 0;
       player.submitted = false;
       if (player.hasOptionCard('circuit_breaker') && player.damage >= 3) {
@@ -104,19 +104,19 @@ GameState = {
     }
 
     // Phase 2: Shuffle the deck once after all cards are returned
-    var deck = await game.getDeckAsync();
+    const deck = await game.getDeckAsync();
     console.log('Shuffling deck with ' + deck.cards.length + ' cards');
     deck.cards = shuffle(deck.cards);
     await Deck.upsertAsync({ gameId: game._id }, deck);
 
     // Phase 3: Deal cards to all eligible players (randomized order)
     playersToDeal = shuffle(playersToDeal);
-    for (var player of playersToDeal) {
+    for (const player of playersToDeal) {
       await CardLogic.dealCardsAsync(game, player);
     }
 
     await game.setGamePhaseAsync(GameState.PHASE.PROGRAM);
-    var notPoweredDownCnt = await Players.find({ gameId: game._id, submitted: false }).countAsync();
+    const notPoweredDownCnt = await Players.find({ gameId: game._id, submitted: false }).countAsync();
     if (notPoweredDownCnt === 0) {
       await game.nextGamePhaseAsync();
     }
@@ -135,10 +135,10 @@ GameState = {
 
   async function playNextRespawn(game) {
     if (game.waitingForRespawn.length > 0) {
-      var player = await Players.findOneAsync(game.waitingForRespawn.pop());
-      var nextPhase;
-      var x = player.start.x;
-      var y = player.start.y;
+      const player = await Players.findOneAsync(game.waitingForRespawn.pop());
+      let nextPhase;
+      const x = player.start.x;
+      const y = player.start.y;
       if (await game.isPlayerOnTileAsync(x, y)) {
         nextPhase = GameState.RESPAWN_PHASE.CHOOSE_POSITION;
       } else {
@@ -169,7 +169,7 @@ GameState = {
   // play phases:
 
   scope.nextPlayPhaseAsync = async function (gameId) {
-    var game = await Games.findOneAsync(gameId);
+    const game = await Games.findOneAsync(gameId);
     await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
     switch (game.playPhase) {
       case GameState.PLAY_PHASE.IDLE:
@@ -204,12 +204,12 @@ GameState = {
   async function playRevealCards(game) {
     await Games.updateAsync(game._id, { $set: { playPhase: GameState.PLAY_PHASE.MOVE_BOTS } });
 
-    var players = await game.livingPlayersAsync();
-    for (var player of players) {
+    const players = await game.livingPlayersAsync();
+    for (const player of players) {
       if (player.isActive()) {
-        var cards = player.cards;
-        var cardIndex = player.playedCardsCnt;
-        var chosenCards = await player.getChosenCardsAsync();
+        const cards = player.cards;
+        const cardIndex = player.playedCardsCnt;
+        const chosenCards = await player.getChosenCardsAsync();
         console.log('reveal', cardIndex, chosenCards[cardIndex]);
         cards[cardIndex] = chosenCards[cardIndex];
         await Players.updateAsync(player._id, { $set: { cards: cards } });
@@ -219,13 +219,13 @@ GameState = {
   }
 
   async function playMoveBots(game) {
-    var players = await game.activePlayersAsync();
+    const players = await game.activePlayersAsync();
     // play 1 card per player
     game.cardsToPlay = [];
 
-    for (var player of players) {
-      var chosenCards = await player.getChosenCardsAsync();
-      var card = {
+    for (const player of players) {
+      const chosenCards = await player.getChosenCardsAsync();
+      const card = {
         cardId: chosenCards[player.playedCardsCnt],
       };
       await Players.updateAsync(player._id, { $inc: { playedCardsCnt: 1 } });
@@ -250,14 +250,14 @@ GameState = {
   }
 
   async function playMoveBot(game) {
-    var card = game.cardsToPlay.shift();
+    const card = game.cardsToPlay.shift();
     await Games.updateAsync(game._id, {
       $set: {
         announceCard: card,
         cardsToPlay: game.cardsToPlay,
       },
     });
-    var player = await Players.findOneAsync(card.playerId);
+    const player = await Players.findOneAsync(card.playerId);
     await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_CARD_TIME));
     await Games.updateAsync(game._id, {
       $set: {
@@ -280,7 +280,7 @@ GameState = {
   }
 
   async function playMoveBoard(game) {
-    var players = await game.playersOnBoardAsync();
+    const players = await game.playersOnBoardAsync();
     await GameLogic.executeRollers(players);
     await GameLogic.executeExpressRollers(players);
     await GameLogic.executeGears(players);
@@ -290,7 +290,7 @@ GameState = {
   }
 
   async function playLasers(game) {
-    var players = await game.playersOnBoardAsync();
+    const players = await game.playersOnBoardAsync();
     await game.setPlayPhaseAsync(GameState.PLAY_PHASE.CHECKPOINTS);
     await GameLogic.executeLasers(players);
     await game.nextPlayPhaseAsync();
@@ -311,13 +311,13 @@ GameState = {
   }
 
   async function playRepairs(game) {
-    var players = await game.playersOnBoardAsync();
+    const players = await game.playersOnBoardAsync();
     await GameLogic.executeRepairs(players);
     await game.nextGamePhaseAsync();
   }
 
   async function checkCheckpoints(player) {
-    var tile = await player.tileAsync();
+    const tile = await player.tileAsync();
 
     if (tile.checkpoint || tile.repair) {
       player.updateStartPosition();
@@ -329,15 +329,15 @@ GameState = {
   }
 
   async function checkIfWeHaveAWinner(game) {
-    var players = await Players.find({ gameId: game._id }).fetchAsync();
-    var board = game.board();
-    var ended = false;
-    var lastManStanding = false;
-    var livingPlayers = 0;
-    var messages = [];
+    const players = await Players.find({ gameId: game._id }).fetchAsync();
+    const board = game.board();
+    let ended = false;
+    let lastManStanding = false;
+    let livingPlayers = 0;
+    const messages = [];
 
-    for (var i in players) {
-      var player = players[i];
+    for (const i in players) {
+      const player = players[i];
       await checkCheckpoints(player);
       if (player.lives > 0) {
         livingPlayers++;
@@ -387,7 +387,7 @@ GameState = {
       await buildHighscores();
       ended = true;
     }
-    for (var msg of messages) {
+    for (const msg of messages) {
       await game.chatAsync(msg);
     }
     return ended;
@@ -395,7 +395,7 @@ GameState = {
 
   // respawn phases
   scope.nextRespawnPhaseAsync = async function (gameId) {
-    var game = await Games.findOneAsync(gameId);
+    const game = await Games.findOneAsync(gameId);
     await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
     switch (game.respawnPhase) {
       case GameState.RESPAWN_PHASE.CHOOSE_POSITION:
@@ -408,19 +408,19 @@ GameState = {
   };
 
   async function prepareChooseRespawnPosition(game) {
-    var player = await Players.findOneAsync(game.respawnPlayerId);
-    var selectOptions = [];
-    var x = player.start.x;
-    var y = player.start.y;
-    var board = game.board();
+    const player = await Players.findOneAsync(game.respawnPlayerId);
+    const selectOptions = [];
+    const x = player.start.x;
+    const y = player.start.y;
+    const board = game.board();
     // House rule: the base game says "adjacent space" (radius 1). If every
     // adjacent square is a pit, off-board, or occupied, expand outward ring
     // by ring until at least one valid square is found, capped at the board's
     // longer dimension so the loop always terminates.
-    var maxR = Math.max(board.width, board.height);
-    for (var r = 1; r <= maxR && selectOptions.length === 0; ++r) {
-      for (var dx = -r; dx <= r; ++dx) {
-        for (var dy = -r; dy <= r; ++dy) {
+    const maxR = Math.max(board.width, board.height);
+    for (let r = 1; r <= maxR && selectOptions.length === 0; ++r) {
+      for (let dx = -r; dx <= r; ++dx) {
+        for (let dy = -r; dy <= r; ++dy) {
           // For r > 1, only consider the new ring (skip inner squares
           // already evaluated at smaller radii).
           if (r > 1 && Math.max(Math.abs(dx), Math.abs(dy)) < r) continue;
@@ -443,20 +443,20 @@ GameState = {
   }
 
   async function prepareChooseRespawnDirection(game) {
-    var player = await Players.findOneAsync(game.respawnPlayerId);
-    var selectOptions = [];
-    var x = player.position.x;
-    var y = player.position.y;
-    var step;
+    const player = await Players.findOneAsync(game.respawnPlayerId);
+    const selectOptions = [];
+    const x = player.position.x;
+    const y = player.position.y;
+    let step;
     if (player.start.x !== x && player.start.y !== y) {
-      for (var i = 0; i < 4; ++i) {
+      for (let i = 0; i < 4; ++i) {
         step = Board.to_step(i);
         if (await noPlayerOnNextThreeAsync(x, y, step.x, step.y, game)) {
           selectOptions.push({ x: x + step.x, y: y + step.y, dir: i });
         }
       }
     } else {
-      for (var j = 0; j < 4; ++j) {
+      for (let j = 0; j < 4; ++j) {
         step = Board.to_step(j);
         selectOptions.push({
           x: x + step.x,
