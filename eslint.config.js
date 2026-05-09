@@ -76,7 +76,6 @@ module.exports = [
       globals: {
         ...globals.browser,
         ...globals.node,
-        ...globals.jquery,
         ...meteorGlobals,
         ...projectGlobals,
       },
