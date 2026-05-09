@@ -13,9 +13,8 @@ GameLogic = {
   _CARD_PLAY_DELAY = 1000;
 
   scope.playCard = async function (player, card) {
-    if (!player.needsRespawn) {
-      console.log('trying to play next card for player ' + player.name);
-    }
+    if (player.needsRespawn) return;
+    console.log('trying to play next card for player ' + player.name);
 
     if (card !== CardLogic.EMPTY) {
       const game = await player.gameAsync();
