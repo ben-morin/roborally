@@ -1,6 +1,6 @@
 Template._tiles.helpers({
   visited_checkpoint: function (number) {
-    var player = Players.findOne({ userId: Meteor.userId() });
+    const player = Players.findOne({ userId: Meteor.userId() });
     if (player != null && player.visited_checkpoints >= number) {
       return 'visited';
     } else {
@@ -11,7 +11,7 @@ Template._tiles.helpers({
     return current <= limit;
   },
   rotate: function (direction) {
-    var rotate = 'rotate(' + 90 * direction + 'deg);';
+    const rotate = 'rotate(' + 90 * direction + 'deg);';
     return 'transform: ' + rotate + ' -webkit-transform: ' + rotate + ' -ms-transform: ' + rotate;
   },
 });

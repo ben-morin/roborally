@@ -40,7 +40,7 @@ FlowRouter.route('/select/:_id', {
     this.render('applicationLayout', 'loading');
   },
   action: function (params) {
-    var game = Games.findOne(params._id);
+    const game = Games.findOne(params._id);
     if (game === undefined) {
       FlowRouter.go('/');
       return;
@@ -71,7 +71,7 @@ FlowRouter.route('/games/:_id', {
     this.render('applicationLayout', 'loading');
   },
   action: function (params) {
-    var game = Games.findOne(params._id);
+    const game = Games.findOne(params._id);
     if (game === undefined) {
       FlowRouter.go('/');
       return;

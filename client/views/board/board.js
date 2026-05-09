@@ -1,7 +1,7 @@
-var tileSizeDep = new Tracker.Dependency();
+const tileSizeDep = new Tracker.Dependency();
 
 function getGame() {
-  var id = FlowRouter.getParam('_id');
+  const id = FlowRouter.getParam('_id');
   if (id) {
     return Games.findOne(id);
   }
@@ -13,20 +13,20 @@ function getPlayers() {
 
 function getTileSize() {
   tileSizeDep.depend();
-  var board = document.getElementById('board');
+  const board = document.getElementById('board');
   if (!board) return 50;
-  var game = getGame();
+  const game = getGame();
   if (!game) return 50;
   return Math.floor(board.offsetWidth / game.board().width);
 }
 
 function updateTileSize() {
-  var board = document.getElementById('board');
+  const board = document.getElementById('board');
   if (!board) return;
-  var game = getGame();
+  const game = getGame();
   if (!game) return;
   board.style.width = '100%';
-  var tileSize = Math.floor(board.offsetWidth / game.board().width);
+  const tileSize = Math.floor(board.offsetWidth / game.board().width);
   board.style.setProperty('--tile-size', tileSize + 'px');
   board.style.width = tileSize * game.board().width + 'px';
   board.style.height = tileSize * game.board().height + 'px';
@@ -34,15 +34,15 @@ function updateTileSize() {
 }
 
 Template.board.onRendered(function () {
-  var self = this;
-  var resizeTimer;
+  const self = this;
+  let resizeTimer;
   self._resizeHandler = function () {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(updateTileSize, 100);
   };
   $(window).on('resize', self._resizeHandler);
 
-  var boardEl = document.getElementById('board');
+  const boardEl = document.getElementById('board');
   if (boardEl && typeof ResizeObserver !== 'undefined') {
     self._resizeObserver = new ResizeObserver(self._resizeHandler);
     self._resizeObserver.observe(boardEl);
@@ -75,9 +75,9 @@ Template.board.helpers({
     });
   },
   player: function () {
-    var players = getPlayers();
-    for (var i in players) {
-      var player = players[i];
+    const players = getPlayers();
+    for (const i in players) {
+      const player = players[i];
       if (player.userId === Meteor.userId()) {
         return player;
       }
@@ -85,9 +85,9 @@ Template.board.helpers({
   },
 
   robots: function () {
-    var r = [];
+    const r = [];
     getPlayers().forEach(function (player) {
-      var rclass = 'r' + player.robotId;
+      const rclass = 'r' + player.robotId;
       r.push({
         path: '/robots/robot_' + player.robotId.toString() + '.png',
         robot_class: rclass,
@@ -100,9 +100,9 @@ Template.board.helpers({
     return r;
   },
   markers: function () {
-    let m = [];
+    const m = [];
     getPlayers().forEach(function (player) {
-      let playerName = player.userId === Meteor.userId() ? 'You' : player.name;
+      const playerName = player.userId === Meteor.userId() ? 'You' : player.name;
       m.push({
         path: '/robots/marker_' + player.robotId.toString() + '.png',
         marker_class: 'm' + player.robotId.toString(),
@@ -113,20 +113,20 @@ Template.board.helpers({
     return m;
   },
   shots: function () {
-    var laserWidth = 4;
-    var tileWidth = getTileSize();
-    var startOffset = 5;
-    var s = [];
-    var game = getGame();
+    const laserWidth = 4;
+    const tileWidth = getTileSize();
+    const startOffset = 5;
+    const s = [];
+    const game = getGame();
     if (game && game.playPhase === GameState.PLAY_PHASE.CHECKPOINTS) {
       getPlayers().forEach(function (player, i) {
         if (!player.isPoweredDown() && !player.needsRespawn) {
-          var offsetY;
-          var offsetX;
-          var animate = {};
-          var animateRev = {};
-          var style = '';
-          var lc = 'l' + i;
+          let offsetY;
+          let offsetX;
+          const animate = {};
+          const animateRev = {};
+          let style = '';
+          const lc = 'l' + i;
           switch (player.direction % 2) {
             case 0: // up or down
               animate.height = tileWidth * player.shotDistance + 'px';
@@ -164,10 +164,10 @@ Template.board.helpers({
           }
           style += cssPosition(player.position.x, player.position.y, offsetX, offsetY);
           Tracker.afterFlush(function () {
-            var once = false;
-            var laserDiv = $('.' + lc);
+            let once = false;
+            const laserDiv = $('.' + lc);
             laserDiv.stop();
-            var duration = player.shotDistance * 26;
+            const duration = player.shotDistance * 26;
             console.log('shot duration', duration);
             laserDiv.animate(animate, {
               duration: duration,
@@ -191,24 +191,24 @@ Template.board.helpers({
   },
 
   tiles: function () {
-    var game = getGame();
+    const game = getGame();
     return game ? game.board().tiles : [];
   },
   gameEnded: function () {
-    var game = getGame();
+    const game = getGame();
     return game && game.gamePhase === GameState.PHASE.ENDED;
   },
   boardWidth: function () {
-    var game = getGame();
+    const game = getGame();
     return game ? game.board().width * getTileSize() : 0;
   },
   boardHeight: function () {
-    var game = getGame();
+    const game = getGame();
     return game ? game.board().height * getTileSize() : 0;
   },
   selectOptions: function () {
-    var s = [];
-    var game = getGame();
+    const s = [];
+    const game = getGame();
     if (!game) return s;
     console.log(
       'game.respawnUserId: ' + game.respawnUserId + '; Meteor.userId(): ' + Meteor.userId()
@@ -230,14 +230,14 @@ Template.board.helpers({
     return s;
   },
   registerPhases: function () {
-    var phases = [1, 2, 3, 4, 5];
-    var pUIData = [];
-    var game = getGame();
+    const phases = [1, 2, 3, 4, 5];
+    const pUIData = [];
+    const game = getGame();
     if (!game) return pUIData;
 
     phases.forEach(function (phase) {
-      var pclass = false;
-      var pstatus = 'fa-circle';
+      let pclass = false;
+      let pstatus = 'fa-circle';
       if (game.playPhaseCount === phase) {
         pclass = 'active';
         pstatus = 'fa-arrow-circle-right';
@@ -256,19 +256,19 @@ Template.board.helpers({
     return pUIData;
   },
   playPhases: function () {
-    var game = getGame();
+    const game = getGame();
     if (!game) return [];
-    var pUIData = [];
-    var phases = [
+    const pUIData = [];
+    const phases = [
       GameState.PLAY_PHASE.MOVE_BOTS,
       GameState.PLAY_PHASE.MOVE_BOARD,
       GameState.PLAY_PHASE.LASERS,
       GameState.PLAY_PHASE.CHECKPOINTS,
     ];
 
-    var finished = true;
+    let finished = true;
     phases.forEach(function (phase) {
-      var phaseProp = {
+      const phaseProp = {
         announceCard: false,
         width: (game.board().width * getTileSize()) / phases.length,
       };
@@ -305,17 +305,17 @@ Template.board.helpers({
     return pUIData;
   },
   announceMove: function () {
-    var game = getGame();
+    const game = getGame();
     return game && game.playPhase === GameState.PLAY_PHASE.MOVE_BOTS && game.announceCard;
   },
   cardPlaying: function () {
-    var game = getGame();
+    const game = getGame();
     if (game == null || game.announceCard == null) {
       return;
     }
 
-    var cardId = game.announceCard.cardId;
-    var player = Players.findOne(game.announceCard.playerId);
+    const cardId = game.announceCard.cardId;
+    const player = Players.findOne(game.announceCard.playerId);
     return {
       class: 'played announce-move',
       priority: CardLogic.priority(cardId),
@@ -330,20 +330,20 @@ Template.board.helpers({
 });
 
 function animatePosition(element, x, y) {
-  var newPosition = calcPosition(x, y);
-  var oldX = newPosition.x;
-  var oldY = newPosition.y;
+  const newPosition = calcPosition(x, y);
+  let oldX = newPosition.x;
+  let oldY = newPosition.y;
 
-  var position = $('.' + element).position();
+  const position = $('.' + element).position();
   if (position) {
     oldX = position.left;
     oldY = position.top;
 
     if (oldX !== newPosition.x || oldY !== newPosition.y) {
       Tracker.afterFlush(function () {
-        var deltaX = newPosition.x - oldX;
-        var deltaY = newPosition.y - oldY;
-        var playerElement = $('.' + element);
+        const deltaX = newPosition.x - oldX;
+        const deltaY = newPosition.y - oldY;
+        const playerElement = $('.' + element);
         playerElement.stop();
 
         playerElement.animate(
@@ -360,8 +360,8 @@ function animatePosition(element, x, y) {
 }
 
 function animateRotation(element, direction) {
-  var newRotation = direction * 90;
-  var el = $('.' + element);
+  const newRotation = direction * 90;
+  const el = $('.' + element);
   if (el.length) {
     el.css({ transform: 'rotate(' + newRotation + 'deg)' });
     return '';
@@ -370,12 +370,12 @@ function animateRotation(element, direction) {
 }
 
 function cssPosition(x, y, offsetX, offsetY) {
-  var coord = calcPosition(x, y, offsetX, offsetY);
+  const coord = calcPosition(x, y, offsetX, offsetY);
   return 'top: ' + coord.y + 'px; left:' + coord.x + 'px;';
 }
 
 function cssRotate(deg) {
-  var rotate = 'rotate(' + deg + 'deg);';
+  const rotate = 'rotate(' + deg + 'deg);';
   return 'transform: ' + rotate + ' -webkit-transform: ' + rotate + ' -ms-transform: ' + rotate;
 }
 
@@ -387,8 +387,8 @@ function calcPosition(x, y, offsetX, offsetY) {
     offsetY = 0;
   }
 
-  var tileWidth = getTileSize();
-  var tileHeight = getTileSize();
+  const tileWidth = getTileSize();
+  const tileHeight = getTileSize();
 
   x = tileWidth * x + offsetX;
   y = tileHeight * y + offsetY;
@@ -401,7 +401,7 @@ Template.board.events({
     FlowRouter.go(FlowRouter.path('gamelist.page'));
   },
   'click .cancel': async function () {
-    var game = getGame();
+    const game = getGame();
     if (game && game.gamePhase !== GameState.PHASE.ENDED) {
       if (
         await modalConfirm(
@@ -423,7 +423,7 @@ Template.board.events({
     }
   },
   'click .position-select': function (e) {
-    var game = getGame();
+    const game = getGame();
     Meteor.callAsync(
       'selectRespawnPosition',
       game._id,
@@ -434,7 +434,7 @@ Template.board.events({
     });
   },
   'click .direction-select': function (e) {
-    var game = getGame();
+    const game = getGame();
     Meteor.callAsync('selectRespawnDirection', game._id, $(e.target).attr('data-dir')).catch(
       function (error) {
         modalAlert(error.reason);

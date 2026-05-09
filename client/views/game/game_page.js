@@ -1,16 +1,16 @@
 function getGame() {
-  var id = FlowRouter.getParam('_id');
+  const id = FlowRouter.getParam('_id');
   if (id) {
     return Games.findOne(id);
   }
 }
 
 Template.gamePageActions.onCreated(function () {
-  var gameLoaded = false;
+  let gameLoaded = false;
   this.autorun(function (computation) {
-    var id = FlowRouter.getParam('_id');
+    const id = FlowRouter.getParam('_id');
     if (id) {
-      var game = Games.findOne(id);
+      const game = Games.findOne(id);
       if (game) {
         gameLoaded = true;
       }
@@ -69,7 +69,7 @@ Template.gamePageActions.events({
 
   'click .start': function (e) {
     e.preventDefault();
-    var gameId = this._id;
+    const gameId = this._id;
 
     Meteor.callAsync('startGame', gameId).catch(function (error) {
       modalAlert(error.reason);
@@ -82,7 +82,7 @@ Template.players.helpers({
     return Players.find();
   },
   minPlayer: function () {
-    var game = getGame();
+    const game = getGame();
     if (game && game.min_player > 1) {
       return '' + game.min_player + ' players';
     } else {
@@ -93,9 +93,9 @@ Template.players.helpers({
 
 Template.selectedBoard.helpers({
   boardData: function () {
-    var game = getGame();
+    const game = getGame();
     if (!game) return {};
-    var board = game.board();
+    const board = game.board();
     return {
       width: board.width * 24,
       height: board.height * 24,
@@ -105,7 +105,7 @@ Template.selectedBoard.helpers({
     };
   },
   ownGame: function () {
-    var game = getGame();
+    const game = getGame();
     return game && game.userId == Meteor.userId();
   },
 });
@@ -113,7 +113,7 @@ Template.selectedBoard.helpers({
 Template.selectedBoard.events({
   'click .select': function (e) {
     e.preventDefault();
-    var game = getGame();
+    const game = getGame();
     if (game) {
       FlowRouter.go(FlowRouter.path('boardselect.page', { _id: game._id }));
     }

@@ -7,7 +7,7 @@ Template.applicationLayout.onRendered(function () {
 
 Template.applicationLayout.helpers({
   loggingIn: function () {
-    var user = Meteor.user();
+    const user = Meteor.user();
     return user != null;
   },
   appHash: function () {

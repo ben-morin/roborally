@@ -1,7 +1,7 @@
-var timerHandle = null;
+let timerHandle = null;
 
 function getGame() {
-  var id = FlowRouter.getParam('_id');
+  const id = FlowRouter.getParam('_id');
   if (id) {
     return Games.findOne(id);
   }
@@ -12,12 +12,12 @@ function getCardData() {
 }
 
 function getHandCards() {
-  var c = getCardData();
+  const c = getCardData();
   return c ? c.handCards : [];
 }
 
 function getChosenCards() {
-  var c = getCardData();
+  const c = getCardData();
   return c ? c.chosenCards : [];
 }
 
@@ -26,7 +26,7 @@ Template.cards.helpers({
     return Players.findOne({ userId: Meteor.userId() });
   },
   otherPlayers: function () {
-    var game = getGame();
+    const game = getGame();
     if (!game) return [];
     return Players.find({ gameId: game._id, userId: { $ne: Meteor.userId() } });
   },
@@ -40,14 +40,14 @@ Template.cards.helpers({
     );
   },
   availableCards: function () {
-    var cards = getHandCards();
+    const cards = getHandCards();
     if (cards.length < 9) {
       //add empty cards^
       for (let j = cards.length; j < 9; j++) {
         cards.push(CardLogic.DAMAGE);
       }
     }
-    var chosenIds = new Set(
+    const chosenIds = new Set(
       getChosenCards().filter(function (id) {
         return id !== CardLogic.EMPTY;
       })
@@ -55,8 +55,8 @@ Template.cards.helpers({
     return addUIData(cards, true, false, false, getPlayer().game().playerCnt(), chosenIds);
   },
   showCards: function () {
-    var game = getGame();
-    var player = getPlayer();
+    const game = getGame();
+    const player = getPlayer();
     return (
       game &&
       game.gamePhase === GameState.PHASE.PROGRAM &&
@@ -69,10 +69,10 @@ Template.cards.helpers({
     return !getPlayer().submitted;
   },
   timer: function () {
-    var game = getGame();
+    const game = getGame();
     if (!game) return '';
-    var player = getPlayer();
-    var isNonPlayer = !player || player.lives <= 0;
+    const player = getPlayer();
+    const isNonPlayer = !player || player.lives <= 0;
     if (game.timer === 1 && timerHandle === null) {
       console.log('starting timer');
       Session.set('timeLeft', GameLogic.TIMER);
@@ -103,11 +103,11 @@ Template.cards.helpers({
       timerHandle = null;
     }
 
-    var timeLeft = Session.get('timeLeft') || 0;
+    const timeLeft = Session.get('timeLeft') || 0;
     return isNonPlayer ? '' : timeLeft > 0 ? '(' + timeLeft + ')' : '';
   },
   gameState: function () {
-    var game = getGame();
+    const game = getGame();
     if (!game) return '';
     switch (game.gamePhase) {
       case GameState.PHASE.IDLE:
@@ -115,8 +115,8 @@ Template.cards.helpers({
         return 'Dealing cards';
       case GameState.PHASE.ENDED:
         return 'Game over';
-      case GameState.PHASE.PROGRAM:
-        var player = getPlayer();
+      case GameState.PHASE.PROGRAM: {
+        const player = getPlayer();
         if (!player) {
           return 'Players thinking';
         } else if (player.lives <= 0) {
@@ -127,6 +127,7 @@ Template.cards.helpers({
           return 'Pick your cards';
         }
         break;
+      }
       case GameState.PHASE.PLAY:
         switch (game.playPhase) {
           case GameState.PLAY_PHASE.IDLE:
@@ -188,8 +189,8 @@ Template.cards.helpers({
     return getPlayer().isPoweredDown();
   },
   lives: function () {
-    var hearts = [];
-    for (var i = 0; i < 3; i++) {
+    const hearts = [];
+    for (let i = 0; i < 3; i++) {
       if (i < getPlayer().lives) {
         hearts.push('fa-heart');
       } else {
@@ -211,7 +212,7 @@ Template.cards.helpers({
     return Object.keys(getPlayer().optionCards).length > 0;
   },
   activeOptionCards: function () {
-    var r = [];
+    const r = [];
     Object.keys(getPlayer().optionCards).forEach(function (optionKey) {
       r.push({
         name: CardLogic.getOptionTitle(optionKey),
@@ -274,7 +275,7 @@ Template.card.helpers({
     return this.slot === getSlotIndex();
   },
   timer: function () {
-    var timeLeft = Session.get('timeLeft') || 0;
+    const timeLeft = Session.get('timeLeft') || 0;
     return timeLeft > 0 ? '(' + timeLeft + ')' : '';
   },
 });
@@ -293,7 +294,7 @@ Template.playerStatus.helpers({
   },
   lives: function () {
     l = [];
-    for (var i = 0; i < 3; i++) {
+    for (let i = 0; i < 3; i++) {
       if (i < this.lives) {
         l.push('fa-heart');
       } else {
@@ -341,7 +342,7 @@ Template.playerStatus.helpers({
     return Object.keys(this.optionCards).length > 0;
   },
   activeOptionCards: function () {
-    var r = [];
+    const r = [];
     Object.keys(this.optionCards).forEach(function (optionKey) {
       r.push({
         name: CardLogic.getOptionTitle(optionKey),
@@ -355,9 +356,9 @@ Template.playerStatus.helpers({
 Template.card.events({
   'click .available': function (e) {
     if (this.chosen) return;
-    var player = getPlayer();
+    const player = getPlayer();
     if (player.submitted) return;
-    var currentSlot = getSlotIndex();
+    const currentSlot = getSlotIndex();
     if (!isEmptySlot(currentSlot)) return;
 
     Session.set('selectedSlot', getNextEmptySlotIndex(currentSlot));
@@ -378,7 +379,7 @@ Template.card.events({
   'click .played': function (e) {
     if (this.locked) return;
     if (isEmptySlot(this.slot)) return;
-    var player = getPlayer();
+    const player = getPlayer();
     if (player.submitted) return;
     unchooseCard(player.gameId, this.slot);
     Session.set('selectedSlot', this.slot);
@@ -392,11 +393,11 @@ Template.card.events({
 
 Template.cards.events({
   'click .playBtn': function (e) {
-    var game = getGame();
+    const game = getGame();
     if (game) submitCards(game);
   },
   'click .powerBtn': function (e) {
-    var game = getGame();
+    const game = getGame();
     if (!game) return;
     Meteor.callAsync('togglePowerDown', game._id).then(
       function (powerState) {
@@ -450,7 +451,7 @@ function getChosenCnt() {
 }
 
 function getSlotIndex() {
-  var slot = Session.get('selectedSlot');
+  const slot = Session.get('selectedSlot');
   if (slot == null) {
     return getFirstEmptySlotIndex();
   }
@@ -462,8 +463,8 @@ function isEmptySlot(index) {
 }
 
 function getFirstEmptySlotIndex() {
-  var chosen = getChosenCards();
-  for (var i = 0; i < GameLogic.CARD_SLOTS; i++) {
+  const chosen = getChosenCards();
+  for (let i = 0; i < GameLogic.CARD_SLOTS; i++) {
     if (chosen[i] === CardLogic.EMPTY) {
       return i;
     }
@@ -472,9 +473,9 @@ function getFirstEmptySlotIndex() {
 }
 
 function getNextEmptySlotIndex(currentSlot) {
-  var chosen = getChosenCards();
-  for (var j = currentSlot + 1; j < currentSlot + GameLogic.CARD_SLOTS; j++) {
-    var k = j % GameLogic.CARD_SLOTS;
+  const chosen = getChosenCards();
+  for (let j = currentSlot + 1; j < currentSlot + GameLogic.CARD_SLOTS; j++) {
+    const k = j % GameLogic.CARD_SLOTS;
     if (chosen[k] === CardLogic.EMPTY) {
       return k;
     }
@@ -501,9 +502,9 @@ function submitCards(game) {
 }
 
 function addUIData(cards, available, locked, selectable, numberOfPlayers, chosenIds) {
-  var uiCards = [];
+  const uiCards = [];
   cards.forEach(function (card, i) {
-    var cardProp = {
+    const cardProp = {
       cardId: card,
     };
     if (selectable) {
@@ -524,7 +525,7 @@ function addUIData(cards, available, locked, selectable, numberOfPlayers, chosen
         break;
       default:
         if (card !== null && typeof card !== 'undefined') {
-          var ct = CardLogic.cardType(card, numberOfPlayers);
+          const ct = CardLogic.cardType(card, numberOfPlayers);
           if (ct) {
             cardProp.class = available ? 'available' : 'played';
             cardProp.priority = CardLogic.priority(card);

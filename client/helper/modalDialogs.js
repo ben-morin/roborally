@@ -29,7 +29,7 @@ modalAlert = function (bodyText) {
     jQuery('#notification-modal .modal-body p').text(bodyText);
   }
 
-  var notificationModal = jQuery('#notification-modal');
+  const notificationModal = jQuery('#notification-modal');
 
   notificationModal.find('.cancel-button').hide();
   notificationModal
@@ -64,8 +64,8 @@ modalConfirm = function (bodyText) {
     jQuery('#notification-modal .modal-body p').text(bodyText);
   }
 
-  var notificationModal = jQuery('#notification-modal');
-  var confirmed = false;
+  const notificationModal = jQuery('#notification-modal');
+  let confirmed = false;
 
   notificationModal
     .off('click', '.confirm-button')

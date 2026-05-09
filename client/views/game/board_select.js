@@ -1,17 +1,17 @@
 function getGame() {
-  var id = FlowRouter.getParam('_id');
+  const id = FlowRouter.getParam('_id');
   if (id) {
     return Games.findOne(id);
   }
 }
 
 function buildBoards(from, to) {
-  var game = getGame();
+  const game = getGame();
   if (!game) return [];
-  var b = [];
-  for (var i = from; i < to; i++) {
-    var board = BoardBox.getBoard(i);
-    var css_class = '';
+  const b = [];
+  for (let i = from; i < to; i++) {
+    const board = BoardBox.getBoard(i);
+    let css_class = '';
     if (Number(game.boardId) === Number(i)) {
       css_class = 'selected';
     }
@@ -28,9 +28,9 @@ function buildBoards(from, to) {
 }
 
 function activeCategory() {
-  var game = getGame();
+  const game = getGame();
   if (!game) return 'beginner';
-  var id = Number(game.boardId);
+  const id = Number(game.boardId);
   if (id >= BoardBox.CUSTOM_COURSE_IDX) return 'custom';
   if (id >= BoardBox.BEGINNER_COURSE_CNT) return 'expert';
   return 'beginner';
@@ -61,10 +61,10 @@ Template.boardselect.events({
   'click .boardchoice': function (e) {
     e.preventDefault();
 
-    var thumbnail = e.currentTarget.querySelector('.board-thumbnail');
+    const thumbnail = e.currentTarget.querySelector('.board-thumbnail');
     if (!thumbnail) return;
-    var boardName = thumbnail.id;
-    var game = getGame();
+    const boardName = thumbnail.id;
+    const game = getGame();
     if (!game) return;
 
     Meteor.callAsync('selectBoard', boardName, game._id).then(

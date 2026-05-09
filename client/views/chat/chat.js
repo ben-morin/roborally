@@ -6,16 +6,16 @@ Template.chat.helpers({
     return FlowRouter.getParam('_id') || 'global';
   },
   inGame: function () {
-    var gameId = FlowRouter.getParam('_id') || 'global';
+    const gameId = FlowRouter.getParam('_id') || 'global';
     return Players.findOne({ gameId: gameId, userId: Meteor.userId(), robotId: { $ne: null } });
   },
   viewingGame: function () {
     return FlowRouter.getRouteName() === 'board.page';
   },
   gameEnded: function () {
-    var gameId = FlowRouter.getParam('_id');
+    const gameId = FlowRouter.getParam('_id');
     if (!gameId) return false;
-    var game = Games.findOne(gameId);
+    const game = Games.findOne(gameId);
     return game && game.gamePhase === GameState.PHASE.ENDED;
   },
   leaveDisabledClass: function () {
@@ -31,9 +31,9 @@ Template.chat.helpers({
 });
 
 function canLeaveActiveGame() {
-  var gameId = FlowRouter.getParam('_id');
+  const gameId = FlowRouter.getParam('_id');
   if (!gameId) return true;
-  var game = Games.findOne(gameId);
+  const game = Games.findOne(gameId);
   if (!game) return true;
   if (!game.started) return true;
   if (game.gamePhase === GameState.PHASE.ENDED) return true;
@@ -43,7 +43,7 @@ function canLeaveActiveGame() {
 Template.chat.events({
   'submit form': function (event) {
     event.preventDefault();
-    var message = {
+    const message = {
       gameId: $(event.target).find('[name=gameId]').val(),
       message: $(event.target).find('[name=message]').val(),
     };
@@ -61,9 +61,9 @@ Template.chat.events({
   },
   'click .cancel': async function (e) {
     if ($(e.currentTarget).hasClass('disabled')) return;
-    var gameId = FlowRouter.getParam('_id') || 'global';
-    var game = Games.findOne(gameId);
-    var inGame = Players.findOne({
+    const gameId = FlowRouter.getParam('_id') || 'global';
+    const game = Games.findOne(gameId);
+    const inGame = Players.findOne({
       gameId: gameId,
       userId: Meteor.userId(),
       robotId: { $ne: null },
@@ -93,7 +93,7 @@ Template.chat.events({
 Template.chat.onRendered(function () {
   Chat.find().observe({
     added: function () {
-      var $chat = $('.chat'),
+      const $chat = $('.chat'),
         $printer = $('.messages', $chat),
         printerH = $printer.innerHeight();
       if ($printer && $printer[0]) {

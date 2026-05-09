@@ -19,7 +19,7 @@ Template.gameItemPostForm.helpers({
 Template.gameItemPostForm.events({
   'submit form': function (event) {
     event.preventDefault();
-    var game = {
+    const game = {
       name: $(event.target).find('[name=name]').val(),
     };
 
