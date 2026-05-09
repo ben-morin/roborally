@@ -24,7 +24,6 @@ session@1.2.2
 fourseven:scss
 coffeescript@2.7.0
 
-mrt:moment
 jquery@3.0.2
 email@3.1.2
 

@@ -26,7 +26,12 @@ Template.chat.helpers({
   },
 
   timeToStr: function (time) {
-    return moment(new Date(time)).format('L LT');
+    const d = new Date(time);
+    return (
+      d.toLocaleDateString() +
+      ' ' +
+      d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    );
   },
 });
 

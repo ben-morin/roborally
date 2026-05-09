@@ -54,8 +54,6 @@ const projectGlobals = {
   ownsDocument: 'writable',
   shuffle: 'writable',
   buildHighscores: 'writable',
-  // Third-party globals exposed via Meteor packages
-  moment: 'readonly',
 };
 
 module.exports = [
