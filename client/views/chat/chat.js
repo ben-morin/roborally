@@ -49,14 +49,14 @@ Template.chat.events({
   'submit form': function (event) {
     event.preventDefault();
     const message = {
-      gameId: $(event.target).find('[name=gameId]').val(),
-      message: $(event.target).find('[name=message]').val(),
+      gameId: event.target.elements.gameId.value,
+      message: event.target.elements.message.value,
     };
 
     if (message.message.length > 0) {
       Meteor.callAsync('addMessage', message).then(
         function () {
-          $(event.target).find('[name=message]').val('');
+          event.target.elements.message.value = '';
         },
         function (error) {
           modalAlert(error.reason);
@@ -65,7 +65,7 @@ Template.chat.events({
     }
   },
   'click .cancel': async function (e) {
-    if ($(e.currentTarget).hasClass('disabled')) return;
+    if (e.currentTarget.classList.contains('disabled')) return;
     const gameId = FlowRouter.getParam('_id') || 'global';
     const game = Games.findOne(gameId);
     const inGame = Players.findOne({
@@ -98,11 +98,9 @@ Template.chat.events({
 Template.chat.onRendered(function () {
   Chat.find().observe({
     added: function () {
-      const $chat = $('.chat'),
-        $printer = $('.messages', $chat),
-        printerH = $printer.innerHeight();
-      if ($printer && $printer[0]) {
-        $printer.stop().animate({ scrollTop: $printer[0].scrollHeight - printerH }, 100);
+      const printer = document.querySelector('.chat .messages');
+      if (printer) {
+        printer.scrollTo({ top: printer.scrollHeight, behavior: 'smooth' });
       }
     },
   });
