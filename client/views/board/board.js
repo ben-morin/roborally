@@ -40,7 +40,7 @@ Template.board.onRendered(function () {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(updateTileSize, 100);
   };
-  $(window).on('resize', self._resizeHandler);
+  window.addEventListener('resize', self._resizeHandler);
 
   const boardEl = document.getElementById('board');
   if (boardEl && typeof ResizeObserver !== 'undefined') {
@@ -61,8 +61,9 @@ Template.board.onDestroyed(function () {
     this._resizeObserver.disconnect();
   }
   if (this._resizeHandler) {
-    $(window).off('resize', this._resizeHandler);
+    window.removeEventListener('resize', this._resizeHandler);
   }
+  lastKnownPositions.clear();
 });
 
 Template.board.helpers({
@@ -123,21 +124,24 @@ Template.board.helpers({
         if (!player.isPoweredDown() && !player.needsRespawn) {
           let offsetY;
           let offsetX;
-          const animate = {};
-          const animateRev = {};
+          const extend = {};
+          const retract = {};
           let style = '';
           const lc = 'l' + i;
+          const beamLength = tileWidth * player.shotDistance;
+          const tailDistance = beamLength - startOffset;
+
           switch (player.direction % 2) {
             case 0: // up or down
-              animate.height = tileWidth * player.shotDistance + 'px';
-              animateRev.height = '0px';
+              extend.height = beamLength + 'px';
+              retract.height = '0px';
               style = 'width: ' + laserWidth + 'px;';
               style += 'height: 0px;';
               offsetX = (tileWidth - laserWidth) / 2;
               break;
             case 1: // left or right
-              animate.width = tileWidth * player.shotDistance + 'px';
-              animateRev.width = '0px';
+              extend.width = beamLength + 'px';
+              retract.width = '0px';
               style = 'height: ' + laserWidth + 'px;';
               style += 'width: 0px;';
               offsetY = (tileWidth - laserWidth) / 2;
@@ -147,38 +151,48 @@ Template.board.helpers({
           switch (player.direction) {
             case GameLogic.UP:
               offsetY = startOffset;
-              animate.top = '-=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               break;
             case GameLogic.LEFT:
               offsetX = startOffset;
-              animate.left = '-=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               break;
             case GameLogic.DOWN:
-              animateRev.top = '+=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               offsetY = tileWidth - startOffset;
               break;
             case GameLogic.RIGHT:
-              animateRev.left = '+=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               offsetX = tileWidth - startOffset;
               break;
           }
+
+          const initialTop = tileWidth * player.position.y + offsetY;
+          const initialLeft = tileWidth * player.position.x + offsetX;
+
+          switch (player.direction) {
+            case GameLogic.UP:
+              extend.top = initialTop - tailDistance + 'px';
+              break;
+            case GameLogic.LEFT:
+              extend.left = initialLeft - tailDistance + 'px';
+              break;
+            case GameLogic.DOWN:
+              retract.top = initialTop + tailDistance + 'px';
+              break;
+            case GameLogic.RIGHT:
+              retract.left = initialLeft + tailDistance + 'px';
+              break;
+          }
+
           style += cssPosition(player.position.x, player.position.y, offsetX, offsetY);
           Tracker.afterFlush(function () {
-            let once = false;
-            const laserDiv = $('.' + lc);
-            laserDiv.stop();
+            const laserDiv = document.querySelector('.' + lc);
+            if (!laserDiv) return;
+            laserDiv.getAnimations().forEach((a) => a.cancel());
             const duration = player.shotDistance * 26;
             console.log('shot duration', duration);
-            laserDiv.animate(animate, {
-              duration: duration,
-              queue: false,
-              progress: function (anim, progress, remainingMs) {
-                if (remainingMs <= duration - duration / 7 && !once) {
-                  laserDiv.animate(animateRev, { duration: duration, queue: false });
-                  once = true;
-                }
-              },
-            });
+            laserDiv.animate([{}, extend], { duration, fill: 'forwards' });
+            setTimeout(function () {
+              const el = document.querySelector('.' + lc);
+              if (el) el.animate([{}, retract], { duration, fill: 'forwards' });
+            }, duration / 7);
           });
           s.push({ shot: style, laser_class: lc });
         }
@@ -329,41 +343,63 @@ Template.board.helpers({
   },
 });
 
+// Tracks each animated element's last-known logical position so we can detect
+// real position changes without reading the DOM (offsetLeft is unreliable when
+// an animation is mid-flight or held by fill: forwards).
+const lastKnownPositions = new Map();
+
 function animatePosition(element, x, y) {
   const newPosition = calcPosition(x, y);
-  let oldX = newPosition.x;
-  let oldY = newPosition.y;
+  const previous = lastKnownPositions.get(element);
+  lastKnownPositions.set(element, { x, y });
 
-  const position = $('.' + element).position();
-  if (position) {
-    oldX = position.left;
-    oldY = position.top;
-
-    if (oldX !== newPosition.x || oldY !== newPosition.y) {
-      Tracker.afterFlush(function () {
-        const deltaX = newPosition.x - oldX;
-        const deltaY = newPosition.y - oldY;
-        const playerElement = $('.' + element);
-        playerElement.stop();
-
-        playerElement.animate(
-          {
-            left: '+=' + deltaX + 'px',
-            top: '+=' + deltaY + 'px',
-          },
-          Math.max(Math.abs(deltaX), Math.abs(deltaY)) * 4
-        );
-      });
+  // Snapshot the current rendered position BEFORE returning, while the inline
+  // style still reflects the previous render. getComputedStyle includes any
+  // in-flight animation effect, so a multi-step move (server fires 3 updates
+  // within milliseconds for a "move 3") starts the new animation from where
+  // the robot is currently *visible*, not from its prior tile origin. This
+  // makes 3-tile moves play as one continuous glide instead of three rapid
+  // animations that cancel each other before rendering.
+  let visualX = null;
+  let visualY = null;
+  if (previous && (previous.x !== x || previous.y !== y)) {
+    const el = document.querySelector('.' + element);
+    if (el) {
+      const computed = getComputedStyle(el);
+      const cl = parseFloat(computed.left);
+      const ct = parseFloat(computed.top);
+      if (!Number.isNaN(cl)) visualX = cl;
+      if (!Number.isNaN(ct)) visualY = ct;
     }
+    const oldPosition = calcPosition(previous.x, previous.y);
+    const startX = visualX != null ? visualX : oldPosition.x;
+    const startY = visualY != null ? visualY : oldPosition.y;
+
+    Tracker.afterFlush(function () {
+      const playerElement = document.querySelector('.' + element);
+      if (!playerElement) return;
+      playerElement.getAnimations().forEach((a) => a.cancel());
+      const duration =
+        Math.max(Math.abs(newPosition.x - startX), Math.abs(newPosition.y - startY)) * 4;
+      playerElement.animate(
+        [
+          { left: startX + 'px', top: startY + 'px' },
+          { left: newPosition.x + 'px', top: newPosition.y + 'px' },
+        ],
+        { duration }
+      );
+    });
   }
-  return 'left: ' + oldX + 'px; top: ' + oldY + 'px;';
+  return 'left: ' + newPosition.x + 'px; top: ' + newPosition.y + 'px;';
 }
 
 function animateRotation(element, direction) {
   const newRotation = direction * 90;
-  const el = $('.' + element);
-  if (el.length) {
-    el.css({ transform: 'rotate(' + newRotation + 'deg)' });
+  const els = document.querySelectorAll('.' + element);
+  if (els.length) {
+    els.forEach((el) => {
+      el.style.transform = 'rotate(' + newRotation + 'deg)';
+    });
     return '';
   }
   return 'transform: rotate(' + newRotation + 'deg)';
@@ -427,15 +463,15 @@ Template.board.events({
     Meteor.callAsync(
       'selectRespawnPosition',
       game._id,
-      $(e.target).attr('data-x'),
-      $(e.target).attr('data-y')
+      e.target.dataset.x,
+      e.target.dataset.y
     ).catch(function (error) {
       modalAlert(error.reason);
     });
   },
   'click .direction-select': function (e) {
     const game = getGame();
-    Meteor.callAsync('selectRespawnDirection', game._id, $(e.target).attr('data-dir')).catch(
+    Meteor.callAsync('selectRespawnDirection', game._id, e.target.dataset.dir).catch(
       function (error) {
         modalAlert(error.reason);
       }
