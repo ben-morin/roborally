@@ -26,75 +26,73 @@
 
 modalAlert = function (bodyText) {
   if (bodyText) {
-    jQuery('#notification-modal .modal-body p').text(bodyText);
+    document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
   }
 
-  const notificationModal = jQuery('#notification-modal');
+  const modalEl = document.getElementById('notification-modal');
+  const cancelBtn = modalEl.querySelector('.cancel-button');
+  cancelBtn.style.display = 'none';
 
-  notificationModal.find('.cancel-button').hide();
-  notificationModal
-    .off('click', '.confirm-button')
-    .off('click', '.cancel-button')
-    .off('hidden.bs.modal')
-    .off('keydown');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
   return new Promise(function (resolve) {
-    notificationModal.on('click', '.confirm-button', function () {
-      notificationModal.modal('hide');
-    });
-
-    notificationModal.on('keydown', function (e) {
+    const onClick = function (e) {
+      if (e.target.closest('.confirm-button')) modal.hide();
+    };
+    const onKeydown = function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        notificationModal.modal('hide');
+        modal.hide();
       }
-    });
-
-    notificationModal.on('hidden.bs.modal', function () {
-      notificationModal.find('.cancel-button').show();
+    };
+    const onHidden = function () {
+      modalEl.removeEventListener('click', onClick);
+      modalEl.removeEventListener('keydown', onKeydown);
+      cancelBtn.style.display = '';
       resolve(true);
-    });
+    };
 
-    notificationModal.modal('show');
+    modalEl.addEventListener('click', onClick);
+    modalEl.addEventListener('keydown', onKeydown);
+    modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+    modal.show();
   });
 };
 
 modalConfirm = function (bodyText) {
   if (bodyText) {
-    jQuery('#notification-modal .modal-body p').text(bodyText);
+    document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
   }
 
-  const notificationModal = jQuery('#notification-modal');
+  const modalEl = document.getElementById('notification-modal');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   let confirmed = false;
 
-  notificationModal
-    .off('click', '.confirm-button')
-    .off('click', '.cancel-button')
-    .off('hidden.bs.modal')
-    .off('keydown');
-
   return new Promise(function (resolve) {
-    notificationModal.on('click', '.confirm-button', function () {
-      confirmed = true;
-      notificationModal.modal('hide');
-    });
-
-    notificationModal.on('click', '.cancel-button', function () {
-      notificationModal.modal('hide');
-    });
-
-    notificationModal.on('keydown', function (e) {
+    const onClick = function (e) {
+      if (e.target.closest('.confirm-button')) {
+        confirmed = true;
+        modal.hide();
+      } else if (e.target.closest('.cancel-button')) {
+        modal.hide();
+      }
+    };
+    const onKeydown = function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmed = true;
-        notificationModal.modal('hide');
+        modal.hide();
       }
-    });
-
-    notificationModal.on('hidden.bs.modal', function () {
+    };
+    const onHidden = function () {
+      modalEl.removeEventListener('click', onClick);
+      modalEl.removeEventListener('keydown', onKeydown);
       resolve(confirmed);
-    });
+    };
 
-    notificationModal.modal('show');
+    modalEl.addEventListener('click', onClick);
+    modalEl.addEventListener('keydown', onKeydown);
+    modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+    modal.show();
   });
 };

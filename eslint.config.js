@@ -22,6 +22,8 @@ const meteorGlobals = {
   Roles: 'readonly',
   SyncedCron: 'readonly',
   _: 'readonly',
+  // Bootstrap 5 (loaded as a global via public/bootstrap.bundle.min.js)
+  bootstrap: 'readonly',
 };
 
 // Project-defined globals — declared `writable` because these names are
