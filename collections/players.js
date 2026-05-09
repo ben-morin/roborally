@@ -1,4 +1,4 @@
-var player = {
+const player = {
   game: function () {
     return Games.findOne(this.gameId);
   },
@@ -9,30 +9,30 @@ var player = {
     return Games.findOne(this.gameId).board();
   },
   boardAsync: async function () {
-    var game = await Games.findOneAsync(this.gameId);
+    const game = await Games.findOneAsync(this.gameId);
     return game.board();
   },
   tile: function () {
     return this.board().getTile(this.position.x, this.position.y);
   },
   tileAsync: async function () {
-    var board = await this.boardAsync();
+    const board = await this.boardAsync();
     return board.getTile(this.position.x, this.position.y);
   },
   getHandCards: function () {
-    var c = Cards.findOne({ playerId: this._id });
+    const c = Cards.findOne({ playerId: this._id });
     return c ? c.handCards : [];
   },
   getHandCardsAsync: async function () {
-    var c = await Cards.findOneAsync({ playerId: this._id });
+    const c = await Cards.findOneAsync({ playerId: this._id });
     return c ? c.handCards : [];
   },
   getChosenCards: function () {
-    var c = Cards.findOne({ playerId: this._id });
+    const c = Cards.findOne({ playerId: this._id });
     return c ? c.chosenCards : [];
   },
   getChosenCardsAsync: async function () {
-    var c = await Cards.findOneAsync({ playerId: this._id });
+    const c = await Cards.findOneAsync({ playerId: this._id });
     return c ? c.chosenCards : [];
   },
   hasOptionCard: function (optionName) {
@@ -42,8 +42,8 @@ var player = {
     await Cards.upsertAsync({ playerId: this._id }, { $set: { handCards: cards } });
   },
   chooseCardAsync: async function (card, index) {
-    var cards = await this.getChosenCardsAsync();
-    var inc = 0;
+    const cards = await this.getChosenCardsAsync();
+    let inc = 0;
     if (cards[index] === CardLogic.EMPTY) inc = 1;
     cards[index] = card;
     if (Meteor.isServer) console.log('update chosen cards', index, card);
@@ -60,7 +60,7 @@ var player = {
     });
   },
   unchooseCardAsync: async function (index) {
-    var cards = await this.getChosenCardsAsync();
+    const cards = await this.getChosenCardsAsync();
     if (cards[index] !== CardLogic.EMPTY) {
       cards[index] = CardLogic.EMPTY;
       await Cards.updateAsync(
@@ -77,16 +77,16 @@ var player = {
     }
   },
   isOnBoardAsync: async function () {
-    var board = await this.boardAsync();
-    var a = board.onBoard(this.position.x, this.position.y);
+    const board = await this.boardAsync();
+    const a = board.onBoard(this.position.x, this.position.y);
     if (!a) {
       console.log('Player fell off the board', this.name);
     }
     return a;
   },
   isOnVoidAsync: async function () {
-    var tile = await this.tileAsync();
-    var a = tile.type === Tile.VOID;
+    const tile = await this.tileAsync();
+    const a = tile.type === Tile.VOID;
     if (a) {
       console.log('Player fell into the void', this.name);
     }
@@ -163,10 +163,10 @@ var player = {
       this.damage += inc;
       if (this.isPoweredDown() && this.lockedCnt() > 0) {
         // powered down robot has no cards so we have to draw from deck to get locked cards
-        var game = await this.gameAsync();
-        var deck = await game.getDeckAsync();
-        var chosenCards = await this.getChosenCardsAsync();
-        for (var i = 0; i < this.lockedCnt(); i++) {
+        const game = await this.gameAsync();
+        const deck = await game.getDeckAsync();
+        const chosenCards = await this.getChosenCardsAsync();
+        for (let i = 0; i < this.lockedCnt(); i++) {
           this.cards[this.notLockedCnt() + i] = deck.cards.shift();
           chosenCards[this.notLockedCnt() + i] = this.cards[this.notLockedCnt() + i];
         }
@@ -184,23 +184,23 @@ var player = {
     }
   },
   drawOptionCardAsync: async function () {
-    var game = await this.gameAsync();
-    var gameId = game._id;
-    var deckDoc = await Deck.findOneAsync({ gameId: gameId });
-    var optionCards = deckDoc.optionCards;
+    const game = await this.gameAsync();
+    const gameId = game._id;
+    const deckDoc = await Deck.findOneAsync({ gameId: gameId });
+    const optionCards = deckDoc.optionCards;
     //Ensure that there are option cards to choose from and then update game deck.
     if (optionCards.length) {
-      var optionId = optionCards.pop();
+      const optionId = optionCards.pop();
       this.optionCards[CardLogic.getOptionName(optionId)] = true;
       await Deck.updateAsync({ gameId: gameId }, { $set: { optionCards: optionCards } });
     }
   },
   discardOptionCardAsync: async function (name) {
-    var game = await this.gameAsync();
-    let gameId = game._id;
+    const game = await this.gameAsync();
+    const gameId = game._id;
     delete this.optionCards[name];
-    let deckDoc = await Deck.findOneAsync({ gameId: gameId });
-    let discarded = deckDoc.discardedOptionCards;
+    const deckDoc = await Deck.findOneAsync({ gameId: gameId });
+    const discarded = deckDoc.discardedOptionCards;
     discarded.push(CardLogic.getOptionId(name));
     await Deck.updateAsync({ gameId: gameId }, { $set: { discardedOptionCards: discarded } });
   },
@@ -208,7 +208,7 @@ var player = {
 
 Players = new Meteor.Collection('players', {
   transform: function (doc) {
-    var newInstance = Object.create(player);
+    const newInstance = Object.create(player);
     return Object.assign(newInstance, doc);
   },
 });

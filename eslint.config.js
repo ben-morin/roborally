@@ -82,8 +82,8 @@ module.exports = [
       },
     },
     rules: {
-      'no-var': 'warn',
-      'prefer-const': 'warn',
+      'no-var': 'error',
+      'prefer-const': 'error',
       eqeqeq: ['warn', 'smart'],
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
