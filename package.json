@@ -7,7 +7,7 @@
     "type": "git",
     "url": "git+https://github.com/ben-morin/roborally.git"
   },
-	"bugs": {
+  "bugs": {
     "url": "https://github.com/ben-morin/roborally/issues"
   },
   "license": "GPL-2.0",

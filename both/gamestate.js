@@ -116,7 +116,10 @@ GameState = {
     }
 
     await game.setGamePhaseAsync(GameState.PHASE.PROGRAM);
-    const notPoweredDownCnt = await Players.find({ gameId: game._id, submitted: false }).countAsync();
+    const notPoweredDownCnt = await Players.find({
+      gameId: game._id,
+      submitted: false,
+    }).countAsync();
     if (notPoweredDownCnt === 0) {
       await game.nextGamePhaseAsync();
     }

@@ -80,7 +80,9 @@ Template.cards.helpers({
         Session.set('timeLeft', Math.max(0, Session.get('timeLeft') - 1));
       }, 1000);
       if (!isNonPlayer && !Players.findOne({ userId: Meteor.userId() }).submitted) {
-        $(document).find('.right-panel .card').addClass('countdown');
+        document
+          .querySelectorAll('.right-panel .card')
+          .forEach((el) => el.classList.add('countdown'));
       }
     }
     if (game.timer === 0) {
@@ -93,8 +95,10 @@ Template.cards.helpers({
       timerHandle = null;
     }
     if (timerHandle && Session.get('timeLeft') <= 5 && !isNonPlayer && !getPlayer().submitted) {
-      $(document).find('.right-panel .card').removeClass('countdown');
-      $(document).find('.right-panel .card').addClass('finish');
+      document.querySelectorAll('.right-panel .card').forEach((el) => {
+        el.classList.remove('countdown');
+        el.classList.add('finish');
+      });
     }
     if (game.timer === -1) {
       console.log('game timer = -1');
@@ -368,7 +372,9 @@ Template.card.events({
     if (player.isPoweredDown()) {
       Meteor.callAsync('togglePowerDown', player.gameId).then(
         function (powerState) {
-          $('.playBtn').toggleClass('disabled', !allowSubmit());
+          document
+            .querySelectorAll('.playBtn')
+            .forEach((el) => el.classList.toggle('disabled', !allowSubmit()));
         },
         function (error) {
           modalAlert(error.reason);
@@ -404,7 +410,9 @@ Template.cards.events({
         if (powerState === GameLogic.OFF) {
           unchooseAllCards(getPlayer());
         }
-        $('.playBtn').toggleClass('disabled', !allowSubmit());
+        document
+          .querySelectorAll('.playBtn')
+          .forEach((el) => el.classList.toggle('disabled', !allowSubmit()));
       },
       function (error) {
         modalAlert(error.reason);
@@ -420,7 +428,9 @@ function getPlayer() {
 function chooseCard(gameId, card, slot) {
   Meteor.callAsync('selectCard', gameId, card, slot).then(
     function (chosenCards) {
-      $('.playBtn').toggleClass('disabled', !allowSubmit());
+      document
+        .querySelectorAll('.playBtn')
+        .forEach((el) => el.classList.toggle('disabled', !allowSubmit()));
     },
     function (error) {
       modalAlert(error.reason);
@@ -431,7 +441,9 @@ function chooseCard(gameId, card, slot) {
 function unchooseCard(gameId, slot) {
   Meteor.callAsync('deselectCard', gameId, slot).then(
     function (chosenCards) {
-      $('.playBtn').toggleClass('disabled', !allowSubmit());
+      document
+        .querySelectorAll('.playBtn')
+        .forEach((el) => el.classList.toggle('disabled', !allowSubmit()));
     },
     function (error) {
       modalAlert(error.reason);
@@ -489,7 +501,9 @@ function allowSubmit() {
 
 function submitCards(game) {
   console.log('submitting cards');
-  $(document).find('.right-panel .card').removeClass('countdown').removeClass('finish');
+  document
+    .querySelectorAll('.right-panel .card')
+    .forEach((el) => el.classList.remove('countdown', 'finish'));
   Meteor.callAsync('playCards', game._id).then(
     function () {
       Session.set('selectedSlot', 0);
