@@ -1,63 +1,63 @@
 <template name="board">
-  {{#if game}}
-    {{#if gameEnded}}
-      <div class="card card-body">
-        <h3>Game over</h3>
-        <hr class="star-well">
-        <h4>{{game.winner}} has won the game!</h4>
-        <div class="exit">
-          <a class="btn btn-danger cancel">Close game</a>
-        </div>
-      </div>
-    {{else if game.announce}}
-      <div class="announce-bar" style="width: {{boardWidth}}px; height: 74px;">
-        <div style="width: 100%">
-          {{#each registerPhases}}
-            <span class="phase {{phaseClass}}" style="width: {{width}}px;">
-              <span class="fa {{status}}"></span>
-              <span>{{phaseName}}</span>
-            </span>
-          {{/each}}
-        </div>
-        <div style="width: 100%">
-          {{#each playPhases}}
-            <span class="phase {{phaseClass}}" style="width: {{width}}px;">
-              <span class="fa {{status}}"></span>
-              <span>{{phaseName}}</span>
-            </span>
-          {{/each}}
-        </div>
-      </div>
-    {{/if}}
-    <div id="board">
-      {{> _tiles rows=tiles show_start=false}}
-      <br>
-      {{#each markers}}
-        <div class="marker {{marker_class}}" style="{{position}}">
-          <img src="{{path}}" style="{{direction}}">
-        </div>
+  {{#if game}} {{#if gameEnded}}
+  <div class="card card-body">
+    <h3>Game over</h3>
+    <hr class="star-well" />
+    <h4>{{game.winner}} has won the game!</h4>
+    <div class="exit">
+      <a class="btn btn-danger cancel">Close game</a>
+    </div>
+  </div>
+  {{else if game.announce}}
+  <div class="announce-bar" style="width: {{boardWidth}}px; height: 74px;">
+    <div style="width: 100%">
+      {{#each registerPhases}}
+      <span class="phase {{phaseClass}}" style="width: {{width}}px;">
+        <span class="fa {{status}}"></span>
+        <span>{{phaseName}}</span>
+      </span>
       {{/each}}
-      {{#each robots}}
-        <div class="robot {{robot_class}}" style="{{position}}">
-          <img src="{{path}}" style="{{direction}}">
-          {{#if poweredDown}}
-            <img src="/Power_Off.png" class="robot-off">
-          {{/if}}
-        </div>
+    </div>
+    <div style="width: 100%">
+      {{#each playPhases}}
+      <span class="phase {{phaseClass}}" style="width: {{width}}px;">
+        <span class="fa {{status}}"></span>
+        <span>{{phaseName}}</span>
+      </span>
       {{/each}}
-      {{#each shots}}
-        <div class="laser {{laser_class}}" style="{{shot}}"></div>
-      {{/each}}
-      {{#each selectOptions}}
-        <div class="{{select_class}}" style="{{position}}" data-x="{{x}}" data-y="{{y}}" data-dir="{{dir}}"></div>
-      {{/each}}
-      {{#if announceMove}}
-        {{#with cardPlaying}}
-          <div class="gamecard fadeInAndOut {{type}} {{class}}" style="{{position}} width: {{tileSize}};"></div>
-        {{/with}}
+    </div>
+  </div>
+  {{/if}}
+  <div id="board">
+    {{> _tiles rows=tiles show_start=false}}
+    <br />
+    {{#each markers}}
+    <div class="marker {{marker_class}}" style="{{position}}">
+      <img src="{{path}}" style="{{direction}}" />
+    </div>
+    {{/each}} {{#each robots}}
+    <div class="robot {{robot_class}}" style="{{position}}">
+      <img src="{{path}}" style="{{direction}}" />
+      {{#if poweredDown}}
+      <img src="/Power_Off.png" class="robot-off" />
       {{/if}}
     </div>
-  {{else}}
-    {{> loading}}
-  {{/if}}
+    {{/each}} {{#each shots}}
+    <div class="laser {{laser_class}}" style="{{shot}}"></div>
+    {{/each}} {{#each selectOptions}}
+    <div
+      class="{{select_class}}"
+      style="{{position}}"
+      data-x="{{x}}"
+      data-y="{{y}}"
+      data-dir="{{dir}}"
+    ></div>
+    {{/each}} {{#if announceMove}} {{#with cardPlaying}}
+    <div
+      class="gamecard fadeInAndOut {{type}} {{class}}"
+      style="{{position}} width: {{tileSize}};"
+    ></div>
+    {{/with}} {{/if}}
+  </div>
+  {{else}} {{> loading}} {{/if}}
 </template>

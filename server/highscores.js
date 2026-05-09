@@ -1,24 +1,27 @@
-buildHighscores = async function() {
-
+buildHighscores = async function () {
   console.log('Building Highscores');
 
-  const mostWon = await Games.rawCollection().aggregate([
-    { $match: { winner: { $ne: "Nobody" } } },
-    { $group: { _id: "$winner", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 10 }
-  ]).toArray();
+  const mostWon = await Games.rawCollection()
+    .aggregate([
+      { $match: { winner: { $ne: 'Nobody' } } },
+      { $group: { _id: '$winner', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ])
+    .toArray();
 
-  const mostPlayed = await Players.rawCollection().aggregate([
-    { $group: { _id: "$name", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 10 }
-  ]).toArray();
+  const mostPlayed = await Players.rawCollection()
+    .aggregate([
+      { $group: { _id: '$name', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ])
+    .toArray();
 
   await Highscores.removeAsync({});
   await addToHighscores(mostWon, 'mostWon');
   await addToHighscores(mostPlayed, 'mostPlayed');
-}
+};
 
 async function addToHighscores(arr, type) {
   for (let i = 0; i < arr.length; i++) {

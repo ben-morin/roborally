@@ -1,32 +1,21 @@
 <template name="_tiles">
-  {{#each rows}}
-    {{#each this}}
-      <span class="tile" style="background-image: url('{{this.path}}'); {{rotate direction}}">
-        {{#each items}}
-          <img class="board-item" src="{{path}}" style="position: absolute; {{rotate direction}}">
-        {{/each}}
-        {{#if this.finish}}
-          <div src="/finish.png">
-            <img class="board-item" src="/finish.png">
-          </div>
-        {{/if}}
-        {{#if this.checkpoint}}
-          <div class="checkpoint {{visited_checkpoint this.checkpoint}}">
-            <div class="checkpoint-text-container">
-              <div class="checkpoint-text">
-                {{this.checkpoint}}
-              </div>
-            </div>
-          </div>
-        {{/if}}
-        {{#if ../../show_start}}
-          {{#if this.start}}
-            {{#if leq this.start ../../show_start}}
-              <img class="board-item" src="/start.png">
-            {{/if}}
-          {{/if}}
-        {{/if}}
-      </span>
-    {{/each}}
-  {{/each}}
+  {{#each rows}} {{#each this}}
+  <span class="tile" style="background-image: url('{{this.path}}'); {{rotate direction}}">
+    {{#each items}}
+    <img class="board-item" src="{{path}}" style="position: absolute; {{rotate direction}}" />
+    {{/each}} {{#if this.finish}}
+    <div src="/finish.png">
+      <img class="board-item" src="/finish.png" />
+    </div>
+    {{/if}} {{#if this.checkpoint}}
+    <div class="checkpoint {{visited_checkpoint this.checkpoint}}">
+      <div class="checkpoint-text-container">
+        <div class="checkpoint-text">{{this.checkpoint}}</div>
+      </div>
+    </div>
+    {{/if}} {{#if ../../show_start}} {{#if this.start}} {{#if leq this.start ../../show_start}}
+    <img class="board-item" src="/start.png" />
+    {{/if}} {{/if}} {{/if}}
+  </span>
+  {{/each}} {{/each}}
 </template>

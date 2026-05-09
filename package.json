@@ -1,7 +1,7 @@
 {
   "name": "roborally",
   "description": "RoboRally in Meteor",
-  "version": "3.4.1-1",
+  "version": "3.4.1-2",
   "private": true,
   "repository": {
     "type": "git",
@@ -12,7 +12,11 @@
   "scripts": {
     "start": "meteor run",
     "dev": "meteor run --settings settings-dev.json",
-    "test": "echo \"Error: no tests\" && exit 1"
+    "test": "echo \"Error: no tests\" && exit 1",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,json,html,scss,md}\"",
+    "format:check": "prettier --check \"**/*.{js,json,html,scss,md}\""
   },
   "dependencies": {
     "@babel/runtime": "^7.23.5",
@@ -29,6 +33,11 @@
     "modern": false
   },
   "devDependencies": {
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-meteor": "^7.3.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
     "sass-embedded": "1.79"
   }
 }

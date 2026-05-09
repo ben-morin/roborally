@@ -1,6 +1,7 @@
 Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};
-Meteor.settings.public.appVersion = process.env.APP_VERSION || process.env.npm_package_version || 'development';
+Meteor.settings.public.appVersion =
+  process.env.APP_VERSION || process.env.npm_package_version || 'development';
 
 SyncedCron.config({ log: false });
 
@@ -8,17 +9,16 @@ SyncedCron.add({
   name: 'Build highscore lists',
   schedule: (parser) => parser.text('every 1 hour'),
   job: async () => {
-    console.log("CRON: Building highscore lists");
+    console.log('CRON: Building highscore lists');
     await buildHighscores();
-  }
+  },
 });
 
 SyncedCron.add({
   name: 'Clean up unstarted games',
   schedule: (parser) => parser.text('every 5 minutes'),
   job: async () => {
-
-    const openGames = await Games.find({started: false}).fetchAsync();
+    const openGames = await Games.find({ started: false }).fetchAsync();
     for (const game of openGames) {
       const owner = await Meteor.users.findOneAsync(game.userId);
       if (owner && !owner.status.online) {
@@ -30,14 +30,13 @@ SyncedCron.add({
         }
       }
     }
-  }
+  },
 });
 
 SyncedCron.add({
   name: 'Clean up abandoned games',
   schedule: (parser) => parser.text('every 1 minute'),
   job: async () => {
-
     const liveGames = await Games.find({ started: true, winner: { $exists: false } }).fetchAsync();
     for (const game of liveGames) {
       const players = await Players.find({ gameId: game._id }).fetchAsync();
@@ -45,27 +44,29 @@ SyncedCron.add({
       let playersOnline = 0;
       let lastManStanding = null;
 
-      await Promise.all(players.map(async (player) => {
-        const user = await Meteor.users.findOneAsync(player.userId);
-        if (user && !user.status.online) {
-          await delay(5000);
-          const userRecheck = await Meteor.users.findOneAsync(player.userId);
-          if (userRecheck && !userRecheck.status.online) {
-            await player.chatAsync(`disconnected and left the game`);
+      await Promise.all(
+        players.map(async (player) => {
+          const user = await Meteor.users.findOneAsync(player.userId);
+          if (user && !user.status.online) {
+            await delay(5000);
+            const userRecheck = await Meteor.users.findOneAsync(player.userId);
+            if (userRecheck && !userRecheck.status.online) {
+              await player.chatAsync(`disconnected and left the game`);
+            } else {
+              lastManStanding = player;
+              playersOnline++;
+            }
           } else {
             lastManStanding = player;
             playersOnline++;
           }
-        } else {
-          lastManStanding = player;
-          playersOnline++;
-        }
-      }));
+        })
+      );
 
       console.log(`Game ${game._id}: ${playersOnline} of ${numPlayers} players online.`);
 
       if (playersOnline === 0) {
-        await endGame(game._id, "Nobody");
+        await endGame(game._id, 'Nobody');
       } else if (playersOnline === 1 && game.min_player > 1) {
         await endGame(game._id, lastManStanding.name);
         await buildHighscores();
@@ -76,11 +77,11 @@ SyncedCron.add({
     const inactiveThreshold = new Date();
     inactiveThreshold.setMinutes(inactiveThreshold.getMinutes() - 30);
     await Meteor.users.updateAsync(
-      { "status.lastActivity": { $lt: inactiveThreshold } },
-      { $set: { "status.online": false } },
+      { 'status.lastActivity': { $lt: inactiveThreshold } },
+      { $set: { 'status.online': false } },
       { multi: true }
     );
-  }
+  },
 });
 
 Meteor.startup(() => {
@@ -89,7 +90,7 @@ Meteor.startup(() => {
     sendVerificationEmail: Meteor.settings?.VERIFY_EMAILS || false,
   });
 
-  Accounts.emailTemplates.siteName = "RoboRally";
+  Accounts.emailTemplates.siteName = 'RoboRally';
   if (Meteor.settings?.MAIL_FROM) {
     Accounts.emailTemplates.from = Meteor.settings.MAIL_FROM;
   }
@@ -104,7 +105,10 @@ Meteor.startup(() => {
     if (allowedEmails.length === 0 && allowedDomains.length === 0) return true;
 
     const domain = email.slice(email.lastIndexOf('@') + 1);
-    if (allowedEmails.includes(email.toLowerCase()) || allowedDomains.includes(domain.toLowerCase())) {
+    if (
+      allowedEmails.includes(email.toLowerCase()) ||
+      allowedDomains.includes(domain.toLowerCase())
+    ) {
       return true;
     }
 
@@ -118,20 +122,23 @@ Meteor.startup(() => {
 
     if (Accounts._options.sendVerificationEmail) {
       const user = attempt.user;
-      if (user.emails && !user.emails.some(email => email.verified)) {
-        throw new Meteor.Error('email-not-verified', 'You must verify your email address before logging in. Please check your inbox.');
+      if (user.emails && !user.emails.some((email) => email.verified)) {
+        throw new Meteor.Error(
+          'email-not-verified',
+          'You must verify your email address before logging in. Please check your inbox.'
+        );
       }
     }
 
     return true;
   });
 
-  console.info("Meteor.startup: cron");
+  console.info('Meteor.startup: cron');
   SyncedCron.start();
 });
 
 async function delay(ms) {
-  return new Promise(resolve => Meteor.setTimeout(resolve, ms));
+  return new Promise((resolve) => Meteor.setTimeout(resolve, ms));
 }
 
 async function endGame(gameId, winner) {
@@ -140,7 +147,7 @@ async function endGame(gameId, winner) {
     $set: {
       gamePhase: GameState.PHASE.ENDED,
       winner,
-      stopped: Date.now()
-    }
+      stopped: Date.now(),
+    },
   });
 }

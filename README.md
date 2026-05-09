@@ -1,27 +1,27 @@
-roborally
-=
+# roborally
 
-Browser-based [RoboRally](https://en.wikipedia.org/wiki/RoboRally) board game implementation built with [Meteor 3](https://www.meteor.com). 
+Browser-based [RoboRally](https://en.wikipedia.org/wiki/RoboRally) board game implementation built with [Meteor 3](https://www.meteor.com).
 It uses Blaze for templating, CoffeeScript for core game models, and plain JavaScript for game logic and server methods.
 
-port
--
-This project is a Meteor 3 port of the [blinkingnoise/roborally](https://github.com/blinkingnoise/roborally) Meteor 2 fork of the original 
-[marcelpanse/roborally](https://github.com/marcelpanse/roborally) Meteor-based project. The Meteor 3 version has some significant refactoring, 
+## port
+
+This project is a Meteor 3 port of the [blinkingnoise/roborally](https://github.com/blinkingnoise/roborally) Meteor 2 fork of the original
+[marcelpanse/roborally](https://github.com/marcelpanse/roborally) Meteor-based project. The Meteor 3 version has some significant refactoring,
 but the core game logic and models remain mostly unchanged. The main focus of this port is to update the codebase
-to be compatible with Meteor 3 and modern dependencies.  A new repository was created for this port to avoid 
+to be compatible with Meteor 3 and modern dependencies. A new repository was created for this port to avoid
 confusion with the original Meteor 1 and 2 versions.
 
 Goals of this project:
 
- - use the latest Meteor release (3.4.1 as of May 2026)
- - modernize the codebase and update dependencies
- - stabilize gameplay
- - run in docker
+- use the latest Meteor release (3.4.1 as of May 2026)
+- modernize the codebase and update dependencies
+- stabilize gameplay
+- run in docker
 
-running
-----------------
+## running
+
 With `docker compose`
+
 ```
 services:
   mongo:
@@ -64,13 +64,11 @@ networks:
     driver: bridge
 ```
 
-links
--
+## links
+
 - docker hub: [yieldtoben/roborally](https://hub.docker.com/r/yieldtoben/roborally)
 - github: [ben-morin/roborally](https://github.com/ben-morin/roborally)
 
-
-license
--
+## license
 
 GNU General Public License (GPL) 2.0

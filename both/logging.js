@@ -1,3 +1,3 @@
 if (Meteor.isProduction) {
-    console.log = function() {};
+  console.log = function () {};
 }

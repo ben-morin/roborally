@@ -1,7 +1,7 @@
 Package.describe({
   name: 'ben-morin:synced-cron-global',
   summary: 'Exports SyncedCron (quave:synced-cron) as a global',
-  version: '1.0.0'
+  version: '1.0.0',
 });
 
 Package.onUse(function (api) {

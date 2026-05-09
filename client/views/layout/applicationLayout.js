@@ -12,10 +12,8 @@ Template.applicationLayout.helpers({
   },
   appHash: function () {
     const hash = Meteor.gitCommitHash;
-    if (typeof hash !== 'undefined' && hash)
-      return hash;
-    else
-      return '';
+    if (typeof hash !== 'undefined' && hash) return hash;
+    else return '';
   },
   appVersion: function () {
     return Meteor.settings.public?.appVersion || 'development';

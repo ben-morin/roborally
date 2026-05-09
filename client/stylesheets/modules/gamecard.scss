@@ -1,4 +1,4 @@
-@use "sass:math";
+@use 'sass:math';
 
 $card-height: math.div(153, 99);
 
@@ -12,7 +12,7 @@ $card-height: math.div(153, 99);
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  transition: all .2s ease-in-out;
+  transition: all 0.2s ease-in-out;
 
   &:hover {
     transform: scale(1.1);
@@ -189,15 +189,16 @@ h5.player-status {
   margin: 0.5rem 0;
 }
 .play-buttons {
-    margin-bottom: 1em;
+  margin-bottom: 1em;
 
   a {
     margin-bottom: 0.5em;
   }
 }
 
-.fa-heart, .fa-heart-o {
-  color: #B40A24;
+.fa-heart,
+.fa-heart-o {
+  color: #b40a24;
   margin-top: 2px;
   font-size: 1.125rem;
 }
@@ -247,6 +248,6 @@ h5.player-status {
 .other-robot {
   margin: 0.5em 0;
   padding: 0.5em 0;
-  background-color: rgba(200, 200, 200, .05);
+  background-color: rgba(200, 200, 200, 0.05);
   border-radius: 20px;
 }

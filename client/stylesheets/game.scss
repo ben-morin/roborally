@@ -1,5 +1,5 @@
-@use "sass:math";
-@import "variables.scss";
+@use 'sass:math';
+@import 'variables.scss';
 
 .pointer {
   cursor: pointer;
@@ -122,7 +122,8 @@ a.white {
     line-height: 1;
   }
 
-  .marker, .laser {
+  .marker,
+  .laser {
     position: absolute;
     width: $tile;
     height: $tile;
@@ -193,7 +194,8 @@ a.white {
     line-height: 1;
   }
 
-  .marker, .laser {
+  .marker,
+  .laser {
     position: absolute;
     width: var(--tile-size);
     height: var(--tile-size);
@@ -221,7 +223,7 @@ a.white {
 
   .position-select {
     position: absolute;
-    background-color: #67A50A;
+    background-color: #67a50a;
     cursor: crosshair;
     width: var(--tile-size);
     height: var(--tile-size);
@@ -257,7 +259,7 @@ a.white {
 }
 
 .announce-bar {
-  background-color: #CCC;
+  background-color: #ccc;
   text-align: center;
   padding: 0;
   margin: 0 auto;
@@ -266,8 +268,8 @@ a.white {
     padding: 8px;
     background-color: rgb(113, 113, 113);
     float: left;
-    border-right: 1px solid #FFF;
-    border-bottom: 1px solid #FFF;
+    border-right: 1px solid #fff;
+    border-bottom: 1px solid #fff;
   }
 
   .finished {
@@ -275,7 +277,7 @@ a.white {
   }
 
   .active {
-    background-color: #67A50A;
+    background-color: #67a50a;
   }
 }
 
@@ -341,7 +343,9 @@ span.length {
 }
 
 @keyframes fadeInAndOut {
-  0%, 50%, 100% {
+  0%,
+  50%,
+  100% {
     transition-timing-function: cubic-bezier(0.1, 0.5, 1, 0);
   }
 

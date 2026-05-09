@@ -5,9 +5,9 @@ function getGame() {
   }
 }
 
-Template.gamePageActions.onCreated(function() {
+Template.gamePageActions.onCreated(function () {
   var gameLoaded = false;
-  this.autorun(function(computation) {
+  this.autorun(function (computation) {
     var id = FlowRouter.getParam('_id');
     if (id) {
       var game = Games.findOne(id);
@@ -17,10 +17,10 @@ Template.gamePageActions.onCreated(function() {
       if (!game && gameLoaded) {
         computation.stop();
         FlowRouter.go(FlowRouter.path('gamelist.page'));
-        modalAlert("The game was canceled.");
+        modalAlert('The game was canceled.');
       } else if (game && game.started) {
         computation.stop();
-        FlowRouter.go(FlowRouter.path('board.page', {_id: id}));
+        FlowRouter.go(FlowRouter.path('board.page', { _id: id }));
       }
     }
   });
@@ -30,65 +30,65 @@ Template.gamePageActions.helpers({
   game: function () {
     return getGame();
   },
-  ownGame: function() {
+  ownGame: function () {
     return this.userId === Meteor.userId();
   },
-  inGame: function() {
-    return Players.findOne({gameId: this._id, userId: Meteor.userId()});
+  inGame: function () {
+    return Players.findOne({ gameId: this._id, userId: Meteor.userId() });
   },
-  gameReady: function() {
+  gameReady: function () {
     return Players.find().fetch().length >= 1;
   },
-  gameFull: function() {
+  gameFull: function () {
     return Players.find().fetch().length >= 8;
-  }
+  },
 });
 
 Template.gamePageActions.events({
-  'click .delete': async function(e) {
+  'click .delete': async function (e) {
     e.preventDefault();
-    if (await modalConfirm("Remove this game?")) {
+    if (await modalConfirm('Remove this game?')) {
       Games.remove(this._id);
       FlowRouter.go(FlowRouter.path('gamelist.page'));
     }
   },
-  'click .join': function(e) {
+  'click .join': function (e) {
     e.preventDefault();
 
-    Meteor.callAsync('joinGame', this._id).catch(function(error) {
+    Meteor.callAsync('joinGame', this._id).catch(function (error) {
       modalAlert(error.reason);
     });
   },
-  'click .leave': function(e) {
+  'click .leave': function (e) {
     e.preventDefault();
 
-    Meteor.callAsync('leaveGame', this._id).catch(function(error) {
+    Meteor.callAsync('leaveGame', this._id).catch(function (error) {
       modalAlert(error.reason);
     });
   },
 
-  'click .start': function(e) {
+  'click .start': function (e) {
     e.preventDefault();
     var gameId = this._id;
 
-    Meteor.callAsync('startGame', gameId).catch(function(error) {
+    Meteor.callAsync('startGame', gameId).catch(function (error) {
       modalAlert(error.reason);
     });
-  }
+  },
 });
 
 Template.players.helpers({
   players: function () {
     return Players.find();
   },
-  minPlayer: function() {
+  minPlayer: function () {
     var game = getGame();
     if (game && game.min_player > 1) {
       return '' + game.min_player + ' players';
     } else {
       return 'One player';
     }
-  }
+  },
 });
 
 Template.selectedBoard.helpers({
@@ -101,21 +101,21 @@ Template.selectedBoard.helpers({
       height: board.height * 24,
       extra_class: '',
       game: game,
-      board: board
+      board: board,
     };
   },
-  ownGame: function() {
+  ownGame: function () {
     var game = getGame();
     return game && game.userId == Meteor.userId();
-  }
+  },
 });
 
 Template.selectedBoard.events({
- 'click .select': function(e) {
+  'click .select': function (e) {
     e.preventDefault();
     var game = getGame();
     if (game) {
-      FlowRouter.go(FlowRouter.path('boardselect.page', {_id: game._id}));
+      FlowRouter.go(FlowRouter.path('boardselect.page', { _id: game._id }));
     }
-  }
+  },
 });

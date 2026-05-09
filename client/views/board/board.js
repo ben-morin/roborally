@@ -1,4 +1,4 @@
-var tileSizeDep = new Tracker.Dependency;
+var tileSizeDep = new Tracker.Dependency();
 
 function getGame() {
   var id = FlowRouter.getParam('_id');
@@ -28,8 +28,8 @@ function updateTileSize() {
   board.style.width = '100%';
   var tileSize = Math.floor(board.offsetWidth / game.board().width);
   board.style.setProperty('--tile-size', tileSize + 'px');
-  board.style.width = (tileSize * game.board().width) + 'px';
-  board.style.height = (tileSize * game.board().height) + 'px';
+  board.style.width = tileSize * game.board().width + 'px';
+  board.style.height = tileSize * game.board().height + 'px';
   tileSizeDep.changed();
 }
 
@@ -87,14 +87,14 @@ Template.board.helpers({
   robots: function () {
     var r = [];
     getPlayers().forEach(function (player) {
-      var rclass = "r" + player.robotId;
+      var rclass = 'r' + player.robotId;
       r.push({
-        path: "/robots/robot_" + player.robotId.toString() + ".png",
+        path: '/robots/robot_' + player.robotId.toString() + '.png',
         robot_class: rclass,
         direction: animateRotation(rclass, player.direction),
         position: animatePosition(rclass, player.position.x, player.position.y),
         poweredDown: player.isPoweredDown(),
-        name: (player.userId === Meteor.userId()) ? "You" : player.name
+        name: player.userId === Meteor.userId() ? 'You' : player.name,
       });
     });
     return r;
@@ -102,12 +102,12 @@ Template.board.helpers({
   markers: function () {
     let m = [];
     getPlayers().forEach(function (player) {
-      let playerName = (player.userId === Meteor.userId()) ? "You" : player.name;
+      let playerName = player.userId === Meteor.userId() ? 'You' : player.name;
       m.push({
-        path: "/robots/marker_" + player.robotId.toString() + ".png",
-        marker_class: "m" + player.robotId.toString(),
+        path: '/robots/marker_' + player.robotId.toString() + '.png',
+        marker_class: 'm' + player.robotId.toString(),
         position: cssPosition(player.start.x, player.start.y),
-        name: 'respawn location ( ' + playerName + ' )'
+        name: 'respawn location ( ' + playerName + ' )',
       });
     });
     return m;
@@ -128,16 +128,16 @@ Template.board.helpers({
           var style = '';
           var lc = 'l' + i;
           switch (player.direction % 2) {
-            case 0:  // up or down
-              animate.height = tileWidth * player.shotDistance + "px";
-              animateRev.height = "0px";
+            case 0: // up or down
+              animate.height = tileWidth * player.shotDistance + 'px';
+              animateRev.height = '0px';
               style = 'width: ' + laserWidth + 'px;';
               style += 'height: 0px;';
               offsetX = (tileWidth - laserWidth) / 2;
               break;
             case 1: // left or right
-              animate.width = tileWidth * player.shotDistance + "px";
-              animateRev.width = "0px";
+              animate.width = tileWidth * player.shotDistance + 'px';
+              animateRev.width = '0px';
               style = 'height: ' + laserWidth + 'px;';
               style += 'width: 0px;';
               offsetY = (tileWidth - laserWidth) / 2;
@@ -147,18 +147,18 @@ Template.board.helpers({
           switch (player.direction) {
             case GameLogic.UP:
               offsetY = startOffset;
-              animate.top = "-=" + (tileWidth * player.shotDistance - startOffset) + "px";
+              animate.top = '-=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               break;
             case GameLogic.LEFT:
               offsetX = startOffset;
-              animate.left = "-=" + (tileWidth * player.shotDistance - startOffset) + "px";
+              animate.left = '-=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               break;
             case GameLogic.DOWN:
-              animateRev.top = "+=" + (tileWidth * player.shotDistance - startOffset) + "px";
+              animateRev.top = '+=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               offsetY = tileWidth - startOffset;
               break;
             case GameLogic.RIGHT:
-              animateRev.left = "+=" + (tileWidth * player.shotDistance - startOffset) + "px";
+              animateRev.left = '+=' + (tileWidth * player.shotDistance - startOffset) + 'px';
               offsetX = tileWidth - startOffset;
               break;
           }
@@ -170,22 +170,24 @@ Template.board.helpers({
             var duration = player.shotDistance * 26;
             console.log('shot duration', duration);
             laserDiv.animate(animate, {
-              duration: duration, queue: false, progress: function (anim, progress, remainingMs) {
-                if (remainingMs <= duration - (duration / 7) && !once) {
-                  laserDiv.animate(animateRev, {duration: duration, queue: false});
+              duration: duration,
+              queue: false,
+              progress: function (anim, progress, remainingMs) {
+                if (remainingMs <= duration - duration / 7 && !once) {
+                  laserDiv.animate(animateRev, { duration: duration, queue: false });
                   once = true;
                 }
-              }
+              },
             });
           });
-          s.push({shot: style, laser_class: lc});
+          s.push({ shot: style, laser_class: lc });
         }
       });
     }
     return s;
   },
   getRobotId: function () {
-    return Players.findOne({userId: Meteor.userId()}).robotId.toString();
+    return Players.findOne({ userId: Meteor.userId() }).robotId.toString();
   },
 
   tiles: function () {
@@ -208,7 +210,9 @@ Template.board.helpers({
     var s = [];
     var game = getGame();
     if (!game) return s;
-    console.log("game.respawnUserId: " + game.respawnUserId + "; Meteor.userId(): " + Meteor.userId());
+    console.log(
+      'game.respawnUserId: ' + game.respawnUserId + '; Meteor.userId(): ' + Meteor.userId()
+    );
     if (game.respawnUserId === Meteor.userId()) {
       game.selectOptions.forEach(function (opts) {
         opts.position = cssPosition(opts.x, opts.y);
@@ -243,9 +247,9 @@ Template.board.helpers({
       }
       pUIData.push({
         phaseClass: pclass,
-        phaseName: "register " + phase,
+        phaseName: 'register ' + phase,
         status: pstatus,
-        width: (game.board().width * getTileSize()) / phases.length
+        width: (game.board().width * getTileSize()) / phases.length,
       });
     });
     console.log(pUIData);
@@ -266,23 +270,23 @@ Template.board.helpers({
     phases.forEach(function (phase) {
       var phaseProp = {
         announceCard: false,
-        width: (game.board().width * getTileSize()) / phases.length
+        width: (game.board().width * getTileSize()) / phases.length,
       };
       switch (phase) {
         case GameState.PLAY_PHASE.MOVE_BOTS:
-          phaseProp.phaseName = "moving bots";
+          phaseProp.phaseName = 'moving bots';
           break;
         case GameState.PLAY_PHASE.MOVE_BOARD:
-          phaseProp.phaseName = "moving board";
+          phaseProp.phaseName = 'moving board';
           break;
         case GameState.PLAY_PHASE.LASERS:
-          phaseProp.phaseName = "shooting lasers";
+          phaseProp.phaseName = 'shooting lasers';
           break;
         case GameState.PLAY_PHASE.CHECKPOINTS:
-          phaseProp.phaseName = "checkpoints";
+          phaseProp.phaseName = 'checkpoints';
           break;
         case GameState.PLAY_PHASE.REPAIRS:
-          phaseProp.phaseName = "repairing bots";
+          phaseProp.phaseName = 'repairing bots';
           break;
       }
       if (phase === game.playPhase) {
@@ -302,7 +306,7 @@ Template.board.helpers({
   },
   announceMove: function () {
     var game = getGame();
-    return game && (game.playPhase === GameState.PLAY_PHASE.MOVE_BOTS && game.announceCard);
+    return game && game.playPhase === GameState.PLAY_PHASE.MOVE_BOTS && game.announceCard;
   },
   cardPlaying: function () {
     var game = getGame();
@@ -320,11 +324,9 @@ Template.board.helpers({
       // center card on robot tile; card width equals tile size
       tileSize: getTileSize() + 'px',
       position: cssPosition(player.position.x, player.position.y, 0, -getTileSize() / 2),
-      robotId: player.robotId.toString()
+      robotId: player.robotId.toString(),
     };
-
   },
-
 });
 
 function animatePosition(element, x, y) {
@@ -332,7 +334,7 @@ function animatePosition(element, x, y) {
   var oldX = newPosition.x;
   var oldY = newPosition.y;
 
-  var position = $("." + element).position();
+  var position = $('.' + element).position();
   if (position) {
     oldX = position.left;
     oldY = position.top;
@@ -341,24 +343,27 @@ function animatePosition(element, x, y) {
       Tracker.afterFlush(function () {
         var deltaX = newPosition.x - oldX;
         var deltaY = newPosition.y - oldY;
-        var playerElement = $("." + element);
+        var playerElement = $('.' + element);
         playerElement.stop();
 
-        playerElement.animate({
-          left: "+=" + deltaX + "px",
-          top: "+=" + deltaY + "px"
-        }, Math.max(Math.abs(deltaX), Math.abs(deltaY)) * 4);
+        playerElement.animate(
+          {
+            left: '+=' + deltaX + 'px',
+            top: '+=' + deltaY + 'px',
+          },
+          Math.max(Math.abs(deltaX), Math.abs(deltaY)) * 4
+        );
       });
     }
   }
-  return "left: " + oldX + "px; top: " + oldY + "px;";
+  return 'left: ' + oldX + 'px; top: ' + oldY + 'px;';
 }
 
 function animateRotation(element, direction) {
   var newRotation = direction * 90;
-  var el = $("." + element);
+  var el = $('.' + element);
   if (el.length) {
-    el.css({'transform' : 'rotate(' + newRotation + 'deg)'});
+    el.css({ transform: 'rotate(' + newRotation + 'deg)' });
     return '';
   }
   return 'transform: rotate(' + newRotation + 'deg)';
@@ -370,7 +375,7 @@ function cssPosition(x, y, offsetX, offsetY) {
 }
 
 function cssRotate(deg) {
-  var rotate = "rotate(" + deg + "deg);";
+  var rotate = 'rotate(' + deg + 'deg);';
   return 'transform: ' + rotate + ' -webkit-transform: ' + rotate + ' -ms-transform: ' + rotate;
 }
 
@@ -385,10 +390,10 @@ function calcPosition(x, y, offsetX, offsetY) {
   var tileWidth = getTileSize();
   var tileHeight = getTileSize();
 
-  x = (tileWidth * x) + offsetX;
-  y = (tileHeight * y) + offsetY;
+  x = tileWidth * x + offsetX;
+  y = tileHeight * y + offsetY;
 
-  return {x: x, y: y};
+  return { x: x, y: y };
 }
 
 Template.board.events({
@@ -398,13 +403,20 @@ Template.board.events({
   'click .cancel': async function () {
     var game = getGame();
     if (game && game.gamePhase !== GameState.PHASE.ENDED) {
-      if (await modalConfirm("If you leave, you will forfeit the game, are you sure you want to give up?")) {
-        Meteor.callAsync('leaveGame', game._id).then(function () {
-          FlowRouter.go(FlowRouter.path('gamelist.page'));
-        }, function (error) {
-          modalAlert(error.reason);
-          FlowRouter.go(FlowRouter.path('gamelist.page'));
-        });
+      if (
+        await modalConfirm(
+          'If you leave, you will forfeit the game, are you sure you want to give up?'
+        )
+      ) {
+        Meteor.callAsync('leaveGame', game._id).then(
+          function () {
+            FlowRouter.go(FlowRouter.path('gamelist.page'));
+          },
+          function (error) {
+            modalAlert(error.reason);
+            FlowRouter.go(FlowRouter.path('gamelist.page'));
+          }
+        );
       }
     } else {
       FlowRouter.go(FlowRouter.path('gamelist.page'));
@@ -412,14 +424,21 @@ Template.board.events({
   },
   'click .position-select': function (e) {
     var game = getGame();
-    Meteor.callAsync('selectRespawnPosition', game._id, $(e.target).attr('data-x'), $(e.target).attr('data-y')).catch(function (error) {
+    Meteor.callAsync(
+      'selectRespawnPosition',
+      game._id,
+      $(e.target).attr('data-x'),
+      $(e.target).attr('data-y')
+    ).catch(function (error) {
       modalAlert(error.reason);
     });
   },
   'click .direction-select': function (e) {
     var game = getGame();
-    Meteor.callAsync('selectRespawnDirection', game._id, $(e.target).attr('data-dir')).catch(function (error) {
-      modalAlert(error.reason);
-    });
-  }
+    Meteor.callAsync('selectRespawnDirection', game._id, $(e.target).attr('data-dir')).catch(
+      function (error) {
+        modalAlert(error.reason);
+      }
+    );
+  },
 });

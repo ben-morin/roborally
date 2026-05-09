@@ -1,0 +1,10 @@
+.meteor/
+node_modules/
+packages/meteor-accounts-ui-roborally/
+public/
+_build/
+package-lock.json
+*.coffee
+# uncommitted local notes (mirrors .gitignore)
+*.local.md
+*.local.json

@@ -1,194 +1,149 @@
 <template name="cards">
   <h3>{{gameState}} {{timer}}</h3>
-  <hr class="star-well">
+  <hr class="star-well" />
   {{#if showCards}}
-    <div class="player-robot">
-      <h5>Your hand</h5>
-      <div class="hand d-flex justify-content-center flex-wrap">
-        {{#each availableCards}}
-          {{> card}}
-        {{/each}}
-      </div>
-      {{#with player}}
-        <h5 class="player-status">
-          <img class="robot-icon" src="/robots/robot_{{robotId}}.png">
-          Your robot:
-          {{#each lives}}
-            <span class="fa {{this}}"></span>
-          {{/each}}
-          <br>
-          <span class="small me-2" style="color: #fff">
-            {{dmgPercentage}}% damaged
-          </span>
-          <span class="small" style="color: #fff">
-            next checkpoint:
-          </span>
-          <span class="next-checkpoint">
-            {{#if headingForFinish}}
-              <img class="finish" src="/finish.png">
-            {{else}}
-              <div class="checkpoint">
-                <div class="checkpoint-text-container">
-                  <div class="checkpoint-text">
-                    {{nextCheckpoint}}
-                  </div>
-                </div>
-              </div>
-            {{/if}}
-          </span>
-        </h5>
-      {{/with}}
-      <div class="playing d-flex justify-content-center flex-wrap">
-        {{#if poweredDown}}
-          <p>Your robot is powered down</p>
-          <div class="small">Click the play cards button to stay powered down, any other action will cancel the power down.</div>
-        {{else}}
-          {{#each chosenCards}}
-            {{> card}}
-          {{/each}}
-        {{/if}}
-      </div>
-      {{#if hasOptionCards}}
-        <div class="option-cards">
-          <h6>Option cards</h6>
-          {{#each activeOptionCards}}
-            <div class="option-card" title="{{desc}}">
-              {{name}}
-            </div>
-          {{/each}}
-        </div>
-      {{/if}}
-      {{#if showPlayButton}}
-        <div class="play-buttons">
-        {{#if poweredDown}}
-            <a class="btn btn-outline-warning powerBtn">{{ownPowerStateName}}</a>
-            &nbsp;
-            <a class="btn btn-success playBtn">play cards</a>
-          {{else}}
-            <a class="btn powerBtn {{ownPowerStateStyle}}">
-              {{ownPowerStateName}}
-            </a>
-            &nbsp;
-            <a class="btn btn-success playBtn disabled">play cards</a>
-          {{/if}}
-        </div>
-      {{/if}}
+  <div class="player-robot">
+    <h5>Your hand</h5>
+    <div class="hand d-flex justify-content-center flex-wrap">
+      {{#each availableCards}} {{> card}} {{/each}}
     </div>
-  {{else if player}}
-    <div class="player-robot">
     {{#with player}}
-      {{> playerStatus}}
+    <h5 class="player-status">
+      <img class="robot-icon" src="/robots/robot_{{robotId}}.png" />
+      Your robot: {{#each lives}}
+      <span class="fa {{this}}"></span>
+      {{/each}}
+      <br />
+      <span class="small me-2" style="color: #fff"> {{dmgPercentage}}% damaged </span>
+      <span class="small" style="color: #fff"> next checkpoint: </span>
+      <span class="next-checkpoint">
+        {{#if headingForFinish}}
+        <img class="finish" src="/finish.png" />
+        {{else}}
+        <div class="checkpoint">
+          <div class="checkpoint-text-container">
+            <div class="checkpoint-text">{{nextCheckpoint}}</div>
+          </div>
+        </div>
+        {{/if}}
+      </span>
+    </h5>
     {{/with}}
+    <div class="playing d-flex justify-content-center flex-wrap">
+      {{#if poweredDown}}
+      <p>Your robot is powered down</p>
+      <div class="small">
+        Click the play cards button to stay powered down, any other action will cancel the power
+        down.
+      </div>
+      {{else}} {{#each chosenCards}} {{> card}} {{/each}} {{/if}}
     </div>
-  {{/if}}
-  {{#if player}}
-    <hr class="star-well">
-  {{/if}}
-  {{#each otherPlayers}}
-  <div class="other-robot">
-    {{> playerStatus}}
+    {{#if hasOptionCards}}
+    <div class="option-cards">
+      <h6>Option cards</h6>
+      {{#each activeOptionCards}}
+      <div class="option-card" title="{{desc}}">{{name}}</div>
+      {{/each}}
+    </div>
+    {{/if}} {{#if showPlayButton}}
+    <div class="play-buttons">
+      {{#if poweredDown}}
+      <a class="btn btn-outline-warning powerBtn">{{ownPowerStateName}}</a>
+      &nbsp;
+      <a class="btn btn-success playBtn">play cards</a>
+      {{else}}
+      <a class="btn powerBtn {{ownPowerStateStyle}}"> {{ownPowerStateName}} </a>
+      &nbsp;
+      <a class="btn btn-success playBtn disabled">play cards</a>
+      {{/if}}
+    </div>
+    {{/if}}
   </div>
+  {{else if player}}
+  <div class="player-robot">{{#with player}} {{> playerStatus}} {{/with}}</div>
+  {{/if}} {{#if player}}
+  <hr class="star-well" />
+  {{/if}} {{#each otherPlayers}}
+  <div class="other-robot">{{> playerStatus}}</div>
   {{/each}}
 </template>
 
 <template name="playerStatus">
   <h5 class="player-status">
-    <img class="robot-icon" src="/robots/robot_{{robotId}}.png">
-    {{playerName}}:
-    {{#each lives}}
-      <span class="fa {{this}}"></span>
+    <img class="robot-icon" src="/robots/robot_{{robotId}}.png" />
+    {{playerName}}: {{#each lives}}
+    <span class="fa {{this}}"></span>
     {{/each}}
-    <br>
+    <br />
     <span class="small" style="color: #fff">
-      {{#if showOutOfGameLabel}}
-        unrepairable
-      {{else}}
-        {{dmgPercentage}}% damaged
-      {{/if}}
+      {{#if showOutOfGameLabel}} unrepairable {{else}} {{dmgPercentage}}% damaged {{/if}}
     </span>
     <span class="small mx-2" style="color: #fff">&middot;</span>
     {{#if isWinner}}
-      <span class="small" style="color: #fff">
-        WINNER!
-      </span>
-      <span class="next-checkpoint">
-        <img class="finish" src="/trophy.png">
-      </span>
+    <span class="small" style="color: #fff"> WINNER! </span>
+    <span class="next-checkpoint">
+      <img class="finish" src="/trophy.png" />
+    </span>
     {{else}}
-      <span class="small" style="color: #fff">
-        next checkpoint:
-      </span>
-      <span class="next-checkpoint">
-        {{#if headingForFinish}}
-          <img class="finish" src="/finish.png">
-        {{else}}
-          <div class="checkpoint">
-            <div class="checkpoint-text-container">
-              <div class="checkpoint-text">
-                {{nextCheckpoint}}
-              </div>
-            </div>
-          </div>
-        {{/if}}
-      </span>
+    <span class="small" style="color: #fff"> next checkpoint: </span>
+    <span class="next-checkpoint">
+      {{#if headingForFinish}}
+      <img class="finish" src="/finish.png" />
+      {{else}}
+      <div class="checkpoint">
+        <div class="checkpoint-text-container">
+          <div class="checkpoint-text">{{nextCheckpoint}}</div>
+        </div>
+      </div>
+      {{/if}}
+    </span>
     {{/if}}
   </h5>
   <div class="smallhand d-flex justify-content-center flex-wrap">
-    {{#each cardsHtml}}
-      {{> card}}
-    {{/each}}
-    {{#if powerDownPlayed}}
-      <div class="gamecard powerdown">
-        <span class="fa fa-power-off"></span>
-      </div>
+    {{#each cardsHtml}} {{> card}} {{/each}} {{#if powerDownPlayed}}
+    <div class="gamecard powerdown">
+      <span class="fa fa-power-off"></span>
+    </div>
     {{/if}}
     <div class="badge-wrapper">
       {{#if showOutOfGameLabel}}
-        <div class="badge bg-danger">
-          no archives
-        </div>
+      <div class="badge bg-danger">no archives</div>
       {{else if showPoweredDownLabel}}
-        <div class="badge bg-primary">
-          powered down
-        </div>
+      <div class="badge bg-primary">powered down</div>
       {{else if showSubmittedLabel}}
-        <div class="badge bg-primary">
-          submitted
-        </div>
+      <div class="badge bg-primary">submitted</div>
       {{/if}}
     </div>
   </div>
   {{#if hasOptionCards}}
-    <div class="option-cards">
-      <h6>Option cards</h6>
-      {{#each activeOptionCards}}
-        <div class="option-card" title="{{desc}}">
-          {{name}}
-        </div>
-      {{/each}}
-    </div>
+  <div class="option-cards">
+    <h6>Option cards</h6>
+    {{#each activeOptionCards}}
+    <div class="option-card" title="{{desc}}">{{name}}</div>
+    {{/each}}
+  </div>
   {{/if}}
 </template>
 
 <template name="card">
   {{#if emptyCard}}
-    <div class="gamecard empty {{selected}}">
-      {{#if isSelected}}
-        <div class="cardTimer">{{timer}}</div>
-      {{/if}}
-    </div>
+  <div class="gamecard empty {{selected}}">
+    {{#if isSelected}}
+    <div class="cardTimer">{{timer}}</div>
+    {{/if}}
+  </div>
   {{else if coveredCard}}
-    <div class="gamecard covered"></div>
+  <div class="gamecard covered"></div>
   {{else if dmgCard}}
-    <div class="gamecard damage"></div>
+  <div class="gamecard damage"></div>
   {{else}}
-    <div class="gamecard {{type}} {{class}} {{cardId}}">
-      <div class="priority-wrapper">
-        <span class="priority">{{priority}}</span>
-      </div>
-      {{#if this.locked}}
-        <img class="locked" src="/damage-token.png" width="50%">
-      {{/if}}
+  <div class="gamecard {{type}} {{class}} {{cardId}}">
+    <div class="priority-wrapper">
+      <span class="priority">{{priority}}</span>
     </div>
+    {{#if this.locked}}
+    <img class="locked" src="/damage-token.png" width="50%" />
+    {{/if}}
+  </div>
   {{/if}}
 </template>

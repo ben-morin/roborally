@@ -1,156 +1,161 @@
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=768, initial-scale=1">
-  <meta name="description" content="You are brilliant. You are powerful. You are sophisticated. You are BORED. The ultimate unofficial RoboRally board game fan site.">
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=768, initial-scale=1" />
+  <meta
+    name="description"
+    content="You are brilliant. You are powerful. You are sophisticated. You are BORED. The ultimate unofficial RoboRally board game fan site."
+  />
   <title>RoboRally</title>
   <script src="/bootstrap.bundle.min.js"></script>
 </head>
 
 <template name="applicationLayout">
-<div class="custom-wrapper">
-  <!-- Navigation -->
-  <nav class="navbar navbar-expand-md navbar-dark fixed-top navbar-shrink">
-    <div class="container">
-      <a class="navbar-brand" href="/">RoboRally</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#bs-example-navbar-collapse-1">
-        <span class="visually-hidden">Toggle navigation</span>
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div id="bs-example-navbar-collapse-1" class="collapse navbar-collapse">
-        <ul class="nav navbar-nav ms-auto">
-          <li class="d-none">
-            <a href="/"></a>
-          </li>
-          {{#if loggingIn}}
+  <div class="custom-wrapper">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-md navbar-dark fixed-top navbar-shrink">
+      <div class="container">
+        <a class="navbar-brand" href="/">RoboRally</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#bs-example-navbar-collapse-1"
+        >
+          <span class="visually-hidden">Toggle navigation</span>
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div id="bs-example-navbar-collapse-1" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav ms-auto">
+            <li class="d-none">
+              <a href="/"></a>
+            </li>
+            {{#if loggingIn}}
             <li class="nav-item page-scroll">
               <a class="nav-link" href="{{pathFor 'gamelist.page'}}">Games</a>
             </li>
-          {{/if}}
-          {{#if loggingIn}}
+            {{/if}} {{#if loggingIn}}
             <li class="nav-item page-scroll">
               <a class="nav-link" href="{{pathFor 'ranking.page'}}">Ranking</a>
             </li>
-          {{/if}}
-          <li class="nav-item page-scroll">
-            {{> loginButtons align="right"}}
-          </li>
-        </ul>
+            {{/if}}
+            <li class="nav-item page-scroll">{{> loginButtons align="right"}}</li>
+          </ul>
+        </div>
       </div>
-    </div>
-  </nav>
-  {{#if loggingIn}}
+    </nav>
+    {{#if loggingIn}}
     <header>
       <div class="container">
         <div class="row g-4">
           <div class="col-12 col-lg-8 left-panel">
-            <div class="card card-body p-3">
-              {{> yield}}
-            </div>
+            <div class="card card-body p-3">{{> yield}}</div>
           </div>
           <div class="col-12 col-lg-4 right-panel">
             <div class="card card-body p-2">
-              {{#if rightPanel}}
-                {{> Template.dynamic template=rightPanel}}
-              {{/if}}
-              {{#if rightPanel2}}
-                {{> Template.dynamic template=rightPanel2}}
-              {{/if}}
-              {{#if rightPanel3}}
-                {{> Template.dynamic template=rightPanel3}}
-              {{/if}}
+              {{#if rightPanel}} {{> Template.dynamic template=rightPanel}} {{/if}} {{#if
+              rightPanel2}} {{> Template.dynamic template=rightPanel2}} {{/if}} {{#if rightPanel3}}
+              {{> Template.dynamic template=rightPanel3}} {{/if}}
             </div>
           </div>
         </div>
       </div>
     </header>
-  {{else}}
+    {{else}}
     <header>
       <div class="container">
         <div class="card card-body p-2 pb-4">
-        <div class="row">
-          <div class="col-12 col-lg-12 text-center">
-            <h2>roborally</h2>
-            <hr class="star-well">
-            <p></p>
-            &nbsp;
+          <div class="row">
+            <div class="col-12 col-lg-12 text-center">
+              <h2>roborally</h2>
+              <hr class="star-well" />
+              <p></p>
+              &nbsp;
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-12 col-lg-12 text-center">
+              <p>
+                Based on original <a href="https://github.com/marcelpanse/roborally">work</a> by
+                Marcel Panse
+                <br />
+                and the <a href="https://github.com/blinkingnoise/roborally">fork</a> by Tom Hlina.
+              </p>
+              <p></p>
+              &nbsp;
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-12 col-lg-12 text-center">
+              <h3>Version</h3>
+              <hr class="star-well" />
+              <p></p>
+              <p>{{appVersion}}</p>
+              <p>{{appHash}}</p>
+              <p></p>
+              &nbsp;
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-12 col-lg-12 text-center">
+              <h3>Source</h3>
+              <hr class="star-well" />
+              <p></p>
+              <a href="https://github.com/ben-morin/roborally" class="btn btn-primary btn-lg"
+                >GitHub</a
+              >
+              <a
+                href="https://github.com/ben-morin/roborally/commits/main"
+                target="_blank"
+                class="btn btn-primary btn-lg"
+                >change log</a
+              >
+            </div>
           </div>
         </div>
-        <div class="row">
-          <div class="col-12 col-lg-12 text-center">
-            <p>
-              Based on original <a href="https://github.com/marcelpanse/roborally">work</a> by Marcel Panse
-              <br>
-              and the <a href="https://github.com/blinkingnoise/roborally">fork</a> by Tom Hlina.
-            </p>
-            <p></p>
-            &nbsp;
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-12 col-lg-12 text-center">
-            <h3>Version</h3>
-            <hr class="star-well">
-            <p></p>
-            <p>{{appVersion}}</p>
-            <p>{{appHash}}</p>
-            <p></p>
-            &nbsp;
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-12 col-lg-12 text-center">
-            <h3>Source</h3>
-            <hr class="star-well">
-            <p></p>
-            <a href="https://github.com/ben-morin/roborally" class="btn btn-primary btn-lg">GitHub</a>
-            <a href="https://github.com/ben-morin/roborally/commits/main" target="_blank" class="btn btn-primary btn-lg">change log</a>
-          </div>
-        </div>
-      </div>
       </div>
     </header>
-  {{/if}}
+    {{/if}}
 
-  <!-- confirmation modal -->
-  <div id="notification-modal" class="modal fade" data-bs-backdrop="static" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-body">
-          <p></p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary cancel-button" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary confirm-button">Ok</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <div id="fb-root"></div>
-  <footer class="text-center">
-    <div class="footer-below">
-      <div class="container">
-        <div class="row">
-          <div class="col-12 col-lg-12">
-            {{> usersPill}}
-            <h6 class="tutorial float-end">
-              <i class="fa fa-youtube-play"></i>
-              <a href="https://youtu.be/0l8Y-L5IZLE" target="_blank">
-                tutorial video
-              </a>
-            </h6>
+    <!-- confirmation modal -->
+    <div id="notification-modal" class="modal fade" data-bs-backdrop="static" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-body">
+            <p></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary cancel-button" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="button" class="btn btn-primary confirm-button">Ok</button>
           </div>
         </div>
       </div>
     </div>
-  </footer>
-</div>
+
+    <!-- Footer -->
+    <div id="fb-root"></div>
+    <footer class="text-center">
+      <div class="footer-below">
+        <div class="container">
+          <div class="row">
+            <div class="col-12 col-lg-12">
+              {{> usersPill}}
+              <h6 class="tutorial float-end">
+                <i class="fa fa-youtube-play"></i>
+                <a href="https://youtu.be/0l8Y-L5IZLE" target="_blank"> tutorial video </a>
+              </h6>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
 </template>
 
 <template name="loading">
-  <div class="text-center" style="padding: 50px;">
+  <div class="text-center" style="padding: 50px">
     <p>Loading...</p>
   </div>
 </template>

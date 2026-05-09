@@ -1,27 +1,21 @@
 <template name="gamePageActions">
   {{#with game}}
-    <h2>
-      Game created by
-      <span class="small">{{author}}</span>
-    </h2>
-    {{#unless gameFull}}
-      {{#unless inGame}}
-        <a class="btn btn-success btn-lg join action-button" href="#">Join game</a>
-      {{/unless}}
-    {{/unless}}
-    {{#if gameReady}}
-      {{#if ownGame}}
-        <a class="btn btn-success btn-lg start action-button" href="#">Start game</a>
-      {{/if}}
+  <h2>
+    Game created by
+    <span class="small">{{author}}</span>
+  </h2>
+  {{#unless gameFull}} {{#unless inGame}}
+  <a class="btn btn-success btn-lg join action-button" href="#">Join game</a>
+  {{/unless}} {{/unless}} {{#if gameReady}} {{#if ownGame}}
+  <a class="btn btn-success btn-lg start action-button" href="#">Start game</a>
+  {{/if}} {{/if}}
+  <p>
+    {{#if inGame}}
+    <a class="btn btn-danger leave action-button" href="#">Leave game</a>
+    {{/if}} {{#if ownGame}}
+    <a class="btn btn-danger delete action-button" href="#">Cancel game</a>
     {{/if}}
-    <p>
-      {{#if inGame}}
-        <a class="btn btn-danger leave action-button" href="#">Leave game</a>
-      {{/if}}
-      {{#if ownGame}}
-        <a class="btn btn-danger delete action-button" href="#">Cancel game</a>
-      {{/if}}
-    </p>
+  </p>
   {{/with}}
 </template>
 
@@ -29,9 +23,9 @@
   <h3>Players</h3>
   <ol>
     {{#each players}}
-      <li>{{name}}</li>
+    <li>{{name}}</li>
     {{else}}
-      <p>nobody joined yet :-(</p>
+    <p>nobody joined yet :-(</p>
     {{/each}}
   </ol>
   <p>min {{minPlayer}} recommended to start the game</p>
@@ -40,13 +34,10 @@
 <template name="selectedBoard">
   <h3>Board</h3>
   {{#with boardData}}
-    <div class="selected-board" style="clear:both;">
-      {{> thumbnail}}
-    </div>
-    {{#if ownGame}}
-      <p>
-        <a class="btn btn-primary select action-button" href="#">Change board</a>
-      </p>
-    {{/if}}
-  {{/with}}
+  <div class="selected-board" style="clear: both">{{> thumbnail}}</div>
+  {{#if ownGame}}
+  <p>
+    <a class="btn btn-primary select action-button" href="#">Change board</a>
+  </p>
+  {{/if}} {{/with}}
 </template>

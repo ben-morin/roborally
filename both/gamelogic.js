@@ -6,7 +6,7 @@ GameLogic = {
   OFF: 4,
   ON: 5,
   TIMER: 30,
-  CARD_SLOTS: 5
+  CARD_SLOTS: 5,
 };
 
 (function (scope) {
@@ -14,7 +14,7 @@ GameLogic = {
 
   scope.playCard = async function (player, card) {
     if (!player.needsRespawn) {
-      console.log("trying to play next card for player " + player.name);
+      console.log('trying to play next card for player ' + player.name);
     }
 
     if (card !== CardLogic.EMPTY) {
@@ -29,7 +29,7 @@ GameLogic = {
       } else {
         step = Math.min(cardType.position, 1);
         for (j = 0; j < Math.abs(cardType.position); j++) {
-          var players = await Players.find({gameId: player.gameId}).fetchAsync();
+          var players = await Players.find({ gameId: player.gameId }).fetchAsync();
           await executeStep(players, player, step);
           if (player.needsRespawn) {
             break;
@@ -37,7 +37,7 @@ GameLogic = {
         }
       }
     } else {
-      console.warn("card is not playable " + card + " player " + player.name);
+      console.warn('card is not playable ' + card + ' player ' + player.name);
     }
   };
 
@@ -46,7 +46,7 @@ GameLogic = {
     for (var player of players) {
       //check if is on roller
       var tile = await player.tileAsync();
-      var moving = (tile.type === Tile.ROLLER);
+      var moving = tile.type === Tile.ROLLER;
       if (!player.needsRespawn) {
         roller_moves.push(rollerMove(player, tile, moving));
       }
@@ -60,7 +60,7 @@ GameLogic = {
     for (var player of players) {
       //check if is on roller
       var tile = await player.tileAsync();
-      var moving = (tile.type === Tile.ROLLER && tile.speed === 2);
+      var moving = tile.type === Tile.ROLLER && tile.speed === 2;
       if (!player.needsRespawn) {
         roller_moves.push(rollerMove(player, tile, moving));
       }
@@ -106,12 +106,14 @@ GameLogic = {
           victims = await scope.shootRobotLaserAsync(players, player, victims);
           player.rotate(2);
         }
-        if (player.hasOptionCard('mini_howitzer') ||
-            player.hasOptionCard('fire_control') ||
-            player.hasOptionCard('radio_control') ||
-            (player.hasOptionCard('scrambler') && game.playPhaseCount < 5) ||
-            player.hasOptionCard('tractor_beam') ||
-            player.hasOptionCard('pressor_beam')) {
+        if (
+          player.hasOptionCard('mini_howitzer') ||
+          player.hasOptionCard('fire_control') ||
+          player.hasOptionCard('radio_control') ||
+          (player.hasOptionCard('scrambler') && game.playPhaseCount < 5) ||
+          player.hasOptionCard('tractor_beam') ||
+          player.hasOptionCard('pressor_beam')
+        ) {
           //todo: there is no game state laser options yet..?
           //player.game().setPlayPhase(GameState.PLAY_PHASE.LASER_OPTIONS);
         }
@@ -128,18 +130,18 @@ GameLogic = {
       var tile = await player.tileAsync();
       if (tile.option) {
         await player.drawOptionCardAsync();
-        player.damage = Math.max(player.damage-1, 0);
+        player.damage = Math.max(player.damage - 1, 0);
       } else if (tile.checkpoint) {
-        player.damage = Math.max(player.damage-1, 0);
+        player.damage = Math.max(player.damage - 1, 0);
       } else if (tile.repair) {
-        player.damage = Math.max(player.damage-3, 0);
+        player.damage = Math.max(player.damage - 3, 0);
       }
       await Players.updateAsync(player._id, player);
     }
   };
 
   scope.shootRobotLaserAsync = async function (players, player, victims) {
-    var step = {x: 0, y: 0};
+    var step = { x: 0, y: 0 };
     var board = await player.boardAsync();
     switch (player.direction) {
       case GameLogic.UP:
@@ -168,9 +170,13 @@ GameLogic = {
       shotDistance++;
       var victim = isPlayerOnTile(players, x, y);
       if (victim) {
-        debug_info = 'Shot: (' + player.position.x + ',' + player.position.y + ') -> (' + x + ',' + y + ')';
-        await victim.chatAsync('was shot by ' + player.name + ', Total damage: ' + (victim.damage + 1), debug_info);
-        await Players.updateAsync(player._id, {$set: {shotDistance: shotDistance}});
+        debug_info =
+          'Shot: (' + player.position.x + ',' + player.position.y + ') -> (' + x + ',' + y + ')';
+        await victim.chatAsync(
+          'was shot by ' + player.name + ', Total damage: ' + (victim.damage + 1),
+          debug_info
+        );
+        await Players.updateAsync(player._id, { $set: { shotDistance: shotDistance } });
         victims.push(victim);
         if (player.hasOptionCard('double-barreled_laser')) {
           victims.push(victim);
@@ -181,12 +187,13 @@ GameLogic = {
         highPower = false;
       }
     }
-    await Players.updateAsync(player._id, {$set: {shotDistance: shotDistance}});
+    await Players.updateAsync(player._id, { $set: { shotDistance: shotDistance } });
     return victims;
   };
 
-  async function executeStep(players, player, direction) {   // direction = 1 for step forward, -1 for step backwards
-    var step = {x: 0, y: 0};
+  async function executeStep(players, player, direction) {
+    // direction = 1 for step forward, -1 for step backwards
+    var step = { x: 0, y: 0 };
     switch (player.direction) {
       case GameLogic.UP:
         step.y = -1 * direction;
@@ -208,19 +215,33 @@ GameLogic = {
     var board = await p.boardAsync();
     var makeMove = true;
     if (step.x !== 0 || step.y !== 0) {
-      console.log("trying to move player " + p.name + " to " + (p.position.x + step.x) + "," + (p.position.y + step.y));
+      console.log(
+        'trying to move player ' +
+          p.name +
+          ' to ' +
+          (p.position.x + step.x) +
+          ',' +
+          (p.position.y + step.y)
+      );
 
       if (board.canMove(p.position.x, p.position.y, step)) {
         var pushedPlayer = isPlayerOnTile(players, p.position.x + step.x, p.position.y + step.y);
         if (pushedPlayer !== null) {
-          console.log("trying to push player " + pushedPlayer.name);
+          console.log('trying to push player ' + pushedPlayer.name);
           if (p.hasOptionCard('ramming_gear')) {
             await pushedPlayer.addDamageAsync(1);
           }
           makeMove = await tryToMovePlayer(players, pushedPlayer, step);
         }
         if (makeMove) {
-          console.log("moving player " + p.name + " to " + (p.position.x + step.x) + "," + (p.position.y + step.y));
+          console.log(
+            'moving player ' +
+              p.name +
+              ' to ' +
+              (p.position.x + step.x) +
+              ',' +
+              (p.position.y + step.y)
+          );
           p.move(step);
           await checkRespawnsAndUpdateDb(p);
           return true;
@@ -238,14 +259,15 @@ GameLogic = {
         y: player.position.y + tile.move.y,
         rotate: tile.rotate,
         step: tile.move,
-        canceled: false
+        canceled: false,
       };
-    } else { // to detect conflicts add non-moving players
+    } else {
+      // to detect conflicts add non-moving players
       return {
         player: player,
         x: player.position.x,
         y: player.position.y,
-        canceled: true
+        canceled: true,
       };
     }
   }
@@ -253,10 +275,11 @@ GameLogic = {
   async function tryToMovePlayersOnRollers(moves) {
     var move_canceled = true;
     var max = 0;
-    while (move_canceled) {  // if a move was canceled we have to check for other conflicts again
+    while (move_canceled) {
+      // if a move was canceled we have to check for other conflicts again
       max++;
       if (max > 100) {
-        console.warn("Infinite loop detected.. cancelling..");
+        console.warn('Infinite loop detected.. cancelling..');
         break;
       }
       move_canceled = false;
@@ -297,7 +320,17 @@ GameLogic = {
   async function checkRespawnsAndUpdateDb(player) {
     var isOnBoard = await player.isOnBoardAsync();
     var isOnVoid = isOnBoard ? await player.isOnVoidAsync() : false;
-    console.log(player.name + " Player.position " + player.position.x + "," + player.position.y + " " + isOnBoard + "|" + isOnVoid);
+    console.log(
+      player.name +
+        ' Player.position ' +
+        player.position.x +
+        ',' +
+        player.position.y +
+        ' ' +
+        isOnBoard +
+        '|' +
+        isOnVoid
+    );
     if (!player.needsRespawn && (!isOnBoard || isOnVoid || player.damage > 9)) {
       if (player.hasOptionCard('superior_archive')) {
         player.damage = 0;
@@ -318,21 +351,21 @@ GameLogic = {
       await player.chatAsync('died! (lives: ' + player.lives + ', damage: ' + player.damage + ')');
       await removePlayerWithDelay(player);
     } else {
-      console.log("updating position", player.name);
+      console.log('updating position', player.name);
       await Players.updateAsync(player._id, player);
     }
   }
 
   async function removePlayerWithDelay(player) {
-    await new Promise(resolve => Meteor.setTimeout(resolve, _CARD_PLAY_DELAY));
+    await new Promise((resolve) => Meteor.setTimeout(resolve, _CARD_PLAY_DELAY));
     var board = await player.boardAsync();
     player.position.x = board.width - 1;
     player.position.y = board.height;
     player.direction = GameLogic.UP;
     player.optionCards = {};
 
-    var playerCards = await Cards.findOneAsync({playerId: player._id});
-    var deck = await Deck.findOneAsync({gameId: player.gameId});
+    var playerCards = await Cards.findOneAsync({ playerId: player._id });
+    var deck = await Deck.findOneAsync({ gameId: player.gameId });
     for (var unusedCard of playerCards.handCards) {
       if (unusedCard >= 0) {
         deck.cards.push(unusedCard);
@@ -340,16 +373,16 @@ GameLogic = {
     }
     await Deck.updateAsync(deck._id, deck);
     // Clear handCards so discardCardsAsync doesn't return them again
-    await Cards.updateAsync({playerId: player._id}, {$set: {handCards: []}});
+    await Cards.updateAsync({ playerId: player._id }, { $set: { handCards: [] } });
 
-    console.log("removing player", player.name);
+    console.log('removing player', player.name);
     await Players.updateAsync(player._id, player);
   }
 
   scope.respawnPlayerAtPosAsync = async function (player, x, y) {
     player.position.x = x;
     player.position.y = y;
-    console.log("respawning player", player.name, 'at', x, ',', y);
+    console.log('respawning player', player.name, 'at', x, ',', y);
     await Players.updateAsync(player._id, player);
   };
 
@@ -358,5 +391,4 @@ GameLogic = {
     player.needsRespawn = false;
     await Players.updateAsync(player._id, player);
   };
-
 })(GameLogic);

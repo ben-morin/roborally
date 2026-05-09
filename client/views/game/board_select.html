@@ -1,43 +1,43 @@
 <template name="boardselect">
   <div class="card card-body">
     <h3>Select board</h3>
-    <hr class="star-well">
+    <hr class="star-well" />
     <ul class="nav nav-pills">
       <li class="nav-item" role="presentation">
-        <a class="nav-link {{beginnerActive}}" href="#beginner" role="tab" data-bs-toggle="pill">Beginner courses</a>
+        <a class="nav-link {{beginnerActive}}" href="#beginner" role="tab" data-bs-toggle="pill"
+          >Beginner courses</a
+        >
       </li>
       <li class="nav-item" role="presentation">
-        <a class="nav-link {{expertActive}}" href="#expert" role="tab" data-bs-toggle="pill">Expert courses</a>
+        <a class="nav-link {{expertActive}}" href="#expert" role="tab" data-bs-toggle="pill"
+          >Expert courses</a
+        >
       </li>
       <li class="nav-item" role="presentation">
-        <a class="nav-link {{customActive}}" href="#custom" role="tab" data-bs-toggle="pill">Custom courses</a>
+        <a class="nav-link {{customActive}}" href="#custom" role="tab" data-bs-toggle="pill"
+          >Custom courses</a
+        >
       </li>
     </ul>
     <div class="tab-content">
       <div class="tab-pane {{beginnerActive}}" role="tabpanel" id="beginner">
         <div class="d-flex flex-wrap justify-content-center">
           {{#each beginnerBoards}}
-            <div class="boardchoice">
-              {{> thumbnail}}
-            </div>
+          <div class="boardchoice">{{> thumbnail}}</div>
           {{/each}}
         </div>
       </div>
       <div class="tab-pane {{expertActive}}" role="tabpanel" id="expert">
         <div class="d-flex flex-wrap justify-content-center">
           {{#each expertBoards}}
-            <div class="boardchoice">
-              {{> thumbnail}}
-            </div>
+          <div class="boardchoice">{{> thumbnail}}</div>
           {{/each}}
         </div>
       </div>
       <div class="tab-pane {{customActive}}" role="tabpanel" id="custom">
         <div class="d-flex flex-wrap justify-content-center">
           {{#each customBoards}}
-            <div class="boardchoice">
-              {{> thumbnail}}
-            </div>
+          <div class="boardchoice">{{> thumbnail}}</div>
           {{/each}}
         </div>
       </div>

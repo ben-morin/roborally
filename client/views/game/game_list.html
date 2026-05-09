@@ -1,57 +1,60 @@
 <template name="gameList">
   <div class="chat card card-body">
-      <h2>Open games</h2>
-      <hr class="star-well">
-      {{#each openGames}}
-        <h4 class="text-lowercase">
-          <a class="white" href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
-          <span class="small text-lowercase">created {{formatDate submitted}}</span>
-        </h4>
-      {{else}}
-        <p>No open games at the moment, create one at the right.</p>
-      {{/each}}
-      <br>
-      <h3>Active games</h3>
-      <hr class="star-well">
-      {{#each activeGames}}
-        <h4 class="text-lowercase">
-          <a class="white" href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
-          <span class="small text-lowercase">created {{formatDate submitted}}</span>
-        </h4>
-      {{else}}
-        <p>No active games at the moment</p>
-      {{/each}}
-      <br>
-      <h3>Finished games</h3>
-      <hr class="star-well">
-      {{#each endedGames}}
-        <h4 class="text-lowercase">
-          <a class="white" href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
-          <span class="small text-lowercase">won by {{winner}} {{formatDate stopped}}</span>
-        </h4>
-      {{/each}}
+    <h2>Open games</h2>
+    <hr class="star-well" />
+    {{#each openGames}}
+    <h4 class="text-lowercase">
+      <a class="white" href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
+      <span class="small text-lowercase">created {{formatDate submitted}}</span>
+    </h4>
+    {{else}}
+    <p>No open games at the moment, create one at the right.</p>
+    {{/each}}
+    <br />
+    <h3>Active games</h3>
+    <hr class="star-well" />
+    {{#each activeGames}}
+    <h4 class="text-lowercase">
+      <a class="white" href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
+      <span class="small text-lowercase">created {{formatDate submitted}}</span>
+    </h4>
+    {{else}}
+    <p>No active games at the moment</p>
+    {{/each}}
+    <br />
+    <h3>Finished games</h3>
+    <hr class="star-well" />
+    {{#each endedGames}}
+    <h4 class="text-lowercase">
+      <a class="white" href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
+      <span class="small text-lowercase">won by {{winner}} {{formatDate stopped}}</span>
+    </h4>
+    {{/each}}
   </div>
 </template>
 
 <template name="gameItemPostForm">
   <h2>Create game</h2>
-  <hr class="star-well">
-  {{#if gameCreated}}
-    {{#with gameCreated}}
-      You have an open game named
-      <a href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
-    {{/with}}
-  {{else}}
-    <form class="main m-2" role="form">
-      <div class="mb-3">
-        <input class="form-control form-control-lg" name="name" type="text" value="" placeholder="The name of your game">
+  <hr class="star-well" />
+  {{#if gameCreated}} {{#with gameCreated}} You have an open game named
+  <a href="{{pathFor 'game.page' _id=_id}}">{{name}}</a>
+  {{/with}} {{else}}
+  <form class="main m-2" role="form">
+    <div class="mb-3">
+      <input
+        class="form-control form-control-lg"
+        name="name"
+        type="text"
+        value=""
+        placeholder="The name of your game"
+      />
+    </div>
+    <br />
+    <div class="mb-3">
+      <div>
+        <input class="btn btn-primary btn-lg" type="submit" value="Create game" />
       </div>
-      <br>
-      <div class="mb-3">
-        <div>
-          <input class="btn btn-primary btn-lg" type="submit" value="Create game">
-        </div>
-      </div>
-    </form>
+    </div>
+  </form>
   {{/if}}
 </template>

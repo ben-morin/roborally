@@ -1,4 +1,4 @@
-@import "variables.scss";
+@import 'variables.scss';
 
 header {
   text-align: center;
@@ -24,15 +24,15 @@ header {
 
   .fixed-top {
     padding: 25px 0;
-    -webkit-transition: padding .3s;
-    -moz-transition: padding .3s;
-    transition: padding .3s;
+    -webkit-transition: padding 0.3s;
+    -moz-transition: padding 0.3s;
+    transition: padding 0.3s;
 
     .navbar-brand {
       font-size: 2em;
-      -webkit-transition: all .3s;
-      -moz-transition: all .3s;
-      transition: all .3s;
+      -webkit-transition: all 0.3s;
+      -moz-transition: all 0.3s;
+      transition: all 0.3s;
     }
 
     &.navbar-shrink {
@@ -47,7 +47,7 @@ header {
 
 .navbar {
   text-transform: uppercase;
-  font-family: Montserrat, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: Montserrat, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-weight: 700;
 
   a:focus {

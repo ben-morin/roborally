@@ -1,4 +1,4 @@
-@import "variables.scss";
+@import 'variables.scss';
 
 body {
   overflow-x: scroll;
@@ -32,7 +32,7 @@ h1,
 h2,
 h3 {
   text-transform: uppercase;
-  font-family: Montserrat, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: Montserrat, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-weight: 700;
   margin-top: 1em;
 }

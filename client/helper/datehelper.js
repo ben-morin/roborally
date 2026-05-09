@@ -1,3 +1,3 @@
-Template.registerHelper("formatDate", function(timestamp) {
-    return moment(new Date(timestamp)).fromNow();
+Template.registerHelper('formatDate', function (timestamp) {
+  return moment(new Date(timestamp)).fromNow();
 });
