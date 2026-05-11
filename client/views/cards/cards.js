@@ -1,4 +1,15 @@
 let timerHandle = null;
+const cardsState = new ReactiveDict();
+
+// Compute seconds remaining from the server-stored timer start time. Returns 0
+// when the timer is not active. Establishes a reactive dependency on the tick
+// counter so callers re-run once per second while the timer is live.
+function getTimeLeft(game) {
+  if (!game || game.timer !== 1 || !game.timerStartedAt) return 0;
+  cardsState.get('tick'); // reactive dep — invalidated each second by setInterval
+  const elapsed = (Date.now() - new Date(game.timerStartedAt).getTime()) / 1000;
+  return Math.max(0, GameLogic.TIMER - Math.floor(elapsed));
+}
 
 function getGame() {
   const id = FlowRouter.getParam('_id');
@@ -73,41 +84,38 @@ Template.cards.helpers({
     if (!game) return '';
     const player = getPlayer();
     const isNonPlayer = !player || player.lives <= 0;
+    const timeLeft = getTimeLeft(game);
+
+    // Manage the per-second tick interval (drives reactive re-runs while the
+    // timer is active).
     if (game.timer === 1 && timerHandle === null) {
       console.log('starting timer');
-      Session.set('timeLeft', GameLogic.TIMER);
       timerHandle = Meteor.setInterval(function () {
-        Session.set('timeLeft', Math.max(0, Session.get('timeLeft') - 1));
+        cardsState.set('tick', Date.now());
       }, 1000);
-      if (!isNonPlayer && !Players.findOne({ userId: Meteor.userId() }).submitted) {
-        document
-          .querySelectorAll('.right-panel .card')
-          .forEach((el) => el.classList.add('countdown'));
-      }
     }
-    if (game.timer === 0) {
-      console.log('game timer = 0');
-      if (!isNonPlayer) {
-        submitCards(game);
-      }
-      Session.set('timeLeft', 0);
-      Meteor.clearInterval(timerHandle);
-      timerHandle = null;
-    }
-    if (timerHandle && Session.get('timeLeft') <= 5 && !isNonPlayer && !getPlayer().submitted) {
-      document.querySelectorAll('.right-panel .card').forEach((el) => {
-        el.classList.remove('countdown');
-        el.classList.add('finish');
-      });
-    }
-    if (game.timer === -1) {
-      console.log('game timer = -1');
-      Session.set('timeLeft', 0);
+    if (game.timer !== 1 && timerHandle !== null) {
       Meteor.clearInterval(timerHandle);
       timerHandle = null;
     }
 
-    const timeLeft = Session.get('timeLeft') || 0;
+    if (game.timer === 0 && !isNonPlayer) {
+      submitCards(game);
+    }
+
+    // Apply countdown / finish classes on every helper run so state survives
+    // page reloads and late template mounts. Each run derives the correct
+    // class set from current values; classList.toggle removes them when the
+    // condition flips false.
+    const rightPanelCards = document.querySelectorAll('.right-panel .card');
+    const me = Players.findOne({ userId: Meteor.userId() });
+    const showTimer = game.timer === 1 && !isNonPlayer && me && !me.submitted;
+    const showFinish = showTimer && timeLeft <= 5;
+    rightPanelCards.forEach((el) => {
+      el.classList.toggle('countdown', showTimer && !showFinish);
+      el.classList.toggle('finish', showFinish);
+    });
+
     return isNonPlayer ? '' : timeLeft > 0 ? '(' + timeLeft + ')' : '';
   },
   gameState: function () {
@@ -279,7 +287,7 @@ Template.card.helpers({
     return this.slot === getSlotIndex();
   },
   timer: function () {
-    const timeLeft = Session.get('timeLeft') || 0;
+    const timeLeft = getTimeLeft(getGame());
     return timeLeft > 0 ? '(' + timeLeft + ')' : '';
   },
 });
@@ -365,7 +373,7 @@ Template.card.events({
     const currentSlot = getSlotIndex();
     if (!isEmptySlot(currentSlot)) return;
 
-    Session.set('selectedSlot', getNextEmptySlotIndex(currentSlot));
+    cardsState.set('selectedSlot', getNextEmptySlotIndex(currentSlot));
     chooseCard(player.gameId, this.cardId, currentSlot);
     console.log('choose card ', this.cardId, ' for slot ', currentSlot);
 
@@ -388,11 +396,11 @@ Template.card.events({
     const player = getPlayer();
     if (player.submitted) return;
     unchooseCard(player.gameId, this.slot);
-    Session.set('selectedSlot', this.slot);
+    cardsState.set('selectedSlot', this.slot);
   },
   'click .empty': function (e) {
     if (!getPlayer().submitted) {
-      Session.set('selectedSlot', this.slot);
+      cardsState.set('selectedSlot', this.slot);
     }
   },
 });
@@ -452,7 +460,7 @@ function unchooseCard(gameId, slot) {
 }
 
 function unchooseAllCards(player) {
-  Session.set('selectedSlot', 0);
+  cardsState.set('selectedSlot', 0);
   Meteor.callAsync('deselectAllCards', player.gameId).catch(function (error) {
     modalAlert(error.reason);
   });
@@ -463,7 +471,7 @@ function getChosenCnt() {
 }
 
 function getSlotIndex() {
-  const slot = Session.get('selectedSlot');
+  const slot = cardsState.get('selectedSlot');
   if (slot == null) {
     return getFirstEmptySlotIndex();
   }
@@ -506,10 +514,10 @@ function submitCards(game) {
     .forEach((el) => el.classList.remove('countdown', 'finish'));
   Meteor.callAsync('playCards', game._id).then(
     function () {
-      Session.set('selectedSlot', 0);
+      cardsState.set('selectedSlot', 0);
     },
     function (error) {
-      Session.set('selectedSlot', 0);
+      cardsState.set('selectedSlot', 0);
       modalAlert(error.reason);
     }
   );

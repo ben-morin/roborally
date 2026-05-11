@@ -101,11 +101,11 @@ class @CardLogic
     playerCnt = await Players.find({gameId: player.gameId, lives: {$gt: 0}}).countAsync()
     readyPlayerCnt = await Players.find({gameId: player.gameId, submitted: true, lives: {$gt: 0}}).countAsync()
     if readyPlayerCnt == playerCnt
-      await Games.updateAsync(player.gameId, {$set: {timer: -1}})
+      await Games.updateAsync(player.gameId, {$set: {timer: -1, timerStartedAt: null}})
       await GameState.nextGamePhaseAsync(player.gameId)
     else if readyPlayerCnt == playerCnt-1
       # start timer
-      await Games.updateAsync(player.gameId, {$set: {timer: 1}})
+      await Games.updateAsync(player.gameId, {$set: {timer: 1, timerStartedAt: new Date()}})
       Meteor.setTimeout Meteor.bindEnvironment(->
         autoSubmitIfTimedOut(player.gameId).catch (err) ->
           console.error("autoSubmitIfTimedOut error", err)
@@ -115,7 +115,7 @@ class @CardLogic
     game = await Games.findOneAsync(gameId)
     if game.timer == 1
       console.log("time up! setting timer to 0")
-      await Games.updateAsync(gameId, {$set: {timer: 0}})
+      await Games.updateAsync(gameId, {$set: {timer: 0, timerStartedAt: null}})
       await new Promise (resolve) -> Meteor.setTimeout resolve, 2500
       cnt = await Players.find({gameId: gameId, submitted: true}).countAsync()
       playerCnt = await Players.find({gameId: gameId, lives: {$gt: 0}}).countAsync()
