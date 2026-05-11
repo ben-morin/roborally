@@ -21,7 +21,6 @@ blaze-hot               # Update files using Blaze's API with HMR
 mizzao:user-status@2.0.0-rc.2
 mizzao:timesync@1.0.0-beta.2
 linto:fontawesome
-session@1.2.2
 fourseven:scss
 coffeescript@2.7.0
 

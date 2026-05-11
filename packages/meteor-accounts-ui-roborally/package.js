@@ -12,7 +12,7 @@ Package.onUse(function(api) {
       'accounts-base',
       'ecmascript',
       'templating@1.4.1',
-      'session',
+      'reactive-dict',
     ],
     'client'
   );

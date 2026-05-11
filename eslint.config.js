@@ -10,7 +10,6 @@ const meteorGlobals = {
   Template: 'readonly',
   Tracker: 'readonly',
   Blaze: 'readonly',
-  Session: 'readonly',
   ReactiveDict: 'readonly',
   ReactiveVar: 'readonly',
   Random: 'readonly',

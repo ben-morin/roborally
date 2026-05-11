@@ -30,7 +30,10 @@ const validateKey = key => {
     throw new Error(`Invalid key in loginButtonsSession: ${key}`);
 };
 
-const KEY_PREFIX = "Meteor.loginButtons.";
+// Package-scoped reactive state. Previously stored under the global Session
+// with a "Meteor.loginButtons." key prefix; namespacing is now provided by
+// this ReactiveDict instance instead.
+const state = new ReactiveDict();
 
 // XXX This should probably be package scope rather than exported
 // (there was even a comment to that effect here from before we had
@@ -44,11 +47,11 @@ const set = (key, value) => {
   _set(key, value);
 };
 
-const _set = (key, value) => Session.set(KEY_PREFIX + key, value);
+const _set = (key, value) => state.set(key, value);
 
 const get = key => {
   validateKey(key);
-  return Session.get(KEY_PREFIX + key);
+  return state.get(key);
 };
 
 const closeDropdown = () => {
