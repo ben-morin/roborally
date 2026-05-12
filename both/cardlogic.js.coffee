@@ -104,26 +104,32 @@ class @CardLogic
       await Games.updateAsync(player.gameId, {$set: {timer: -1, timerStartedAt: null}})
       await GameState.nextGamePhaseAsync(player.gameId)
     else if readyPlayerCnt == playerCnt-1
-      # start timer
-      await Games.updateAsync(player.gameId, {$set: {timer: 1, timerStartedAt: new Date()}})
+      # start timer — capture timerStart so the scheduled callback can verify
+      # it is still acting on the same timer instance when it fires
+      timerStart = new Date()
+      await Games.updateAsync(player.gameId, {$set: {timer: 1, timerStartedAt: timerStart}})
       Meteor.setTimeout Meteor.bindEnvironment(->
-        autoSubmitIfTimedOut(player.gameId).catch (err) ->
+        autoSubmitIfTimedOut(player.gameId, timerStart).catch (err) ->
           console.error("autoSubmitIfTimedOut error", err)
       ), GameLogic.TIMER * 1000
 
-  autoSubmitIfTimedOut = (gameId) ->
+  autoSubmitIfTimedOut = (gameId, expectedStart) ->
     game = await Games.findOneAsync(gameId)
-    if game.timer == 1
-      console.log("time up! setting timer to 0")
-      await Games.updateAsync(gameId, {$set: {timer: 0, timerStartedAt: null}})
-      await new Promise (resolve) -> Meteor.setTimeout resolve, 2500
-      cnt = await Players.find({gameId: gameId, submitted: true}).countAsync()
-      playerCnt = await Players.find({gameId: gameId, lives: {$gt: 0}}).countAsync()
-      if cnt < playerCnt
-        unsubmittedPlayer = await Players.findOneAsync({gameId: gameId, submitted: false})
-        if unsubmittedPlayer
-          await CardLogic.submitCardsAsync(unsubmittedPlayer)
-          console.log("Player " + unsubmittedPlayer.name + " did not respond, submitting random cards")
+    # Bail out if the timer has been reset (manual submit completed the turn) or
+    # if a new timer instance was started for a later turn — without this check,
+    # a stale setTimeout from a previous turn can auto-submit a player who still
+    # has time on their current programming timer.
+    return unless game.timer == 1 and game.timerStartedAt? and game.timerStartedAt.getTime() == expectedStart.getTime()
+    console.log("time up! setting timer to 0")
+    await Games.updateAsync(gameId, {$set: {timer: 0, timerStartedAt: null}})
+    await new Promise (resolve) -> Meteor.setTimeout resolve, 2500
+    cnt = await Players.find({gameId: gameId, submitted: true}).countAsync()
+    playerCnt = await Players.find({gameId: gameId, lives: {$gt: 0}}).countAsync()
+    if cnt < playerCnt
+      unsubmittedPlayer = await Players.findOneAsync({gameId: gameId, submitted: false})
+      if unsubmittedPlayer
+        await CardLogic.submitCardsAsync(unsubmittedPlayer)
+        console.log("Player " + unsubmittedPlayer.name + " did not respond, submitting random cards")
 
   verifySubmittedCardsAsync = (player) ->
     # check if all played cards are available from original hand...
