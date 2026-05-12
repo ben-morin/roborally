@@ -114,8 +114,8 @@ Template.board.helpers({
     return m;
   },
   shots: function () {
-    const laserWidth = 4;
     const tileWidth = getTileSize();
+    const laserWidth = Math.trunc(tileWidth / 15);
     const startOffset = 5;
     const s = [];
     const game = getGame();

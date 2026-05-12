@@ -77,7 +77,7 @@ class @BoardBox
       return board
     test: () ->
       board = new Board('test',1,4,4,5)
-      board.addRallyArea('test_pit')
+#      board.addRallyArea('test_pit')
       board.addStartArea('test',0,4)
       board.addCheckpoint(3,0)
       return board
