@@ -79,6 +79,9 @@ Template.cards.helpers({
   showPlayButton: function () {
     return !getPlayer().submitted;
   },
+  playBtnDisabled: function () {
+    return allowSubmit() ? '' : 'disabled';
+  },
   timer: function () {
     const game = getGame();
     if (!game) return '';
