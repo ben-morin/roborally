@@ -379,8 +379,11 @@ function animatePosition(element, x, y) {
       const playerElement = document.querySelector('.' + element);
       if (!playerElement) return;
       playerElement.getAnimations().forEach((a) => a.cancel());
-      const duration =
-        Math.max(Math.abs(newPosition.x - startX), Math.abs(newPosition.y - startY)) * 4;
+      const tileSize = getTileSize();
+      const tilesTraveled =
+        Math.max(Math.abs(newPosition.x - startX), Math.abs(newPosition.y - startY)) /
+        Math.max(tileSize, 1);
+      const duration = tilesTraveled * GameLogic.MS_PER_TILE;
       playerElement.animate(
         [
           { left: startX + 'px', top: startY + 'px' },

@@ -7,6 +7,10 @@ GameLogic = {
   ON: 5,
   TIMER: 30,
   CARD_SLOTS: 5,
+  // Per-tile animation duration. Shared with the client (see client/views/board/board.js)
+  // so the server's inter-batch pause matches the time the client needs to play out the
+  // prior batch's smooth glide.
+  MS_PER_TILE: 220,
 };
 
 (function (scope) {
@@ -26,10 +30,32 @@ GameLogic = {
       if (cardType.position === 0) {
         await checkRespawnsAndUpdateDb(player);
       } else {
-        step = Math.min(cardType.position, 1);
-        for (j = 0; j < Math.abs(cardType.position); j++) {
+        const direction = Math.min(cardType.position, 1);
+        const totalSteps = Math.abs(cardType.position);
+        // Group contiguous steps that move the same set of robots into a "batch".
+        // Between batches, pause long enough for the client's smooth glide of the
+        // prior batch to finish, so a pushed robot doesn't start moving before the
+        // pusher visually reaches it.
+        let prevMovingSet = null;
+        let priorBatchTiles = 0;
+        for (let j = 0; j < totalSteps; j++) {
           const players = await Players.find({ gameId: player.gameId }).fetchAsync();
-          await executeStep(players, player, step);
+          const movingSet = await predictMovingSet(players, player, direction);
+          if (
+            prevMovingSet !== null &&
+            !setsEqual(movingSet, prevMovingSet) &&
+            priorBatchTiles > 0
+          ) {
+            await new Promise((resolve) =>
+              Meteor.setTimeout(resolve, priorBatchTiles * GameLogic.MS_PER_TILE)
+            );
+            priorBatchTiles = 0;
+          }
+          await executeStep(players, player, direction);
+          if (movingSet.size > 0) {
+            priorBatchTiles += 1;
+          }
+          prevMovingSet = movingSet;
           if (player.needsRespawn) {
             break;
           } // player respawned, don't continue playing out this card.
@@ -304,6 +330,52 @@ GameLogic = {
         await checkRespawnsAndUpdateDb(roller_move.player);
       }
     }
+  }
+
+  function stepVector(player, direction) {
+    const step = { x: 0, y: 0 };
+    switch (player.direction) {
+      case GameLogic.UP:
+        step.y = -1 * direction;
+        break;
+      case GameLogic.RIGHT:
+        step.x = direction;
+        break;
+      case GameLogic.DOWN:
+        step.y = direction;
+        break;
+      case GameLogic.LEFT:
+        step.x = -1 * direction;
+        break;
+    }
+    return step;
+  }
+
+  // Walks the would-be push chain for `player` taking one step in `direction` and
+  // returns the set of player ids that would visibly move. Returns an empty set if
+  // the step is blocked by a wall or an immovable chain — those are also batch
+  // boundaries for animation purposes. Pure: does not mutate state.
+  async function predictMovingSet(players, player, direction) {
+    const step = stepVector(player, direction);
+    const set = new Set();
+    if (step.x === 0 && step.y === 0) return set;
+    const board = await player.boardAsync();
+    let p = player;
+    // bounded by player count; each pushed player is added once
+    for (let guard = 0; guard <= players.length; guard++) {
+      if (!board.canMove(p.position.x, p.position.y, step)) return new Set();
+      set.add(p._id);
+      const next = isPlayerOnTile(players, p.position.x + step.x, p.position.y + step.y);
+      if (next === null) return set;
+      p = next;
+    }
+    return set;
+  }
+
+  function setsEqual(a, b) {
+    if (a.size !== b.size) return false;
+    for (const v of a) if (!b.has(v)) return false;
+    return true;
   }
 
   function isPlayerOnTile(players, x, y) {
