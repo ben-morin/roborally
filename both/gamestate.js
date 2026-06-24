@@ -254,22 +254,34 @@ GameState = {
 
   async function playMoveBot(game) {
     const card = game.cardsToPlay.shift();
-    await Games.updateAsync(game._id, {
-      $set: {
-        announceCard: card,
-        cardsToPlay: game.cardsToPlay,
-      },
-    });
     const player = await Players.findOneAsync(card.playerId);
-    await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_CARD_TIME));
-    await Games.updateAsync(game._id, {
-      $set: {
-        announceCard: null,
-      },
-    });
-    await GameLogic.playCard(player, card.cardId);
+    // Skip the announce + execute for dead players: their card is dequeued
+    // but their robot is off-board, so flashing their card on the bottom-right
+    // teleport position would just be visual noise.
+    const skip = !player || player.needsRespawn;
+    if (skip) {
+      await Games.updateAsync(game._id, {
+        $set: { cardsToPlay: game.cardsToPlay },
+      });
+    } else {
+      await Games.updateAsync(game._id, {
+        $set: {
+          announceCard: card,
+          cardsToPlay: game.cardsToPlay,
+        },
+      });
+      await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_CARD_TIME));
+      await Games.updateAsync(game._id, {
+        $set: {
+          announceCard: null,
+        },
+      });
+      await GameLogic.playCard(player, card.cardId);
+    }
     if (game.cardsToPlay.length > 0) {
-      await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));
+      if (!skip) {
+        await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));
+      }
       await playMoveBot(game);
     } else {
       await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));

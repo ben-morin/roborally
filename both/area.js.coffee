@@ -146,6 +146,20 @@ class @Area
       @addStart 1,0, 'up'
       @addStart 2,0, 'up'
       @addStart 3,0, 'up'
+
+    dev_test: () ->
+      # Three robots in a row at the right edge of a 12-wide board (positioned
+      # by an x_offset/y_offset chosen at the call site). A moves 3 to push B
+      # and C off, then A walks off itself.
+      @addStart  9, 3, 'right'  # A
+      @addStart 10, 3, 'up'     # B
+      @addStart 11, 3, 'up'     # C
+      # Extra slots so additional players can still join without breaking the test.
+      @addStart  0, 3, 'up'
+      @addStart  1, 3, 'up'
+      @addStart  2, 3, 'up'
+      @addStart  3, 3, 'up'
+      @addStart  4, 3, 'up'
   @course:
     test_pit: () ->
       @setVoid 1,3

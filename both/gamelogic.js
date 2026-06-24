@@ -35,9 +35,11 @@ GameLogic = {
         // Group contiguous steps that move the same set of robots into a "batch".
         // Between batches, pause long enough for the client's smooth glide of the
         // prior batch to finish, so a pushed robot doesn't start moving before the
-        // pusher visually reaches it.
+        // pusher visually reaches it. Skip the pause when the prior batch ended in
+        // a death — the 1s removePlayerWithDelay already covered the glide time.
         let prevMovingSet = null;
         let priorBatchTiles = 0;
+        let prevStepDied = false;
         for (let j = 0; j < totalSteps; j++) {
           const players = await Players.find({ gameId: player.gameId }).fetchAsync();
           const movingSet = await predictMovingSet(players, player, direction);
@@ -46,12 +48,14 @@ GameLogic = {
             !setsEqual(movingSet, prevMovingSet) &&
             priorBatchTiles > 0
           ) {
-            await new Promise((resolve) =>
-              Meteor.setTimeout(resolve, priorBatchTiles * GameLogic.MS_PER_TILE)
-            );
+            if (!prevStepDied) {
+              await new Promise((resolve) =>
+                Meteor.setTimeout(resolve, priorBatchTiles * GameLogic.MS_PER_TILE)
+              );
+            }
             priorBatchTiles = 0;
           }
-          await executeStep(players, player, direction);
+          prevStepDied = await executeStep(players, player, direction);
           if (movingSet.size > 0) {
             priorBatchTiles += 1;
           }
@@ -109,7 +113,9 @@ GameLogic = {
     for (const player of players) {
       const tile = await player.tileAsync();
       if (tile.type === Tile.PUSHER && game.playPhaseCount % 2 === tile.pusher_type) {
-        await tryToMovePlayer(players, player, tile.move);
+        const cleanups = [];
+        await tryToMovePlayer(players, player, tile.move, cleanups);
+        for (const cleanup of cleanups) await cleanup();
       }
     }
   };
@@ -217,7 +223,10 @@ GameLogic = {
   };
 
   async function executeStep(players, player, direction) {
-    // direction = 1 for step forward, -1 for step backwards
+    // direction = 1 for step forward, -1 for step backwards. Returns true if
+    // anyone died as a result of this step (used by playCard to skip the
+    // inter-batch animation pause — the 1s death cleanup has already covered
+    // the prior batch's smooth-glide time).
     const step = { x: 0, y: 0 };
     switch (player.direction) {
       case GameLogic.UP:
@@ -233,10 +242,19 @@ GameLogic = {
         step.x = -1 * direction;
         break;
     }
-    await tryToMovePlayer(players, player, step);
+    const cleanups = [];
+    await tryToMovePlayer(players, player, step, cleanups);
+    for (const cleanup of cleanups) await cleanup();
+    return cleanups.length > 0;
   }
 
-  async function tryToMovePlayer(players, p, step) {
+  async function tryToMovePlayer(players, p, step, cleanups) {
+    // cleanups: shared queue threaded through push recursion. When a pushed
+    // robot falls off the board / into a void, its 1-second remove delay is
+    // deferred to the caller (executeStep / executePushers) so the pusher's
+    // position update lands before the off-screen teleport — otherwise the
+    // pushed robot leaves an empty square that the pusher then slides into a
+    // second later.
     const board = await p.boardAsync();
     let makeMove = true;
     if (step.x !== 0 || step.y !== 0) {
@@ -256,7 +274,7 @@ GameLogic = {
           if (p.hasOptionCard('ramming_gear')) {
             await pushedPlayer.addDamageAsync(1);
           }
-          makeMove = await tryToMovePlayer(players, pushedPlayer, step);
+          makeMove = await tryToMovePlayer(players, pushedPlayer, step, cleanups);
         }
         if (makeMove) {
           console.log(
@@ -268,7 +286,7 @@ GameLogic = {
               (p.position.y + step.y)
           );
           p.move(step);
-          await checkRespawnsAndUpdateDb(p);
+          await checkRespawnsAndUpdateDb(p, cleanups);
           return true;
         }
       }
@@ -388,7 +406,7 @@ GameLogic = {
     return found;
   }
 
-  async function checkRespawnsAndUpdateDb(player) {
+  async function checkRespawnsAndUpdateDb(player, cleanups) {
     const isOnBoard = await player.isOnBoardAsync();
     const isOnVoid = isOnBoard ? await player.isOnVoidAsync() : false;
     console.log(
@@ -420,7 +438,11 @@ GameLogic = {
         await Games.updateAsync(game._id, game);
       }
       await player.chatAsync('died! (lives: ' + player.lives + ', damage: ' + player.damage + ')');
-      await removePlayerWithDelay(player);
+      if (cleanups) {
+        cleanups.push(() => removePlayerWithDelay(player));
+      } else {
+        await removePlayerWithDelay(player);
+      }
     } else {
       console.log('updating position', player.name);
       await Players.updateAsync(player._id, player);

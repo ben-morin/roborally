@@ -18,11 +18,14 @@ class @BoardBox
   @CUSTOM_COURSE_IDX = 26
   @cache = []
   @test_board_id = @CATALOG.length
+  @dev_test_board_id = @CATALOG.length + 1
 
   @getBoard: (boardId) ->
     if !boardId? || boardId < 0 || boardId >= @CATALOG.length
       if boardId == @test_board_id
         return @getTestBoard()
+      else if boardId == @dev_test_board_id
+        return @getDevTestBoard()
       else
         boardId = 0
     if !@cache[boardId]?
@@ -35,6 +38,8 @@ class @BoardBox
   @getBoardId: (name) ->
     if name == 'test-mode'
       @test_board_id
+    else if name == 'dev-test'
+      @dev_test_board_id
     else
       @CATALOG.indexOf(name)
 
@@ -42,6 +47,11 @@ class @BoardBox
     if !@cache[@test_board_id]?
       @cache[@test_board_id] = @boards.test()
     @cache[@test_board_id]
+
+  @getDevTestBoard: ->
+    if !@cache[@dev_test_board_id]?
+      @cache[@dev_test_board_id] = @boards.dev_test()
+    @cache[@dev_test_board_id]
 
   @boards:
     default: () ->
@@ -80,6 +90,16 @@ class @BoardBox
 #      board.addRallyArea('test_pit')
       board.addStartArea('test',0,4)
       board.addCheckpoint(3,0)
+      return board
+    dev_test: () ->
+      # Empty 12x12 board with three robots (A, B, C) lined up along row 6
+      # at columns 9, 10, 11. The right edge is at x=11, so A's "move 3"
+      # pushes C, then B, then A off the board — exercises the chained
+      # push-off-edge animation path.
+      board = new Board('dev_test', 1, 8, 12, 12)
+      board.length = 'short'
+      board.addStartArea('dev_test', 0, 3)
+      board.addCheckpoint(0, 0)
       return board
     option_world: () ->
       board = new Board('option_world',2,8)

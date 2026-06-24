@@ -330,6 +330,9 @@ Template.board.helpers({
 
     const cardId = game.announceCard.cardId;
     const player = Players.findOne(game.announceCard.playerId);
+    if (!player || player.needsRespawn) {
+      return;
+    }
     return {
       class: 'played announce-move',
       priority: CardLogic.priority(cardId),
