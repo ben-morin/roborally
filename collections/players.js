@@ -160,15 +160,25 @@ const player = {
         },
       });
     } else {
+      const oldLockedCnt = Math.max(
+        0,
+        GameLogic.CARD_SLOTS + this.damage - CardLogic._MAX_NUMBER_OF_CARDS
+      );
       this.damage += inc;
-      if (this.isPoweredDown() && this.lockedCnt() > 0) {
-        // powered down robot has no cards so we have to draw from deck to get locked cards
+      const newLockedCnt = this.lockedCnt();
+      if (this.isPoweredDown() && newLockedCnt > oldLockedCnt) {
+        // powered down robot has no cards, so draw from the deck for slots that
+        // are NEWLY locked by this damage. Already-locked slots keep their card.
         const game = await this.gameAsync();
         const deck = await game.getDeckAsync();
         const chosenCards = await this.getChosenCardsAsync();
-        for (let i = 0; i < this.lockedCnt(); i++) {
-          this.cards[this.notLockedCnt() + i] = deck.cards.shift();
-          chosenCards[this.notLockedCnt() + i] = this.cards[this.notLockedCnt() + i];
+        for (
+          let slot = GameLogic.CARD_SLOTS - newLockedCnt;
+          slot < GameLogic.CARD_SLOTS - oldLockedCnt;
+          slot++
+        ) {
+          this.cards[slot] = deck.cards.shift();
+          chosenCards[slot] = this.cards[slot];
         }
         await Deck.updateAsync(deck._id, deck);
         await Players.updateAsync(this._id, this);
