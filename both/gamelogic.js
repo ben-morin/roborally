@@ -452,7 +452,10 @@ GameLogic = {
   async function removePlayerWithDelay(player) {
     await new Promise((resolve) => Meteor.setTimeout(resolve, _CARD_PLAY_DELAY));
     const board = await player.boardAsync();
-    player.position.x = board.width - 1;
+    // Park players waiting to respawn at the bottom-right; permanently
+    // eliminated players (out of lives) go to the bottom-left so the two
+    // states are visually distinct.
+    player.position.x = player.lives > 0 ? board.width - 1 : 0;
     player.position.y = board.height;
     player.direction = GameLogic.UP;
     player.optionCards = {};

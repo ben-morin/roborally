@@ -103,6 +103,7 @@ Template.board.helpers({
   markers: function () {
     const m = [];
     getPlayers().forEach(function (player) {
+      if (player.lives <= 0) return;
       const playerName = player.userId === Meteor.userId() ? 'You' : player.name;
       m.push({
         path: '/robots/marker_' + player.robotId.toString() + '.png',
