@@ -1,5 +1,6 @@
 Template.usersPill.helpers({
   usersOnline: function () {
+    if (!Meteor.userId()) return [];
     return Meteor.users.find();
   },
   userPillClass: function () {
