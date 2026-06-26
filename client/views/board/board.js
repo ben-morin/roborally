@@ -89,9 +89,10 @@ Template.board.helpers({
     const r = [];
     getPlayers().forEach(function (player) {
       const rclass = 'r' + player.robotId;
+      const eliminated = player.lives <= 0;
       r.push({
         path: '/robots/robot_' + player.robotId.toString() + '.png',
-        robot_class: rclass,
+        robot_class: eliminated ? rclass + ' eliminated' : rclass,
         direction: animateRotation(rclass, player.direction),
         position: animatePosition(rclass, player.position.x, player.position.y),
         poweredDown: player.isPoweredDown(),

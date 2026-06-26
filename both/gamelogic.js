@@ -453,10 +453,20 @@ GameLogic = {
     await new Promise((resolve) => Meteor.setTimeout(resolve, _CARD_PLAY_DELAY));
     const board = await player.boardAsync();
     // Park players waiting to respawn at the bottom-right; permanently
-    // eliminated players (out of lives) go to the bottom-left so the two
-    // states are visually distinct.
-    player.position.x = player.lives > 0 ? board.width - 1 : 0;
+    // eliminated players (out of lives) line up along the bottom-left in
+    // elimination order so multiple eliminations don't stack on the same tile.
     player.position.y = board.height;
+    if (player.lives > 0) {
+      player.position.x = board.width - 1;
+    } else {
+      const parkedCount = await Players.find({
+        gameId: player.gameId,
+        lives: { $lte: 0 },
+        'position.y': board.height,
+        _id: { $ne: player._id },
+      }).countAsync();
+      player.position.x = parkedCount;
+    }
     player.direction = GameLogic.UP;
     player.optionCards = {};
 

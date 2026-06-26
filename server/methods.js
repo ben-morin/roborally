@@ -51,11 +51,14 @@ Meteor.methods({
     const author = getUsername(user);
     let playerId;
     if (!(await Players.findOneAsync({ gameId: gameId, userId: user._id }))) {
+      // The dev-test board is meant for exercising elimination flows quickly,
+      // so seat players with a single life instead of the standard three.
+      const startingLives = game.boardId === BoardBox.dev_test_board_id ? 1 : 3;
       playerId = await Players.insertAsync({
         gameId: gameId,
         userId: user._id,
         name: author,
-        lives: 3,
+        lives: startingLives,
         damage: 0,
         visited_checkpoints: 0,
         needsRespawn: false,
