@@ -1,7 +1,7 @@
 {
   "name": "roborally",
   "description": "RoboRally in Meteor",
-  "version": "3.4.1-4",
+  "version": "3.4.1-5",
   "private": true,
   "repository": {
     "type": "git",
