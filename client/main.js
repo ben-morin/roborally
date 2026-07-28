@@ -1,3 +1,57 @@
+// TEMPORARY LOAD BRIDGE (Milestone 2).
+//
+// Adding the `ecmascript` package activates `meteor.mainModule`, which makes every
+// app file lazy — only this entry and what it imports is evaluated. Until each layer
+// is converted to real `export`/`import` edges, these side-effect imports keep the
+// same set of files loading in the same order they did as eager scripts, so behavior
+// is unchanged. Entries are removed as the layer that owns them gains real imports.
+import './views/board/_tiles.html';
+import './views/board/board.html';
+import './views/board/thumbnail.html';
+import './views/cards/cards.html';
+import './views/chat/chat.html';
+import './views/game/board_select.html';
+import './views/game/game_list.html';
+import './views/game/game_page.html';
+import './views/layout/applicationLayout.html';
+import './views/ranking/ranking.html';
+import './views/users/users.html';
+
+import './views/board/_tiles.js';
+import './views/board/board.js';
+import './views/board/thumbnail.js';
+import './views/cards/cards.js';
+import './views/chat/chat.js';
+import './views/game/board_select.js';
+import './views/game/game_list.js';
+import './views/game/game_page.js';
+import './views/layout/applicationLayout.js';
+import './views/ranking/ranking.js';
+import './views/users/users.js';
+
+import './helper/datehelper.js';
+import './helper/modalDialogs.js';
+
+import '../both/area.js';
+import '../both/board.js';
+import '../both/board_box.js';
+import '../both/cardMethods.js';
+import '../both/cardlogic.js';
+import '../both/gamelogic.js';
+import '../both/gamestate.js';
+import '../both/logging.js';
+import '../both/permissions.js';
+import '../both/shuffle.js';
+import '../both/tile.js';
+
+import '../collections/cards.js';
+import '../collections/chat.js';
+import '../collections/deck.js';
+import '../collections/games.js';
+import '../collections/highscores.js';
+import '../collections/players.js';
+import '../collections/users.js';
+
 Meteor.subscribe('onlineUsers');
 
 Meteor.startup(function () {

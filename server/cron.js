@@ -1,3 +1,34 @@
+// TEMPORARY LOAD BRIDGE (Milestone 2) — see the note in client/main.js.
+// These side-effect imports keep the previously-eager server files loading now that
+// `meteor.mainModule` is active. Note that ES imports hoist, so the three server/
+// modules below now evaluate before this file's body rather than after it; that is
+// the shape Milestone 2 targets anyway (cron.js genuinely importing them), and the
+// only observable difference is the registration order of independent
+// `Meteor.startup` callbacks.
+import '../both/area.js';
+import '../both/board.js';
+import '../both/board_box.js';
+import '../both/cardMethods.js';
+import '../both/cardlogic.js';
+import '../both/gamelogic.js';
+import '../both/gamestate.js';
+import '../both/logging.js';
+import '../both/permissions.js';
+import '../both/shuffle.js';
+import '../both/tile.js';
+
+import '../collections/cards.js';
+import '../collections/chat.js';
+import '../collections/deck.js';
+import '../collections/games.js';
+import '../collections/highscores.js';
+import '../collections/players.js';
+import '../collections/users.js';
+
+import './highscores.js';
+import './methods.js';
+import './publications.js';
+
 Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};
 Meteor.settings.public.appVersion =
