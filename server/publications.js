@@ -9,8 +9,8 @@ Meteor.publish('games', function () {
 });
 
 Meteor.publish('chat', async function (gameId) {
-  const size = Math.max(0, (await Chat.find({ gameId: gameId }).countAsync()) - 100);
-  return Chat.find({ gameId: gameId }, { skip: size });
+  const size = Math.max(0, (await Chat.find({ gameId }).countAsync()) - 100);
+  return Chat.find({ gameId }, { skip: size });
 });
 
 Meteor.publish('onlineUsers', function () {
@@ -18,11 +18,11 @@ Meteor.publish('onlineUsers', function () {
 });
 
 Meteor.publish('players', function (gameId) {
-  return Players.find({ gameId: gameId });
+  return Players.find({ gameId });
 });
 
 Meteor.publish('cards', function (gameId) {
-  return Cards.find({ gameId: gameId, userId: this.userId });
+  return Cards.find({ gameId, userId: this.userId });
 });
 
 Meteor.publish('highscores', function () {

@@ -1,13 +1,13 @@
 export const Cards = new Meteor.Collection('cards');
 
 Cards.allow({
-  insert: function (userId, doc) {
+  insert(_userId, _doc) {
     return false;
   },
-  update: function (userId, doc) {
+  update(_userId, _doc) {
     return false;
   },
-  remove: function (userId, doc) {
+  remove(_userId, _doc) {
     return false;
   },
 });

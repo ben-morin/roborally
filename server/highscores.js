@@ -3,7 +3,7 @@ import { Games } from '../collections/games.js';
 import { Highscores } from '../collections/highscores.js';
 import { Players } from '../collections/players.js';
 
-export const buildHighscores = async function () {
+export async function buildHighscores() {
   console.log('Building Highscores');
 
   const mostWon = await Games.rawCollection()
@@ -26,15 +26,14 @@ export const buildHighscores = async function () {
   await Highscores.removeAsync({});
   await addToHighscores(mostWon, 'mostWon');
   await addToHighscores(mostPlayed, 'mostPlayed');
-};
+}
 
 // `both/gamestate.js` ends games and needs to rebuild the lists, but cannot import a
 // server-only module. Hand it the implementation instead.
 setBuildHighscores(buildHighscores);
 
 async function addToHighscores(arr, type) {
-  for (let i = 0; i < arr.length; i++) {
-    const { _id: name, count: value } = arr[i];
+  for (const [i, { _id: name, count: value }] of arr.entries()) {
     await Highscores.insertAsync({ type, name, value, rank: i + 1 });
   }
 }

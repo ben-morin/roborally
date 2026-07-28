@@ -2,10 +2,10 @@ import { Highscores } from '../../../collections/highscores.js';
 import './ranking.html';
 
 Template.ranking.helpers({
-  mostPlayed: function () {
+  mostPlayed() {
     return Highscores.find({ type: 'mostPlayed' });
   },
-  mostWon: function () {
+  mostWon() {
     return Highscores.find({ type: 'mostWon' });
   },
 });

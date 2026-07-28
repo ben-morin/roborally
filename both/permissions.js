@@ -1,10 +1,10 @@
 // check that the userId specified owns the documents
-export const ownsDocument = function (userId, doc) {
+export function ownsDocument(userId, doc) {
   return doc && doc.userId === userId;
-};
+}
 
-export const getUsername = function (user) {
-  if (user.profile && user.profile.name) {
+export function getUsername(user) {
+  if (user.profile?.name) {
     return user.profile.name;
   } else {
     return user.emails[0].address
@@ -12,4 +12,4 @@ export const getUsername = function (user) {
       .replace(/[^a-zA-Z0-9]/g, ' ')
       .replace(/ +/g, ' ');
   }
-};
+}

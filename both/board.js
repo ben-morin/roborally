@@ -1,105 +1,83 @@
-/*
- * decaffeinate suggestions:
- * DS101: Remove unnecessary use of Array.from
- * DS102: Remove unnecessary code created because of implicit returns
- * DS202: Simplify dynamic range loops
- * DS205: Consider reworking code to avoid use of IIFEs
- * DS206: Consider reworking classes to avoid initClass
- * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
- */
-
 import { Area } from './area.js';
 import { GameLogic } from './gamelogic.js';
 import { Tile } from './tile.js';
 
-let create2DArray = undefined;
-let stepX = undefined;
-let stepY = undefined;
-let nextX = undefined;
-let nextY = undefined;
-let to_dir = undefined;
-let to_step = undefined;
-let opp_dir = undefined;
-let toTitleCase = undefined;
-let long_dir = undefined;
-let opp_word = undefined;
+const long_dir = {
+  r: 'right',
+  l: 'left',
+  u: 'up',
+  d: 'down',
+  right: 'right',
+  left: 'left',
+  up: 'up',
+  down: 'down',
+};
+
+const opp_word = {
+  r: 'l',
+  l: 'r',
+  u: 'd',
+  d: 'u',
+  right: 'left',
+  left: 'right',
+  up: 'down',
+  down: 'up',
+};
+
+function create2DArray(rows) {
+  const arr = [];
+  for (let i = 0; i < rows; i++) {
+    arr[i] = [];
+  }
+  return arr;
+}
+
+function stepX(direction) {
+  if (direction === 'l' || direction === 'left') {
+    return -1;
+  } else if (direction === 'r' || direction === 'right') {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+function stepY(direction) {
+  if (direction === 'u' || direction === 'up') {
+    return -1;
+  } else if (direction === 'd' || direction === 'down') {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+function nextX(x, direction) {
+  return x + stepX(direction);
+}
+
+function nextY(y, direction) {
+  return y + stepY(direction);
+}
+
+function opp_dir(dir) {
+  switch (typeof dir) {
+    case 'number':
+      return (dir + 2) % 4;
+    case 'string':
+      return opp_word[dir];
+    case 'object':
+      return { x: -dir.x, y: -dir.y };
+  }
+}
+
+function toTitleCase(str) {
+  return str
+    .replace(/_/g, ' ')
+    .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
+}
 
 export class Board {
-  static initClass() {
-    create2DArray = function (rows) {
-      const arr = [];
-      for (let i = 0, end = rows - 1, asc = 0 <= end; asc ? i <= end : i >= end; asc ? i++ : i--) {
-        arr[i] = [];
-      }
-      return arr;
-    };
-
-    stepX = function (direction) {
-      if (direction === 'l' || direction === 'left') {
-        return -1;
-      } else if (direction === 'r' || direction === 'right') {
-        return 1;
-      } else {
-        return 0;
-      }
-    };
-
-    stepY = function (direction) {
-      if (direction === 'u' || direction === 'up') {
-        return -1;
-      } else if (direction === 'd' || direction === 'down') {
-        return 1;
-      } else {
-        return 0;
-      }
-    };
-
-    nextX = (x, direction) => x + stepX(direction);
-
-    nextY = (y, direction) => y + stepY(direction);
-
-    to_dir = (val) => Board.to_dir(val);
-
-    to_step = (dir) => Board.to_step(dir);
-
-    opp_dir = function (dir) {
-      switch (typeof dir) {
-        case 'number':
-          return (dir + 2) % 4;
-        case 'string':
-          return opp_word[dir];
-        case 'object':
-          return { x: -dir.x, y: -dir.y };
-      }
-    };
-
-    toTitleCase = (str) =>
-      str
-        .replace(/_/g, ' ')
-        .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
-
-    long_dir = {
-      r: 'right',
-      l: 'left',
-      u: 'up',
-      d: 'down',
-      right: 'right',
-      left: 'left',
-      up: 'up',
-      down: 'down',
-    };
-
-    opp_word = {
-      r: 'l',
-      l: 'r',
-      u: 'd',
-      d: 'u',
-      right: 'left',
-      left: 'right',
-      up: 'down',
-      down: 'up',
-    };
-  }
   constructor(name, min_player = 2, max_player = 8, width = 12, height = 16) {
     this.name = name;
     this.title = toTitleCase(name);
@@ -111,16 +89,17 @@ export class Board {
     this.height = height;
     this.width = width;
 
-    for (
-      let y = 0, end = this.height - 1, asc = 0 <= end;
-      asc ? y <= end : y >= end;
-      asc ? y++ : y--
-    ) {
-      for (
-        let x = 0, end1 = this.width - 1, asc1 = 0 <= end1;
-        asc1 ? x <= end1 : x >= end1;
-        asc1 ? x++ : x--
-      ) {
+    // The area cursor `addArea` sets up before calling a recipe, and resets afterwards.
+    // Initialized here to the identity placement so the `tile()`-based helpers work on a
+    // bare board, not only from inside `addArea`.
+    this.x_offset = 0;
+    this.y_offset = 0;
+    this.orientation = 0;
+    this.area_width = width;
+    this.area_height = height;
+
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
         this.tiles[y][x] = new Tile();
       }
     }
@@ -139,9 +118,9 @@ export class Board {
   }
 
   canMove(x, y, direction) {
-    const dir = to_dir(direction);
+    const dir = Board.to_dir(direction);
     const tile = this.getTile(x, y);
-    const step = to_step(direction);
+    const step = Board.to_step(direction);
     const targetTile = this.getTile(x + step.x, y + step.y);
     const targetTileDir = opp_dir(dir);
 
@@ -149,11 +128,11 @@ export class Board {
   }
 
   addRallyArea(name, x_offset = 0, y_offset = 0, orientation = 0) {
-    return this.addArea(Area.course[name], x_offset, y_offset, orientation, 12, 12);
+    this.addArea(Area.course[name], x_offset, y_offset, orientation, 12, 12);
   }
 
   addStartArea(name, x_offset = 0, y_offset = 12, orientation = 0) {
-    return this.addArea(Area.start[name], x_offset, y_offset, orientation, 12, 4);
+    this.addArea(Area.start[name], x_offset, y_offset, orientation, 12, 4);
   }
 
   addArea(build_area, x_offset, y_offset, orientation, width, height) {
@@ -167,7 +146,7 @@ export class Board {
 
     this.x_offset = 0;
     this.y_offset = 0;
-    return (this.orientation = 0);
+    this.orientation = 0;
   }
 
   addCheckpoint(x, y) {
@@ -180,7 +159,7 @@ export class Board {
     cnt += 1;
     this.checkpoints.push({ x, y, number: cnt });
     this.tile(x, y).addCheckpoint(cnt);
-    return console.log(`Checkpoint ${cnt} located at ${x},${y}`);
+    console.log(`Checkpoint ${cnt} located at ${x},${y}`);
   }
 
   static to_dir(val) {
@@ -233,165 +212,153 @@ export class Board {
   }
 
   absolute_dir(direction) {
-    return (to_dir(direction) + this.orientation / 90) % 4;
+    return (Board.to_dir(direction) + this.orientation / 90) % 4;
   }
 
   col(x, y) {
-    const res = (() => {
-      switch (this.orientation) {
-        case 0:
-          return x;
-        case 90:
-          return this.area_height - 1 - y;
-        case 180:
-          return this.area_width - 1 - x;
-        case 270:
-          return y;
-      }
-    })();
+    // No default case: an unrecognized orientation yields NaN, as it always has.
+    let res;
+    switch (this.orientation) {
+      case 0:
+        res = x;
+        break;
+      case 90:
+        res = this.area_height - 1 - y;
+        break;
+      case 180:
+        res = this.area_width - 1 - x;
+        break;
+      case 270:
+        res = y;
+        break;
+    }
     return res + this.x_offset;
   }
 
   row(x, y) {
-    const res = (() => {
-      switch (this.orientation) {
-        case 0:
-          return y;
-        case 90:
-          return x;
-        case 180:
-          return this.area_height - 1 - y;
-        case 270:
-          return this.area_width - 1 - x;
-      }
-    })();
+    let res;
+    switch (this.orientation) {
+      case 0:
+        res = y;
+        break;
+      case 90:
+        res = x;
+        break;
+      case 180:
+        res = this.area_height - 1 - y;
+        break;
+      case 270:
+        res = this.area_width - 1 - x;
+        break;
+    }
     return res + this.y_offset;
   }
 
   setVoid(x, y) {
     this.tile(x, y).setType(Tile.VOID);
-    return (() => {
-      const result = [];
-      for (let i = 0; i <= 3; i++) {
-        const step = to_step(i);
-        const nx = x + step.x;
-        const ny = y + step.y;
-        if (
-          this.onBoard(this.col(nx, ny), this.row(nx, ny)) &&
-          this.tile(nx, ny).type === Tile.VOID
-        ) {
-          this.tile(nx, ny).updateVoidType(this.absolute_dir(opp_dir(i)));
-          result.push(this.tile(x, y).updateVoidType(this.absolute_dir(i)));
-        } else {
-          result.push(undefined);
-        }
+    for (let i = 0; i <= 3; i++) {
+      const step = Board.to_step(i);
+      const nx = x + step.x;
+      const ny = y + step.y;
+      if (
+        this.onBoard(this.col(nx, ny), this.row(nx, ny)) &&
+        this.tile(nx, ny).type === Tile.VOID
+      ) {
+        this.tile(nx, ny).updateVoidType(this.absolute_dir(opp_dir(i)));
+        this.tile(x, y).updateVoidType(this.absolute_dir(i));
       }
-      return result;
-    })();
+    }
   }
 
   setRoller(x, y, route, speed = 1) {
-    let cur_dir = route.charAt(0);
-    let roller_type = 'straight';
-    this.setRollerTileProp(x, y, roller_type, cur_dir, speed);
+    let last_dir = route.charAt(0);
+    this.setRollerTileProp(x, y, 'straight', last_dir, speed);
 
-    let last_dir = cur_dir;
-    return (() => {
-      const result = [];
-      for (cur_dir of Array.from(route.slice(1))) {
-        // not the curved conveyor belt but the previous one rotates the robot
-        if (last_dir !== cur_dir) {
-          const rot = to_dir(cur_dir) - to_dir(last_dir);
-          if (rot === -1 || rot === 3) {
-            this.tile(x, y).rotate = -1;
-            roller_type = 'ccw';
-          } else {
-            this.tile(x, y).rotate = 1;
-            roller_type = 'cw';
-          }
+    for (const cur_dir of route.slice(1)) {
+      let roller_type;
+      // not the curved conveyor belt but the previous one rotates the robot
+      if (last_dir !== cur_dir) {
+        const rot = Board.to_dir(cur_dir) - Board.to_dir(last_dir);
+        if (rot === -1 || rot === 3) {
+          this.tile(x, y).rotate = -1;
+          roller_type = 'ccw';
         } else {
-          roller_type = 'straight';
+          this.tile(x, y).rotate = 1;
+          roller_type = 'cw';
         }
-
-        x = nextX(x, last_dir);
-        y = nextY(y, last_dir);
-        this.setRollerTileProp(x, y, roller_type, cur_dir, speed);
-
-        result.push((last_dir = cur_dir));
+      } else {
+        roller_type = 'straight';
       }
-      return result;
-    })();
+
+      x = nextX(x, last_dir);
+      y = nextY(y, last_dir);
+      this.setRollerTileProp(x, y, roller_type, cur_dir, speed);
+
+      last_dir = cur_dir;
+    }
   }
 
   setExpressRoller(x, y, route) {
-    return this.setRoller(x, y, route, 2);
+    this.setRoller(x, y, route, 2);
   }
 
   setRepair(x, y) {
-    this.tile(x, y).repair = true;
-    return this.tile(x, y).setType(Tile.REPAIR);
+    const tile = this.tile(x, y);
+    tile.repair = true;
+    tile.setType(Tile.REPAIR);
   }
 
   setOption(x, y) {
-    this.tile(x, y).repair;
-    this.tile(x, y).repair = true;
-    this.tile(x, y).option = true;
-    return this.tile(x, y).setType(Tile.OPTION);
+    const tile = this.tile(x, y);
+    tile.repair = true;
+    tile.option = true;
+    tile.setType(Tile.OPTION);
   }
 
   setGear(x, y, gear_type) {
-    this.tile(x, y).gear_type = gear_type;
-    if (gear_type === 'cw') {
-      this.tile(x, y).rotate = 1;
-    } else {
-      this.tile(x, y).rotate = -1;
-    }
-    return this.tile(x, y).setType(Tile.GEAR);
+    const tile = this.tile(x, y);
+    tile.gear_type = gear_type;
+    tile.rotate = gear_type === 'cw' ? 1 : -1;
+    tile.setType(Tile.GEAR);
   }
 
   setPusher(x, y, direction, pusher_type) {
     const dir = this.absolute_dir(direction);
-    if (pusher_type === 'even') {
-      this.tile(x, y).pusher_type = 0;
-    } else {
-      this.tile(x, y).pusher_type = 1;
-    }
-    this.tile(x, y).setType(Tile.PUSHER);
-    this.tile(x, y).move = to_step(dir);
-    this.tile(x, y).direction = dir;
-    return this.tile(x, y).addWall(opp_dir(dir));
+    const tile = this.tile(x, y);
+    tile.pusher_type = pusher_type === 'even' ? 0 : 1;
+    tile.setType(Tile.PUSHER);
+    tile.move = Board.to_step(dir);
+    tile.direction = dir;
+    tile.addWall(opp_dir(dir));
   }
 
   addWall(x, y, direction) {
-    return Array.from(direction.split('-')).map((d) =>
-      this.tile(x, y).addWall(this.absolute_dir(d))
-    );
+    for (const d of direction.split('-')) {
+      this.tile(x, y).addWall(this.absolute_dir(d));
+    }
   }
 
   addDoubleLaser(startX, startY, direction, length) {
-    return this.addLaser(startX, startY, direction, length, 2);
+    this.addLaser(startX, startY, direction, length, 2);
   }
 
   addLaser(x, y, direction, length, strength = 1) {
     const dir = this.absolute_dir(direction);
 
-    return (() => {
-      const result = [];
-      for (let i = 1, end = length, asc = 1 <= end; asc ? i <= end : i >= end; asc ? i++ : i--) {
-        this.tile(x, y).addLaser(dir, strength);
-        if (i === 1) {
-          // lasers are always between walls
-          this.tile(x, y).addWall(opp_dir(dir));
-        }
-        if (i === length) {
-          this.tile(x, y).addWall(dir);
-        }
-
-        y = nextY(y, direction);
-        result.push((x = nextX(x, direction)));
+    for (let i = 1; i <= length; i++) {
+      const tile = this.tile(x, y);
+      tile.addLaser(dir, strength);
+      if (i === 1) {
+        // lasers are always between walls
+        tile.addWall(opp_dir(dir));
       }
-      return result;
-    })();
+      if (i === length) {
+        tile.addWall(dir);
+      }
+
+      y = nextY(y, direction);
+      x = nextX(x, direction);
+    }
   }
 
   addStart(x, y, direction) {
@@ -402,25 +369,25 @@ export class Board {
       direction: this.absolute_dir(direction),
     });
 
-    return this.tile(x, y).addStart(this.startpoints.length);
+    this.tile(x, y).addStart(this.startpoints.length);
   }
 
   //~~~~~~ helper methods
 
   setRollerTileProp(x, y, roller_type, direction, speed) {
     const dir = this.absolute_dir(direction);
-    this.tile(x, y).direction = dir;
-    this.tile(x, y).move = to_step(dir);
-    this.tile(x, y).speed = speed;
+    const tile = this.tile(x, y);
+    tile.direction = dir;
+    tile.move = Board.to_step(dir);
+    tile.speed = speed;
 
-    if (this.tile(x, y).type === Tile.ROLLER && this.tile(x, y).roller_type !== roller_type) {
-      const t = this.tile(x, y).roller_type.split('-');
+    if (tile.type === Tile.ROLLER && tile.roller_type !== roller_type) {
+      const t = tile.roller_type.split('-');
       t.push(roller_type);
       roller_type = t.sort().join('-');
     }
 
-    this.tile(x, y).roller_type = roller_type;
-    return this.tile(x, y).setType(Tile.ROLLER);
+    tile.roller_type = roller_type;
+    tile.setType(Tile.ROLLER);
   }
 }
-Board.initClass();

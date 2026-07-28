@@ -39,32 +39,29 @@ function updateTileSize() {
   if (!game) return;
   board.style.width = '100%';
   const tileSize = Math.floor(board.offsetWidth / game.board().width);
-  board.style.setProperty('--tile-size', tileSize + 'px');
-  board.style.width = tileSize * game.board().width + 'px';
-  board.style.height = tileSize * game.board().height + 'px';
+  board.style.setProperty('--tile-size', `${tileSize}px`);
+  board.style.width = `${tileSize * game.board().width}px`;
+  board.style.height = `${tileSize * game.board().height}px`;
   tileSizeDep.changed();
 }
 
 Template.board.onRendered(function () {
-  const self = this;
   let resizeTimer;
-  self._resizeHandler = function () {
+  this._resizeHandler = () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(updateTileSize, 100);
   };
-  window.addEventListener('resize', self._resizeHandler);
+  window.addEventListener('resize', this._resizeHandler);
 
   const boardEl = document.getElementById('board');
   if (boardEl && typeof ResizeObserver !== 'undefined') {
-    self._resizeObserver = new ResizeObserver(self._resizeHandler);
-    self._resizeObserver.observe(boardEl);
+    this._resizeObserver = new ResizeObserver(this._resizeHandler);
+    this._resizeObserver.observe(boardEl);
   }
 
-  self.autorun(function () {
+  this.autorun(() => {
     getGame(); // reactive dependency
-    Tracker.afterFlush(function () {
-      updateTileSize();
-    });
+    Tracker.afterFlush(() => updateTileSize());
   });
 });
 
@@ -79,32 +76,24 @@ Template.board.onDestroyed(function () {
 });
 
 Template.board.helpers({
-  game: function () {
+  game() {
     return getGame();
   },
-  inGame: function () {
-    return getPlayers().some(function (player) {
-      return player.userId === Meteor.userId();
-    });
+  inGame() {
+    return getPlayers().some((player) => player.userId === Meteor.userId());
   },
-  player: function () {
-    const players = getPlayers();
-    for (const i in players) {
-      const player = players[i];
-      if (player.userId === Meteor.userId()) {
-        return player;
-      }
-    }
+  player() {
+    return getPlayers().find((player) => player.userId === Meteor.userId());
   },
 
-  robots: function () {
+  robots() {
     const r = [];
-    getPlayers().forEach(function (player) {
-      const rclass = 'r' + player.robotId;
+    getPlayers().forEach((player) => {
+      const rclass = `r${player.robotId}`;
       const eliminated = player.lives <= 0;
       r.push({
-        path: '/robots/robot_' + player.robotId.toString() + '.png',
-        robot_class: eliminated ? rclass + ' eliminated' : rclass,
+        path: `/robots/robot_${player.robotId}.png`,
+        robot_class: eliminated ? `${rclass} eliminated` : rclass,
         direction: animateRotation(rclass, player.direction),
         position: animatePosition(rclass, player.position.x, player.position.y),
         poweredDown: player.isPoweredDown(),
@@ -113,51 +102,49 @@ Template.board.helpers({
     });
     return r;
   },
-  markers: function () {
+  markers() {
     const m = [];
-    getPlayers().forEach(function (player) {
+    getPlayers().forEach((player) => {
       if (player.lives <= 0) return;
       const playerName = player.userId === Meteor.userId() ? 'You' : player.name;
       m.push({
-        path: '/robots/marker_' + player.robotId.toString() + '.png',
-        marker_class: 'm' + player.robotId.toString(),
+        path: `/robots/marker_${player.robotId}.png`,
+        marker_class: `m${player.robotId}`,
         position: cssPosition(player.start.x, player.start.y),
-        name: 'respawn location ( ' + playerName + ' )',
+        name: `respawn location ( ${playerName} )`,
       });
     });
     return m;
   },
-  shots: function () {
+  shots() {
     const tileWidth = getTileSize();
     const laserWidth = Math.trunc(tileWidth / 15);
     const startOffset = 5;
     const s = [];
     const game = getGame();
     if (game && game.playPhase === GameState.PLAY_PHASE.CHECKPOINTS) {
-      getPlayers().forEach(function (player, i) {
+      getPlayers().forEach((player, i) => {
         if (!player.isPoweredDown() && !player.needsRespawn) {
           let offsetY;
           let offsetX;
           const extend = {};
           const retract = {};
           let style = '';
-          const lc = 'l' + i;
+          const lc = `l${i}`;
           const beamLength = tileWidth * player.shotDistance;
           const tailDistance = beamLength - startOffset;
 
           switch (player.direction % 2) {
             case 0: // up or down
-              extend.height = beamLength + 'px';
+              extend.height = `${beamLength}px`;
               retract.height = '0px';
-              style = 'width: ' + laserWidth + 'px;';
-              style += 'height: 0px;';
+              style = `width: ${laserWidth}px;height: 0px;`;
               offsetX = (tileWidth - laserWidth) / 2;
               break;
             case 1: // left or right
-              extend.width = beamLength + 'px';
+              extend.width = `${beamLength}px`;
               retract.width = '0px';
-              style = 'height: ' + laserWidth + 'px;';
-              style += 'width: 0px;';
+              style = `height: ${laserWidth}px;width: 0px;`;
               offsetY = (tileWidth - laserWidth) / 2;
               break;
           }
@@ -182,29 +169,29 @@ Template.board.helpers({
 
           switch (player.direction) {
             case GameLogic.UP:
-              extend.top = initialTop - tailDistance + 'px';
+              extend.top = `${initialTop - tailDistance}px`;
               break;
             case GameLogic.LEFT:
-              extend.left = initialLeft - tailDistance + 'px';
+              extend.left = `${initialLeft - tailDistance}px`;
               break;
             case GameLogic.DOWN:
-              retract.top = initialTop + tailDistance + 'px';
+              retract.top = `${initialTop + tailDistance}px`;
               break;
             case GameLogic.RIGHT:
-              retract.left = initialLeft + tailDistance + 'px';
+              retract.left = `${initialLeft + tailDistance}px`;
               break;
           }
 
           style += cssPosition(player.position.x, player.position.y, offsetX, offsetY);
-          Tracker.afterFlush(function () {
-            const laserDiv = document.querySelector('.' + lc);
+          Tracker.afterFlush(() => {
+            const laserDiv = document.querySelector(`.${lc}`);
             if (!laserDiv) return;
             laserDiv.getAnimations().forEach((a) => a.cancel());
             const duration = player.shotDistance * 26;
             console.log('shot duration', duration);
             laserDiv.animate([{}, extend], { duration, fill: 'forwards' });
-            setTimeout(function () {
-              const el = document.querySelector('.' + lc);
+            setTimeout(() => {
+              const el = document.querySelector(`.${lc}`);
               if (el) el.animate([{}, retract], { duration, fill: 'forwards' });
             }, duration / 7);
           });
@@ -214,35 +201,33 @@ Template.board.helpers({
     }
     return s;
   },
-  getRobotId: function () {
+  getRobotId() {
     return Players.findOne({ userId: Meteor.userId() }).robotId.toString();
   },
 
-  tiles: function () {
+  tiles() {
     const game = getGame();
     return game ? game.board().tiles : [];
   },
-  gameEnded: function () {
+  gameEnded() {
     const game = getGame();
     return game && game.gamePhase === GameState.PHASE.ENDED;
   },
-  boardWidth: function () {
+  boardWidth() {
     const game = getGame();
     return game ? game.board().width * getTileSize() : 0;
   },
-  boardHeight: function () {
+  boardHeight() {
     const game = getGame();
     return game ? game.board().height * getTileSize() : 0;
   },
-  selectOptions: function () {
+  selectOptions() {
     const s = [];
     const game = getGame();
     if (!game) return s;
-    console.log(
-      'game.respawnUserId: ' + game.respawnUserId + '; Meteor.userId(): ' + Meteor.userId()
-    );
+    console.log(`game.respawnUserId: ${game.respawnUserId}; Meteor.userId(): ${Meteor.userId()}`);
     if (game.respawnUserId === Meteor.userId()) {
-      game.selectOptions.forEach(function (opts) {
+      game.selectOptions.forEach((opts) => {
         opts.position = cssPosition(opts.x, opts.y);
         opts.gameId = game._id;
         if (game.respawnPhase === GameState.RESPAWN_PHASE.CHOOSE_POSITION) {
@@ -257,13 +242,13 @@ Template.board.helpers({
     }
     return s;
   },
-  registerPhases: function () {
+  registerPhases() {
     const phases = [1, 2, 3, 4, 5];
     const pUIData = [];
     const game = getGame();
     if (!game) return pUIData;
 
-    phases.forEach(function (phase) {
+    phases.forEach((phase) => {
       let pclass = false;
       let pstatus = 'fa-circle';
       if (game.playPhaseCount === phase) {
@@ -275,7 +260,7 @@ Template.board.helpers({
       }
       pUIData.push({
         phaseClass: pclass,
-        phaseName: 'register ' + phase,
+        phaseName: `register ${phase}`,
         status: pstatus,
         width: (game.board().width * getTileSize()) / phases.length,
       });
@@ -283,7 +268,7 @@ Template.board.helpers({
     console.log(pUIData);
     return pUIData;
   },
-  playPhases: function () {
+  playPhases() {
     const game = getGame();
     if (!game) return [];
     const pUIData = [];
@@ -295,7 +280,7 @@ Template.board.helpers({
     ];
 
     let finished = true;
-    phases.forEach(function (phase) {
+    phases.forEach((phase) => {
       const phaseProp = {
         announceCard: false,
         width: (game.board().width * getTileSize()) / phases.length,
@@ -332,17 +317,17 @@ Template.board.helpers({
     });
     return pUIData;
   },
-  announceMove: function () {
+  announceMove() {
     const game = getGame();
     return game && game.playPhase === GameState.PLAY_PHASE.MOVE_BOTS && game.announceCard;
   },
-  cardPlaying: function () {
+  cardPlaying() {
     const game = getGame();
     if (game == null || game.announceCard == null) {
       return;
     }
 
-    const cardId = game.announceCard.cardId;
+    const { cardId } = game.announceCard;
     const player = Players.findOne(game.announceCard.playerId);
     if (!player || player.needsRespawn) {
       return;
@@ -353,7 +338,7 @@ Template.board.helpers({
       type: CardLogic.cardType(cardId, game.playerCnt()).name,
       playerName: player.name,
       // center card on robot tile; card width equals tile size
-      tileSize: getTileSize() + 'px',
+      tileSize: `${getTileSize()}px`,
       position: cssPosition(player.position.x, player.position.y, 0, -getTileSize() / 2),
       robotId: player.robotId.toString(),
     };
@@ -380,7 +365,7 @@ function animatePosition(element, x, y) {
   let visualX = null;
   let visualY = null;
   if (previous && (previous.x !== x || previous.y !== y)) {
-    const el = document.querySelector('.' + element);
+    const el = document.querySelector(`.${element}`);
     if (el) {
       const computed = getComputedStyle(el);
       const cl = parseFloat(computed.left);
@@ -389,11 +374,11 @@ function animatePosition(element, x, y) {
       if (!Number.isNaN(ct)) visualY = ct;
     }
     const oldPosition = calcPosition(previous.x, previous.y);
-    const startX = visualX != null ? visualX : oldPosition.x;
-    const startY = visualY != null ? visualY : oldPosition.y;
+    const startX = visualX ?? oldPosition.x;
+    const startY = visualY ?? oldPosition.y;
 
-    Tracker.afterFlush(function () {
-      const playerElement = document.querySelector('.' + element);
+    Tracker.afterFlush(() => {
+      const playerElement = document.querySelector(`.${element}`);
       if (!playerElement) return;
       playerElement.getAnimations().forEach((a) => a.cancel());
       const tileSize = getTileSize();
@@ -403,60 +388,48 @@ function animatePosition(element, x, y) {
       const duration = tilesTraveled * GameLogic.MS_PER_TILE;
       playerElement.animate(
         [
-          { left: startX + 'px', top: startY + 'px' },
-          { left: newPosition.x + 'px', top: newPosition.y + 'px' },
+          { left: `${startX}px`, top: `${startY}px` },
+          { left: `${newPosition.x}px`, top: `${newPosition.y}px` },
         ],
         { duration }
       );
     });
   }
-  return 'left: ' + newPosition.x + 'px; top: ' + newPosition.y + 'px;';
+  return `left: ${newPosition.x}px; top: ${newPosition.y}px;`;
 }
 
 function animateRotation(element, direction) {
   const newRotation = direction * 90;
-  const els = document.querySelectorAll('.' + element);
+  const els = document.querySelectorAll(`.${element}`);
   if (els.length) {
     els.forEach((el) => {
-      el.style.transform = 'rotate(' + newRotation + 'deg)';
+      el.style.transform = `rotate(${newRotation}deg)`;
     });
     return '';
   }
-  return 'transform: rotate(' + newRotation + 'deg)';
+  return `transform: rotate(${newRotation}deg)`;
 }
 
 function cssPosition(x, y, offsetX, offsetY) {
   const coord = calcPosition(x, y, offsetX, offsetY);
-  return 'top: ' + coord.y + 'px; left:' + coord.x + 'px;';
+  return `top: ${coord.y}px; left:${coord.x}px;`;
 }
 
-function cssRotate(deg) {
-  const rotate = 'rotate(' + deg + 'deg);';
-  return 'transform: ' + rotate + ' -webkit-transform: ' + rotate + ' -ms-transform: ' + rotate;
-}
-
-function calcPosition(x, y, offsetX, offsetY) {
-  if (offsetX == null) {
-    offsetX = 0;
-  }
-  if (offsetY == null) {
-    offsetY = 0;
-  }
-
+function calcPosition(x, y, offsetX = 0, offsetY = 0) {
   const tileWidth = getTileSize();
   const tileHeight = getTileSize();
 
-  x = tileWidth * x + offsetX;
-  y = tileHeight * y + offsetY;
-
-  return { x: x, y: y };
+  return {
+    x: tileWidth * x + offsetX,
+    y: tileHeight * y + offsetY,
+  };
 }
 
 Template.board.events({
-  'click .close': function () {
+  'click .close'() {
     FlowRouter.go(FlowRouter.path('gamelist.page'));
   },
-  'click .cancel': async function () {
+  async 'click .cancel'() {
     const game = getGame();
     if (game && game.gamePhase !== GameState.PHASE.ENDED) {
       if (
@@ -465,10 +438,10 @@ Template.board.events({
         )
       ) {
         Meteor.callAsync('leaveGame', game._id).then(
-          function () {
+          () => {
             FlowRouter.go(FlowRouter.path('gamelist.page'));
           },
-          function (error) {
+          (error) => {
             modalAlert(error.reason);
             FlowRouter.go(FlowRouter.path('gamelist.page'));
           }
@@ -478,23 +451,19 @@ Template.board.events({
       FlowRouter.go(FlowRouter.path('gamelist.page'));
     }
   },
-  'click .position-select': function (e) {
+  'click .position-select'(e) {
     const game = getGame();
     Meteor.callAsync(
       'selectRespawnPosition',
       game._id,
       e.target.dataset.x,
       e.target.dataset.y
-    ).catch(function (error) {
-      modalAlert(error.reason);
-    });
+    ).catch((error) => modalAlert(error.reason));
   },
-  'click .direction-select': function (e) {
+  'click .direction-select'(e) {
     const game = getGame();
-    Meteor.callAsync('selectRespawnDirection', game._id, e.target.dataset.dir).catch(
-      function (error) {
-        modalAlert(error.reason);
-      }
+    Meteor.callAsync('selectRespawnDirection', game._id, e.target.dataset.dir).catch((error) =>
+      modalAlert(error.reason)
     );
   },
 });

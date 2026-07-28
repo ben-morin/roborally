@@ -4,37 +4,33 @@ import { modalAlert } from '../../helper/modalDialogs.js';
 import './game_list.html';
 
 Template.gameList.helpers({
-  openGames: function () {
+  openGames() {
     return Games.find({ winner: null, started: false }, { sort: { submitted: -1 } });
   },
-  activeGames: function () {
+  activeGames() {
     return Games.find({ winner: null, started: true }, { sort: { submitted: -1 } });
   },
-  endedGames: function () {
+  endedGames() {
     return Games.find({ winner: { $exists: true } }, { sort: { stopped: -1 } });
   },
 });
 
 Template.gameItemPostForm.helpers({
-  gameCreated: function () {
+  gameCreated() {
     return Games.findOne({ userId: Meteor.userId(), winner: null });
   },
 });
 
 Template.gameItemPostForm.events({
-  'submit form': function (event) {
+  'submit form'(event) {
     event.preventDefault();
     const game = {
       name: event.target.elements.name.value,
     };
 
     Meteor.callAsync('createGame', game).then(
-      function (id) {
-        FlowRouter.go(FlowRouter.path('game.page', { _id: id }));
-      },
-      function (error) {
-        modalAlert(error.reason);
-      }
+      (id) => FlowRouter.go(FlowRouter.path('game.page', { _id: id })),
+      (error) => modalAlert(error.reason)
     );
   },
 });

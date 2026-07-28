@@ -6,17 +6,13 @@ import { GameLogic } from '../../both/gamelogic.js';
 
 beforeEach(() => resetFakeCollections());
 
-// Board's tile()-based helpers (setRoller/setGear/setPusher/setVoid/setRepair/
-// setOption/addStart/addCheckpoint/addWall/addLaser) all resolve coordinates through
-// `col()`/`row()`, which read `x_offset`/`y_offset`/`orientation` — fields the plain
-// constructor never initializes. In real usage they're always set by `addArea` (via
-// addRallyArea/addStartArea) before any of these are called, and reset to 0 (not
-// undefined) afterward. Mirror that with a no-op area so a bare board behaves the way
-// every real board recipe leaves it: usable with raw, unrotated coordinates.
+// The Board constructor initializes the area cursor (`x_offset`/`y_offset`/`orientation`
+// and `area_width`/`area_height`) to the identity placement, so the tile()-based helpers
+// (setRoller/setGear/setPusher/setVoid/setRepair/setOption/addStart/addCheckpoint/
+// addWall/addLaser) work on a bare board with raw, unrotated coordinates — the same state
+// every real board recipe leaves behind once `addArea` has reset it.
 function freshBoard(min_player, max_player, width, height) {
-  const board = new Board('b', min_player, max_player, width, height);
-  board.addArea(function () {}, 0, 0, 0, board.width, board.height);
-  return board;
+  return new Board('b', min_player, max_player, width, height);
 }
 
 describe('Board.to_dir', () => {

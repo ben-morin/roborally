@@ -1,12 +1,3 @@
-/*
- * decaffeinate suggestions:
- * DS101: Remove unnecessary use of Array.from
- * DS102: Remove unnecessary code created because of implicit returns
- * DS202: Simplify dynamic range loops
- * DS206: Consider reworking classes to avoid initClass
- * DS207: Consider shorter variations of null checks
- * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
- */
 import { Cards } from '../collections/cards.js';
 import { Deck } from '../collections/deck.js';
 import { Games } from '../collections/games.js';
@@ -14,197 +5,183 @@ import { Players } from '../collections/players.js';
 import { GameLogic } from './gamelogic.js';
 import { GameState } from './gamestate.js';
 
-let autoSubmitIfTimedOut = undefined;
-let verifySubmittedCardsAsync = undefined;
+async function autoSubmitIfTimedOut(gameId, expectedStart) {
+  const game = await Games.findOneAsync(gameId);
+  // Bail out if the timer has been reset (manual submit completed the turn) or
+  // if a new timer instance was started for a later turn — without this check,
+  // a stale setTimeout from a previous turn can auto-submit a player who still
+  // has time on their current programming timer.
+  if (
+    game.timer !== 1 ||
+    game.timerStartedAt == null ||
+    game.timerStartedAt.getTime() !== expectedStart.getTime()
+  ) {
+    return;
+  }
+  console.log('time up! setting timer to 0');
+  await Games.updateAsync(gameId, { $set: { timer: 0, timerStartedAt: null } });
+  await new Promise((resolve) => Meteor.setTimeout(resolve, 2500));
+  const cnt = await Players.find({ gameId, submitted: true }).countAsync();
+  const playerCnt = await Players.find({ gameId, lives: { $gt: 0 } }).countAsync();
+  if (cnt < playerCnt) {
+    const unsubmittedPlayer = await Players.findOneAsync({ gameId, submitted: false });
+    if (unsubmittedPlayer) {
+      await CardLogic.submitCardsAsync(unsubmittedPlayer);
+      console.log(`Player ${unsubmittedPlayer.name} did not respond, submitting random cards`);
+    }
+  }
+}
+
+async function verifySubmittedCardsAsync(player) {
+  // check if all played cards are available from original hand...
+  // Except locked cards, those are not in the hand.
+  const availableCards = await player.getHandCardsAsync();
+  const submittedCards = await player.getChosenCardsAsync();
+  // compute notLockedCards inline to avoid sync DB call inside notLockedCards()
+  const notLockedCnt = player.notLockedCnt();
+  const notLockedCardsList =
+    player.lockedCnt() === GameLogic.CARD_SLOTS ? [] : submittedCards.slice(0, notLockedCnt);
+  for (let i = 0; i < notLockedCardsList.length; i++) {
+    const card = notLockedCardsList[i];
+    let found = false;
+    if (card >= 0) {
+      const handIndex = availableCards.indexOf(card);
+      if (handIndex !== -1) {
+        availableCards.splice(handIndex, 1);
+        found = true;
+      } else {
+        console.warn(`illegal card detected: ${card}! (removing card)`);
+      }
+    } else {
+      console.warn('Not enough cards submitted');
+    }
+
+    if (card < 0 || !found) {
+      if (availableCards.length > 0) {
+        // grab card from hand
+        const cardIdFromHand = availableCards.splice(
+          Math.floor(Math.random() * availableCards.length),
+          1
+        )[0];
+        console.warn('Handing out random card', cardIdFromHand);
+        submittedCards[i] = cardIdFromHand;
+        player.cards[i] = CardLogic.RANDOM;
+      } else {
+        console.error(`No available cards to fill slot ${i}!`);
+        submittedCards[i] = CardLogic.EMPTY;
+        player.cards[i] = CardLogic.EMPTY;
+      }
+    }
+  }
+
+  await Cards.updateAsync(
+    { playerId: player._id },
+    {
+      $set: {
+        handCards: availableCards,
+        chosenCards: submittedCards,
+      },
+    }
+  );
+  return player.cards;
+}
 
 export class CardLogic {
-  static initClass() {
-    this._MAX_NUMBER_OF_CARDS = 9;
-    this.EMPTY = -1;
-    this.COVERED = -2;
-    this.DAMAGE = -3;
-    this.RANDOM = -4;
+  static _MAX_NUMBER_OF_CARDS = 9;
+  static EMPTY = -1;
+  static COVERED = -2;
+  static DAMAGE = -3;
+  static RANDOM = -4;
 
-    this._cardTypes = {
-      0: { direction: 2, position: 0, name: 'u-turn' },
-      1: { direction: 1, position: 0, name: 'turn-right' },
-      2: { direction: -1, position: 0, name: 'turn-left' },
-      3: { direction: 0, position: -1, name: 'step-backward' },
-      4: { direction: 0, position: 1, name: 'step-forward' },
-      5: { direction: 0, position: 2, name: 'step-forward-2' },
-      6: { direction: 0, position: 3, name: 'step-forward-3' },
-    };
+  static _cardTypes = {
+    0: { direction: 2, position: 0, name: 'u-turn' },
+    1: { direction: 1, position: 0, name: 'turn-right' },
+    2: { direction: -1, position: 0, name: 'turn-left' },
+    3: { direction: 0, position: -1, name: 'step-backward' },
+    4: { direction: 0, position: 1, name: 'step-forward' },
+    5: { direction: 0, position: 2, name: 'step-forward-2' },
+    6: { direction: 0, position: 3, name: 'step-forward-3' },
+  };
 
-    this._8_deck = [
-      6, // u turn
-      18, // right turn
-      18, // left turn
-      6, // step back
-      18, // step 1
-      12, // step 2
-      6, // step 3
-    ];
+  static _8_deck = [
+    6, // u turn
+    18, // right turn
+    18, // left turn
+    6, // step back
+    18, // step 1
+    12, // step 2
+    6, // step 3
+  ];
 
-    this._12_deck = [
-      9, // u turn
-      27, // right turn
-      27, // left turn
-      9, // step back
-      27, // step 1
-      18, // step 2
-      9, // step 3
-    ];
+  static _12_deck = [
+    9, // u turn
+    27, // right turn
+    27, // left turn
+    9, // step back
+    27, // step 1
+    18, // step 2
+    9, // step 3
+  ];
 
-    autoSubmitIfTimedOut = async function (gameId, expectedStart) {
-      const game = await Games.findOneAsync(gameId);
-      // Bail out if the timer has been reset (manual submit completed the turn) or
-      // if a new timer instance was started for a later turn — without this check,
-      // a stale setTimeout from a previous turn can auto-submit a player who still
-      // has time on their current programming timer.
-      if (
-        game.timer !== 1 ||
-        game.timerStartedAt == null ||
-        game.timerStartedAt.getTime() !== expectedStart.getTime()
-      ) {
-        return;
-      }
-      console.log('time up! setting timer to 0');
-      await Games.updateAsync(gameId, { $set: { timer: 0, timerStartedAt: null } });
-      await new Promise((resolve) => Meteor.setTimeout(resolve, 2500));
-      const cnt = await Players.find({ gameId, submitted: true }).countAsync();
-      const playerCnt = await Players.find({ gameId, lives: { $gt: 0 } }).countAsync();
-      if (cnt < playerCnt) {
-        const unsubmittedPlayer = await Players.findOneAsync({ gameId, submitted: false });
-        if (unsubmittedPlayer) {
-          await CardLogic.submitCardsAsync(unsubmittedPlayer);
-          return console.log(
-            'Player ' + unsubmittedPlayer.name + ' did not respond, submitting random cards'
-          );
-        }
-      }
-    };
-
-    verifySubmittedCardsAsync = async function (player) {
-      // check if all played cards are available from original hand...
-      // Except locked cards, those are not in the hand.
-      const availableCards = await player.getHandCardsAsync();
-      const submittedCards = await player.getChosenCardsAsync();
-      // compute notLockedCards inline to avoid sync DB call inside notLockedCards()
-      const notLockedCnt = player.notLockedCnt();
-      const notLockedCardsList =
-        player.lockedCnt() === GameLogic.CARD_SLOTS ? [] : submittedCards.slice(0, notLockedCnt);
-      for (let i = 0; i < notLockedCardsList.length; i++) {
-        const card = notLockedCardsList[i];
-        let found = false;
-        if (card >= 0) {
-          for (
-            let j = 0, end = availableCards.length - 1, asc = 0 <= end;
-            asc ? j <= end : j >= end;
-            asc ? j++ : j--
-          ) {
-            if (card === availableCards[j]) {
-              availableCards.splice(j, 1);
-              found = true;
-              break;
-            }
-          }
-          if (!found) {
-            console.warn('illegal card detected: ' + card + '! (removing card)');
-          }
-        } else {
-          console.warn('Not enough cards submitted');
-        }
-
-        if (card < 0 || !found) {
-          if (availableCards.length > 0) {
-            // grab card from hand
-            const cardIdFromHand = availableCards.splice(
-              Math.floor(Math.random() * availableCards.length),
-              1
-            )[0];
-            console.warn('Handing out random card', cardIdFromHand);
-            submittedCards[i] = cardIdFromHand;
-            player.cards[i] = CardLogic.RANDOM;
-          } else {
-            console.error(`No available cards to fill slot ${i}!`);
-            submittedCards[i] = CardLogic.EMPTY;
-            player.cards[i] = CardLogic.EMPTY;
-          }
-        }
-      }
-
-      await Cards.updateAsync(
-        { playerId: player._id },
-        {
-          $set: {
-            handCards: availableCards,
-            chosenCards: submittedCards,
-          },
-        }
-      );
-      return player.cards;
-    };
-
-    this._option_deck = [
-      [
-        'superior_archive',
-        "When reentering play after beeing destroyed, your robot doesn't receive the normal 20% damage",
-      ],
-      [
-        'circuit_breaker',
-        'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down',
-      ],
-      [
-        'rear-firing_laser',
-        'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser',
-      ],
-      ['extra_memory', 'You receive one extra Program card each turn.'],
-      [
-        'high-power_laser',
-        "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser.",
-      ],
-      [
-        'double-barreled_laser',
-        'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.',
-      ],
-      [
-        'ramming_gear',
-        'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.',
-      ],
-      //    [ 'mechanical_arm', "Your robot can touch a flag or repair site from 1 space away (diagonally or orthogonally),
-      //    as long as there isn't a wall."]
-      ['ablative_coat', 'Absorbs the next 30% damage your robot receives.'],
-      //###### choose to use
-      // 'recompile'
-      //[ 'power-down_shield', ""
-      // 'abort_switch'
-      //##### additional move options
-      // 'fourth_gear'
-      // 'reverse_gear'
-      // 'crab_legs'
-      // 'brakes'
-      //####### register options
-      // 'dual_processor'
-      // 'conditional_program'
-      // 'flywheel'
-      //####### alternative laser
-      // 'mini_howitzer'
-      // 'fire_control'
-      // 'radio_control'
-      // [ 'scrambler',    "Whenever you could fire your main laser at a robot, you may instead fire the Scrambler. This replaces the target's robots's next programmed card with the top Program card from the deck. You can't use this Option on the fifth register phase."]
-      // [ 'tractor_beam', "Whenever you could fire your main laser at a robot that isn't in an adjacent space, you may instead fire the Tractor Beam. This moves the target robot 1 space toward your robot."]
-      // [ 'pressor_beam', "Whenever you could fire your main laser at a robot, you may instead fire the Pressor Beam. This moves the target robot 1 space away from your robot."]
-      //#### activate before submit
-      // 'gyroscopic_stabilizer'
-    ];
-  }
+  static _option_deck = [
+    [
+      'superior_archive',
+      "When reentering play after beeing destroyed, your robot doesn't receive the normal 20% damage",
+    ],
+    [
+      'circuit_breaker',
+      'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down',
+    ],
+    [
+      'rear-firing_laser',
+      'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser',
+    ],
+    ['extra_memory', 'You receive one extra Program card each turn.'],
+    [
+      'high-power_laser',
+      "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser.",
+    ],
+    [
+      'double-barreled_laser',
+      'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.',
+    ],
+    [
+      'ramming_gear',
+      'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.',
+    ],
+    //    [ 'mechanical_arm', "Your robot can touch a flag or repair site from 1 space away (diagonally or orthogonally),
+    //    as long as there isn't a wall."]
+    ['ablative_coat', 'Absorbs the next 30% damage your robot receives.'],
+    //###### choose to use
+    // 'recompile'
+    //[ 'power-down_shield', ""
+    // 'abort_switch'
+    //##### additional move options
+    // 'fourth_gear'
+    // 'reverse_gear'
+    // 'crab_legs'
+    // 'brakes'
+    //####### register options
+    // 'dual_processor'
+    // 'conditional_program'
+    // 'flywheel'
+    //####### alternative laser
+    // 'mini_howitzer'
+    // 'fire_control'
+    // 'radio_control'
+    // [ 'scrambler',    "Whenever you could fire your main laser at a robot, you may instead fire the Scrambler. This replaces the target's robots's next programmed card with the top Program card from the deck. You can't use this Option on the fifth register phase."]
+    // [ 'tractor_beam', "Whenever you could fire your main laser at a robot that isn't in an adjacent space, you may instead fire the Tractor Beam. This moves the target robot 1 space toward your robot."]
+    // [ 'pressor_beam', "Whenever you could fire your main laser at a robot, you may instead fire the Pressor Beam. This moves the target robot 1 space away from your robot."]
+    //#### activate before submit
+    // 'gyroscopic_stabilizer'
+  ];
 
   static async discardCardsAsync(game, player) {
     const deck = await game.getDeckAsync();
 
     const playerCards = await Cards.findOneAsync({ playerId: player._id });
     if (playerCards) {
-      for (const unusedCard of Array.from(playerCards.handCards)) {
+      for (const unusedCard of playerCards.handCards) {
         if (unusedCard >= 0) {
           deck.cards.push(unusedCard);
         }
@@ -243,7 +220,7 @@ export class CardLogic {
       );
     }
 
-    console.log(player.name + ': returned cards, new total: ' + deck.cards.length);
+    console.log(`${player.name}: returned cards, new total: ${deck.cards.length}`);
     return await Deck.upsertAsync({ gameId: game._id }, deck);
   }
 
@@ -257,18 +234,10 @@ export class CardLogic {
       nrOfNewCards++;
     }
     //grab card from deck, so it can't be handed out twice
-    if (nrOfNewCards > 0) {
-      for (
-        let i = 1, end = nrOfNewCards, asc = 1 <= end;
-        asc ? i <= end : i >= end;
-        asc ? i++ : i--
-      ) {
-        handCards.push(deck.cards.pop());
-      }
+    for (let i = 0; i < nrOfNewCards; i++) {
+      handCards.push(deck.cards.pop());
     }
-    console.log(
-      player.name + ': hand cards ' + handCards.length + ', new total: ' + deck.cards.length
-    );
+    console.log(`${player.name}: hand cards ${handCards.length}, new total: ${deck.cards.length}`);
 
     await Cards.updateAsync(
       { playerId: player._id },
@@ -336,7 +305,7 @@ export class CardLogic {
   static getOptionTitle(name) {
     return name
       .replace('/_/g', ' ')
-      .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+      .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
   }
 
   static getOptionId(name) {
@@ -368,4 +337,3 @@ export class CardLogic {
     return (index + 1) * 10;
   }
 }
-CardLogic.initClass();

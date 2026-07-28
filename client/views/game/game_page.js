@@ -15,7 +15,7 @@ function getGame() {
 
 Template.gamePageActions.onCreated(function () {
   let gameLoaded = false;
-  this.autorun(function (computation) {
+  this.autorun((computation) => {
     const id = FlowRouter.getParam('_id');
     if (id) {
       const game = Games.findOne(id);
@@ -35,64 +35,58 @@ Template.gamePageActions.onCreated(function () {
 });
 
 Template.gamePageActions.helpers({
-  game: function () {
+  game() {
     return getGame();
   },
-  ownGame: function () {
+  ownGame() {
     return this.userId === Meteor.userId();
   },
-  inGame: function () {
+  inGame() {
     return Players.findOne({ gameId: this._id, userId: Meteor.userId() });
   },
-  gameReady: function () {
+  gameReady() {
     return Players.find().fetch().length >= 1;
   },
-  gameFull: function () {
+  gameFull() {
     return Players.find().fetch().length >= 8;
   },
 });
 
 Template.gamePageActions.events({
-  'click .delete': async function (e) {
+  async 'click .delete'(e) {
     e.preventDefault();
     if (await modalConfirm('Remove this game?')) {
       Games.remove(this._id);
       FlowRouter.go(FlowRouter.path('gamelist.page'));
     }
   },
-  'click .join': function (e) {
+  'click .join'(e) {
     e.preventDefault();
 
-    Meteor.callAsync('joinGame', this._id).catch(function (error) {
-      modalAlert(error.reason);
-    });
+    Meteor.callAsync('joinGame', this._id).catch((error) => modalAlert(error.reason));
   },
-  'click .leave': function (e) {
+  'click .leave'(e) {
     e.preventDefault();
 
-    Meteor.callAsync('leaveGame', this._id).catch(function (error) {
-      modalAlert(error.reason);
-    });
+    Meteor.callAsync('leaveGame', this._id).catch((error) => modalAlert(error.reason));
   },
 
-  'click .start': function (e) {
+  'click .start'(e) {
     e.preventDefault();
     const gameId = this._id;
 
-    Meteor.callAsync('startGame', gameId).catch(function (error) {
-      modalAlert(error.reason);
-    });
+    Meteor.callAsync('startGame', gameId).catch((error) => modalAlert(error.reason));
   },
 });
 
 Template.players.helpers({
-  players: function () {
+  players() {
     return Players.find();
   },
-  minPlayer: function () {
+  minPlayer() {
     const game = getGame();
     if (game && game.min_player > 1) {
-      return '' + game.min_player + ' players';
+      return `${game.min_player} players`;
     } else {
       return 'One player';
     }
@@ -100,7 +94,7 @@ Template.players.helpers({
 });
 
 Template.selectedBoard.helpers({
-  boardData: function () {
+  boardData() {
     const game = getGame();
     if (!game) return {};
     const board = game.board();
@@ -108,18 +102,18 @@ Template.selectedBoard.helpers({
       width: board.width * 24,
       height: board.height * 24,
       extra_class: '',
-      game: game,
-      board: board,
+      game,
+      board,
     };
   },
-  ownGame: function () {
+  ownGame() {
     const game = getGame();
-    return game && game.userId == Meteor.userId();
+    return game && game.userId === Meteor.userId();
   },
 });
 
 Template.selectedBoard.events({
-  'click .select': function (e) {
+  'click .select'(e) {
     e.preventDefault();
     const game = getGame();
     if (game) {

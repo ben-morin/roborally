@@ -24,7 +24,7 @@
   }
 */
 
-export const modalAlert = function (bodyText) {
+export function modalAlert(bodyText) {
   if (bodyText) {
     document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
   }
@@ -35,17 +35,17 @@ export const modalAlert = function (bodyText) {
 
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
-  return new Promise(function (resolve) {
-    const onClick = function (e) {
+  return new Promise((resolve) => {
+    const onClick = (e) => {
       if (e.target.closest('.confirm-button')) modal.hide();
     };
-    const onKeydown = function (e) {
+    const onKeydown = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         modal.hide();
       }
     };
-    const onHidden = function () {
+    const onHidden = () => {
       modalEl.removeEventListener('click', onClick);
       modalEl.removeEventListener('keydown', onKeydown);
       cancelBtn.style.display = '';
@@ -57,9 +57,9 @@ export const modalAlert = function (bodyText) {
     modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
     modal.show();
   });
-};
+}
 
-export const modalConfirm = function (bodyText) {
+export function modalConfirm(bodyText) {
   if (bodyText) {
     document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
   }
@@ -68,8 +68,8 @@ export const modalConfirm = function (bodyText) {
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   let confirmed = false;
 
-  return new Promise(function (resolve) {
-    const onClick = function (e) {
+  return new Promise((resolve) => {
+    const onClick = (e) => {
       if (e.target.closest('.confirm-button')) {
         confirmed = true;
         modal.hide();
@@ -77,14 +77,14 @@ export const modalConfirm = function (bodyText) {
         modal.hide();
       }
     };
-    const onKeydown = function (e) {
+    const onKeydown = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmed = true;
         modal.hide();
       }
     };
-    const onHidden = function () {
+    const onHidden = () => {
       modalEl.removeEventListener('click', onClick);
       modalEl.removeEventListener('keydown', onKeydown);
       resolve(confirmed);
@@ -95,4 +95,4 @@ export const modalConfirm = function (bodyText) {
     modalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
     modal.show();
   });
-};
+}

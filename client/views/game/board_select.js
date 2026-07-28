@@ -27,7 +27,7 @@ function buildBoards(from, to) {
       gameId: game._id,
       width: board.width * 24 + 4,
       height: board.height * 24 + 4,
-      board: board,
+      board,
       extra_class: css_class,
       show_start: true,
     });
@@ -45,28 +45,28 @@ function activeCategory() {
 }
 
 Template.boardselect.helpers({
-  beginnerBoards: function () {
+  beginnerBoards() {
     return buildBoards(0, BoardBox.BEGINNER_COURSE_CNT);
   },
-  expertBoards: function () {
+  expertBoards() {
     return buildBoards(BoardBox.BEGINNER_COURSE_CNT, BoardBox.CUSTOM_COURSE_IDX);
   },
-  customBoards: function () {
+  customBoards() {
     return buildBoards(BoardBox.CUSTOM_COURSE_IDX, BoardBox.CATALOG.length);
   },
-  beginnerActive: function () {
+  beginnerActive() {
     return activeCategory() === 'beginner' ? 'active' : '';
   },
-  expertActive: function () {
+  expertActive() {
     return activeCategory() === 'expert' ? 'active' : '';
   },
-  customActive: function () {
+  customActive() {
     return activeCategory() === 'custom' ? 'active' : '';
   },
 });
 
 Template.boardselect.events({
-  'click .boardchoice': function (e) {
+  'click .boardchoice'(e) {
     e.preventDefault();
 
     const thumbnail = e.currentTarget.querySelector('.board-thumbnail');
@@ -76,12 +76,8 @@ Template.boardselect.events({
     if (!game) return;
 
     Meteor.callAsync('selectBoard', boardName, game._id).then(
-      function () {
-        FlowRouter.go(FlowRouter.path('game.page', { _id: game._id }));
-      },
-      function (error) {
-        modalAlert(error.reason);
-      }
+      () => FlowRouter.go(FlowRouter.path('game.page', { _id: game._id })),
+      (error) => modalAlert(error.reason)
     );
   },
 });

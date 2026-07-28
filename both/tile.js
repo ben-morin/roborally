@@ -1,32 +1,18 @@
-/*
- * decaffeinate suggestions:
- * DS102: Remove unnecessary code created because of implicit returns
- * DS205: Consider reworking code to avoid use of IIFEs
- * DS206: Consider reworking classes to avoid initClass
- * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
- */
-
 import { GameLogic } from './gamelogic.js';
 
-let to_word = undefined;
-let dir_words = undefined;
+const dir_words = ['up', 'right', 'down', 'left'];
+
+const to_word = (dir) => dir_words[dir];
 
 export class Tile {
-  static initClass() {
-    this.EMPTY = 'empty';
-    this.VOID = 'void';
-    this.ROLLER = 'roller';
-    this.PUSHER = 'pusher';
-    this.GEAR = 'gear';
-    this.REPAIR = 'repair';
-    this.OPTION = 'option';
-    this.LIMBO = 'limbo';
-
-    to_word = (dir) => dir_words[dir];
-
-    dir_words = ['up', 'right', 'down', 'left'];
-    // off the board
-  }
+  static EMPTY = 'empty';
+  static VOID = 'void';
+  static ROLLER = 'roller';
+  static PUSHER = 'pusher';
+  static GEAR = 'gear';
+  static REPAIR = 'repair';
+  static OPTION = 'option';
+  static LIMBO = 'limbo'; // off the board
 
   constructor(tile_type = Tile.EMPTY) {
     this.type = tile_type;
@@ -47,104 +33,103 @@ export class Tile {
 
   setType(type) {
     this.type = type;
-    let msg;
-    return (this.description = (() => {
-      switch (type) {
-        case Tile.ROLLER:
-          if (this.speed === 2) {
-            return `This is an express converyor belt. \
+
+    // Types with no case here (EMPTY, LIMBO) deliberately leave description undefined.
+    let description;
+    switch (type) {
+      case Tile.ROLLER:
+        description =
+          this.speed === 2
+            ? `This is an express converyor belt. \
 You will move 2 spaces in the direction of the arrow \
-when ending here after a card has been played.`;
-          } else {
-            return `This is a converyor belt. \
+when ending here after a card has been played.`
+            : `This is a converyor belt. \
 You will move 1 space in the direction of the arrow \
 when ending here after a card has been played.`;
-          }
-        case Tile.VOID:
-          return "Don't fall in this giant hole in the ground or you'll die.";
-        case Tile.REPAIR:
-          return 'If you end your hand on a repair site, one damage will be repaired.';
-        case Tile.OPTION:
-          return 'If you end your hand on an option site, you draw one option card.';
-        case Tile.GEAR:
-          msg = 'This gear will turn you ';
-          msg += this.gear_type === 'cw' ? 'right' : 'left';
-          return (msg += ' when ending here after a card has been played.');
-        case Tile.PUSHER:
-          msg = 'This pusher will push you 1 space away from it, but only after card ';
-          return (msg += this.pusher_type === 0 ? '2 or 4' : '1, 3 or 5');
-      }
-    })());
+        break;
+      case Tile.VOID:
+        description = "Don't fall in this giant hole in the ground or you'll die.";
+        break;
+      case Tile.REPAIR:
+        description = 'If you end your hand on a repair site, one damage will be repaired.';
+        break;
+      case Tile.OPTION:
+        description = 'If you end your hand on an option site, you draw one option card.';
+        break;
+      case Tile.GEAR:
+        description = `This gear will turn you ${
+          this.gear_type === 'cw' ? 'right' : 'left'
+        } when ending here after a card has been played.`;
+        break;
+      case Tile.PUSHER:
+        description = `This pusher will push you 1 space away from it, but only after card ${
+          this.pusher_type === 0 ? '2 or 4' : '1, 3 or 5'
+        }`;
+        break;
+    }
+    this.description = description;
   }
 
   path() {
-    let p = `/tiles/${this.type}`;
-    p += (() => {
-      switch (this.type) {
-        case 'gear':
-          return `-${this.gear_type}`;
-        case 'pusher':
-          if (this.pusher_type === 0) {
-            return '-even';
-          } else {
-            return '-odd';
-          }
-        case 'roller':
-          if (this.speed === 2) {
-            return `-express-${this.roller_type}`;
-          } else {
-            return `-${this.roller_type}`;
-          }
-        case 'void':
-          return this.void_type;
-        default:
-          return '';
-      }
-    })();
-    p += '.jpg';
-    return p;
+    let suffix;
+    switch (this.type) {
+      case Tile.GEAR:
+        suffix = `-${this.gear_type}`;
+        break;
+      case Tile.PUSHER:
+        suffix = this.pusher_type === 0 ? '-even' : '-odd';
+        break;
+      case Tile.ROLLER:
+        suffix = this.speed === 2 ? `-express-${this.roller_type}` : `-${this.roller_type}`;
+        break;
+      case Tile.VOID:
+        suffix = this.void_type;
+        break;
+      default:
+        suffix = '';
+    }
+    return `/tiles/${this.type}${suffix}.jpg`;
   }
 
   addWall(direction) {
-    if (this.wall) {
-      this.wall[direction] = true;
-    } else {
+    if (!this.wall) {
       this.wall = {};
-      this.wall[direction] = true;
     }
+    this.wall[direction] = true;
 
-    return this.addItem('wall', direction);
+    this.addItem('wall', direction);
   }
 
   addCheckpoint(number) {
     this.checkpoint = number;
     this.finish = true;
-    return (this.repair = true);
+    this.repair = true;
   }
 
   addStart(number) {
-    return (this.start = number);
+    this.start = number;
   }
 
   addLaser(direction, strength) {
-    const laser_type = (() => {
-      switch (strength) {
-        case 3:
-          return 'triplelaser';
-        case 2:
-          return 'doublelaser';
-        default:
-          return 'laser';
-      }
-    })();
+    let laser_type;
+    switch (strength) {
+      case 3:
+        laser_type = 'triplelaser';
+        break;
+      case 2:
+        laser_type = 'doublelaser';
+        break;
+      default:
+        laser_type = 'laser';
+    }
     this.damage = strength;
-    return this.addItem(laser_type, direction);
+    this.addItem(laser_type, direction);
   }
 
   addItem(type, direction) {
     // the items are inside of the tile span so the
     // direction has to be relative to the tile orientation
-    return this.items.push(new Item(type, direction - this.direction));
+    this.items.push(new Item(type, direction - this.direction));
   }
 
   updateVoidType(void_dir) {
@@ -159,38 +144,38 @@ when ending here after a card has been played.`;
       this.direction = 0;
     }
     this.void_type = '';
-    return (() => {
-      const result = [];
-      for (let i = 0; i <= 3; i++) {
-        if (this.void_neighbour[(i + this.direction) % 4]) {
-          result.push((this.void_type += '-' + to_word(i)));
-        } else {
-          result.push(undefined);
-        }
+    for (let i = 0; i <= 3; i++) {
+      if (this.void_neighbour[(i + this.direction) % 4]) {
+        this.void_type += `-${to_word(i)}`;
       }
-      return result;
-    })();
+    }
   }
 }
-Tile.initClass();
 
 class Item {
   constructor(type, direction) {
     this.direction = direction;
-    this.path = '/tiles/' + type + '.png';
-    this.description = (() => {
-      switch (type) {
-        case 'wall':
-          return "Even awesome robots can't pass through these massive walls.";
-        case 'laser':
-          return 'This is a laser! It hurts and you will gain one damage.';
-        case 'doublelaser':
-          return 'This is a double laser!! It hurts a lot and you will gain two damages.';
-        case 'triplelaser':
-          return 'This is a triple laser!!! It hurts like hell and you will gain three damages.';
-        default:
-          return false;
-      }
-    })();
+    this.path = `/tiles/${type}.png`;
+
+    // Unrecognized item types deliberately get `false`, not a description.
+    let description;
+    switch (type) {
+      case 'wall':
+        description = "Even awesome robots can't pass through these massive walls.";
+        break;
+      case 'laser':
+        description = 'This is a laser! It hurts and you will gain one damage.';
+        break;
+      case 'doublelaser':
+        description = 'This is a double laser!! It hurts a lot and you will gain two damages.';
+        break;
+      case 'triplelaser':
+        description =
+          'This is a triple laser!!! It hurts like hell and you will gain three damages.';
+        break;
+      default:
+        description = false;
+    }
+    this.description = description;
   }
 }

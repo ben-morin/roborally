@@ -2,7 +2,7 @@ import { Players } from '../../../collections/players.js';
 import './_tiles.html';
 
 Template._tiles.helpers({
-  visited_checkpoint: function (number) {
+  visited_checkpoint(number) {
     const player = Players.findOne({ userId: Meteor.userId() });
     if (player != null && player.visited_checkpoints >= number) {
       return 'visited';
@@ -10,11 +10,11 @@ Template._tiles.helpers({
       return '';
     }
   },
-  leq: function (current, limit) {
+  leq(current, limit) {
     return current <= limit;
   },
-  rotate: function (direction) {
-    const rotate = 'rotate(' + 90 * direction + 'deg);';
-    return 'transform: ' + rotate + ' -webkit-transform: ' + rotate + ' -ms-transform: ' + rotate;
+  rotate(direction) {
+    const rotate = `rotate(${90 * direction}deg);`;
+    return `transform: ${rotate} -webkit-transform: ${rotate} -ms-transform: ${rotate}`;
   },
 });

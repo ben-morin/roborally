@@ -11,7 +11,7 @@ import { Players } from '../collections/players.js';
 import { buildHighscores } from './highscores.js';
 
 Meteor.methods({
-  createGame: async function (postAttributes) {
+  async createGame(postAttributes) {
     const user = await Meteor.userAsync();
 
     // ensure the user is logged in
@@ -24,7 +24,7 @@ Meteor.methods({
     const game = {
       name: postAttributes.name,
       userId: user._id,
-      author: author,
+      author,
       submitted: new Date().getTime(),
       started: false,
       gamePhase: GameState.PHASE.IDLE,
@@ -44,7 +44,7 @@ Meteor.methods({
     const gameId = await Games.insertAsync(game);
 
     await Chat.insertAsync({
-      gameId: gameId,
+      gameId,
       message: 'Game created',
       submitted: new Date().getTime(),
     });
@@ -53,7 +53,7 @@ Meteor.methods({
     return gameId;
   },
 
-  joinGame: async function (gameId) {
+  async joinGame(gameId) {
     const user = await Meteor.userAsync();
 
     if (!user) throw new Meteor.Error(401, 'You need to login to join a game');
@@ -62,12 +62,12 @@ Meteor.methods({
 
     const author = getUsername(user);
     let playerId;
-    if (!(await Players.findOneAsync({ gameId: gameId, userId: user._id }))) {
+    if (!(await Players.findOneAsync({ gameId, userId: user._id }))) {
       // The dev-test board is meant for exercising elimination flows quickly,
       // so seat players with a single life instead of the standard three.
       const startingLives = game.boardId === BoardBox.dev_test_board_id ? 1 : 3;
       playerId = await Players.insertAsync({
-        gameId: gameId,
+        gameId,
         userId: user._id,
         name: author,
         lives: startingLives,
@@ -79,25 +79,21 @@ Meteor.methods({
         position: { x: -1, y: -1 },
         chosenCardsCnt: 0,
         optionCards: {},
-        cards: Array.apply(null, new Array(GameLogic.CARD_SLOTS)).map(function (x, i) {
-          return CardLogic.EMPTY;
-        }),
+        cards: Array.from({ length: GameLogic.CARD_SLOTS }, () => CardLogic.EMPTY),
       });
       await Cards.insertAsync({
-        gameId: gameId,
-        playerId: playerId,
+        gameId,
+        playerId,
         userId: user._id,
-        chosenCards: Array.apply(null, new Array(GameLogic.CARD_SLOTS)).map(function (x, i) {
-          return CardLogic.EMPTY;
-        }),
+        chosenCards: Array.from({ length: GameLogic.CARD_SLOTS }, () => CardLogic.EMPTY),
         handCards: [],
       });
     }
-    await game.chatAsync(author + ' joined the game', gameId);
+    await game.chatAsync(`${author} joined the game`, gameId);
     return true;
   },
 
-  leaveGame: async function (gameId) {
+  async leaveGame(gameId) {
     const user = await Meteor.userAsync();
     if (!user) throw new Meteor.Error(401, 'You need to login to leave a game');
     const game = await Games.findOneAsync(gameId);
@@ -115,7 +111,7 @@ Meteor.methods({
     }
 
     const author = getUsername(user);
-    console.log('User ' + author + ' leaving game ' + gameId);
+    console.log(`User ${author} leaving game ${gameId}`);
 
     // Return any held cards to the deck before removing
     if (game.started) {
@@ -157,16 +153,16 @@ Meteor.methods({
         });
       }
     }
-    await game.chatAsync(author + ' left the game');
+    await game.chatAsync(`${author} left the game`);
   },
 
-  selectBoard: async function (boardName, gameId) {
+  async selectBoard(boardName, gameId) {
     const user = await Meteor.userAsync();
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(401, 'Game id not found!');
 
     const board_id = BoardBox.getBoardId(boardName);
-    if (board_id < 0) throw new Meteor.Error(401, 'Board ' + boardName + ' not found!');
+    if (board_id < 0) throw new Meteor.Error(401, `Board ${boardName} not found!`);
 
     const min = BoardBox.getBoard(board_id).min_player;
     const max = BoardBox.getBoard(board_id).max_player;
@@ -175,16 +171,18 @@ Meteor.methods({
     });
 
     const author = getUsername(user);
-    await game.chatAsync(author + ' selected board ' + boardName, 'for game' + gameId);
+    await game.chatAsync(`${author} selected board ${boardName}`, `for game${gameId}`);
   },
 
-  startGame: async function (gameId) {
-    const players = await Players.find({ gameId: gameId }).fetchAsync();
+  async startGame(gameId) {
+    const players = await Players.find({ gameId }).fetchAsync();
     const game = await Games.findOneAsync(gameId);
     if (players.length > game.max_player) {
       throw new Meteor.Error(401, 'Too many players.');
     }
 
+    // NOTE: `for...in` on purpose — `i` is a string index, and robotId is persisted as
+    // that string. Switching to a numeric index would mix types across existing docs.
     for (const i in players) {
       const start = game.board().startpoints[i];
       const player = players[i];
@@ -199,9 +197,9 @@ Meteor.methods({
     await GameState.nextGamePhaseAsync(gameId);
   },
 
-  playCards: async function (gameId) {
-    const player = await Players.findOneAsync({ gameId: gameId, userId: Meteor.userId() });
-    if (!player) throw new Meteor.Error(401, 'Game/Player not found! ' + gameId);
+  async playCards(gameId) {
+    const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
+    if (!player) throw new Meteor.Error(401, `Game/Player not found! ${gameId}`);
 
     if (!player.submitted) {
       await player.chatAsync('submitted cards');
@@ -211,28 +209,28 @@ Meteor.methods({
     }
   },
 
-  selectRespawnPosition: async function (gameId, x, y) {
+  async selectRespawnPosition(gameId, x, y) {
     const game = await Games.findOneAsync(gameId);
-    const player = await Players.findOneAsync({ gameId: gameId, userId: Meteor.userId() });
+    const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
     await GameLogic.respawnPlayerAtPosAsync(player, Number(x), Number(y));
-    await player.chatAsync('chose position', '(' + x + ',' + y + ')');
+    await player.chatAsync('chose position', `(${x},${y})`);
     await game.nextRespawnPhaseAsync(GameState.RESPAWN_PHASE.CHOOSE_DIRECTION);
   },
 
-  selectRespawnDirection: async function (gameId, direction) {
+  async selectRespawnDirection(gameId, direction) {
     const game = await Games.findOneAsync(gameId);
-    const player = await Players.findOneAsync({ gameId: gameId, userId: Meteor.userId() });
+    const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
     await GameLogic.respawnPlayerWithDirAsync(player, Number(direction));
     await player.chatAsync('reentered the race', direction);
     await GameState.nextGamePhaseAsync(game._id);
   },
 
-  togglePowerDown: async function (gameId) {
-    const player = await Players.findOneAsync({ gameId: gameId, userId: Meteor.userId() });
+  async togglePowerDown(gameId) {
+    const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
     return await player.togglePowerDownAsync();
   },
 
-  addMessage: async function (postAttributes) {
+  async addMessage(postAttributes) {
     const user = await Meteor.userAsync();
 
     // ensure the user is logged in
@@ -243,17 +241,17 @@ Meteor.methods({
       message: postAttributes.message,
       gameId: postAttributes.gameId,
       userId: user._id,
-      author: author,
+      author,
       submitted: new Date().getTime(),
     };
     await Chat.insertAsync(message);
   },
 
-  isEmailAvailable: function () {
+  isEmailAvailable() {
     return !!process.env.EMAIL_URL || Meteor.isDevelopment;
   },
 
-  resendVerificationEmail: async function (email) {
+  async resendVerificationEmail(email) {
     const user = await Meteor.users.findOneAsync({ 'emails.address': email });
     if (!user) {
       throw new Meteor.Error('user-not-found', 'No account found with that email address.');

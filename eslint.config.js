@@ -53,8 +53,12 @@ module.exports = [
       'no-undef': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
-      eqeqeq: ['warn', 'smart'],
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      // Stricter than the 'smart' option this replaced: `==` is an error everywhere except
+      // against `null`, where it is the intended "null or undefined" test. Every remaining
+      // `== null` in the tree is one of those; `'smart'` additionally tolerated literal and
+      // typeof comparisons, which nothing needs.
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
   prettier,

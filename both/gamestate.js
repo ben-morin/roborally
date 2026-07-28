@@ -36,482 +36,485 @@ export const GameState = {
 // would pull server-only code (and `rawCollection`) into the client bundle. The server
 // injects it as it loads. The phase machine is only ever driven from server methods, so
 // the client never reaches the call sites below and the default is never invoked.
-let buildHighscores = async function () {};
+let buildHighscores = async () => {};
 
 export function setBuildHighscores(fn) {
   buildHighscores = fn;
 }
 
-(function (scope) {
-  const _NEXT_PHASE_DELAY = 250;
-  const _ANNOUNCE_NEXT_PHASE = 1000;
-  const _ANNOUNCE_CARD_TIME = 1750; // match to .fadeInAndOut duration in game.scss
-  const _EXECUTE_CARD_TIME = 1000;
+const _NEXT_PHASE_DELAY = 250;
+const _ANNOUNCE_NEXT_PHASE = 1000;
+const _ANNOUNCE_CARD_TIME = 1750; // match to .fadeInAndOut duration in game.scss
+const _EXECUTE_CARD_TIME = 1000;
 
-  // game phases:
+// game phases:
 
-  scope.nextGamePhaseAsync = async function (gameId) {
-    const game = await Games.findOneAsync(gameId);
-    await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
-    switch (game.gamePhase) {
-      case GameState.PHASE.IDLE:
+async function nextGamePhaseAsync(gameId) {
+  const game = await Games.findOneAsync(gameId);
+  await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
+  switch (game.gamePhase) {
+    case GameState.PHASE.IDLE:
+      await Games.updateAsync(game._id, {
+        $set: { started: true, gamePhase: GameState.PHASE.DEAL },
+      });
+      await playDealPhase(game);
+      break;
+    case GameState.PHASE.DEAL:
+      await game.stopAnnounceAsync();
+      await playDealPhase(game);
+      break;
+    case GameState.PHASE.PROGRAM:
+      await game.startAnnounceAsync();
+      await playProgramCardsSubmitted(game);
+      break;
+    case GameState.PHASE.PLAY:
+      if (game.waitingForRespawn.length > 0) {
         await Games.updateAsync(game._id, {
-          $set: { started: true, gamePhase: GameState.PHASE.DEAL },
+          $set: {
+            waitingForRespawn: game.waitingForRespawn.reverse(),
+            gamePhase: GameState.PHASE.RESPAWN,
+          },
         });
-        await playDealPhase(game);
-        break;
-      case GameState.PHASE.DEAL:
-        await game.stopAnnounceAsync();
-        await playDealPhase(game);
-        break;
-      case GameState.PHASE.PROGRAM:
-        await game.startAnnounceAsync();
-        await playProgramCardsSubmitted(game);
-        break;
-      case GameState.PHASE.PLAY:
-        if (game.waitingForRespawn.length > 0) {
-          await Games.updateAsync(game._id, {
-            $set: {
-              waitingForRespawn: game.waitingForRespawn.reverse(),
-              gamePhase: GameState.PHASE.RESPAWN,
-            },
-          });
-          await game.nextGamePhaseAsync();
-        } else {
-          await game.nextGamePhaseAsync(GameState.PHASE.DEAL);
-        }
-        break;
-      case GameState.PHASE.RESPAWN:
-        await playNextRespawn(game);
-        break;
+        await game.nextGamePhaseAsync();
+      } else {
+        await game.nextGamePhaseAsync(GameState.PHASE.DEAL);
+      }
+      break;
+    case GameState.PHASE.RESPAWN:
+      await playNextRespawn(game);
+      break;
+  }
+}
+
+async function playDealPhase(game) {
+  const players = await game.playersAsync();
+  let playersToDeal = [];
+
+  // Phase 1: Update player states and return all cards to deck
+  for (const player of players) {
+    let dealCards = player.lives > 0;
+    player.playedCardsCnt = 0;
+    player.submitted = false;
+    if (player.hasOptionCard('circuit_breaker') && player.damage >= 3) {
+      player.powerState = GameLogic.DOWN;
+      await player.discardOptionCardAsync('circuit_breaker');
     }
-  };
 
-  async function playDealPhase(game) {
-    const players = await game.playersAsync();
-    let playersToDeal = [];
-
-    // Phase 1: Update player states and return all cards to deck
-    for (const player of players) {
-      let dealCards = player.lives > 0;
-      player.playedCardsCnt = 0;
-      player.submitted = false;
-      if (player.hasOptionCard('circuit_breaker') && player.damage >= 3) {
-        player.powerState = GameLogic.DOWN;
-        await player.discardOptionCardAsync('circuit_breaker');
-      }
-
-      if (player.powerState === GameLogic.OFF) {
-        // player was powered down last turn
-        // -> can choose to stay powered down this turn
-        player.optionalInstantPowerDown = true;
-      } else if (player.powerState === GameLogic.DOWN) {
-        // player announced power down last turn
-        player.powerState = GameLogic.OFF;
-        if (!player.optionalInstantPowerDown) {
-          player.submitted = true;
-          player.damage = 0;
-          dealCards = false;
-        }
-      }
-
-      await Players.updateAsync(player._id, player);
-      await CardLogic.discardCardsAsync(game, player);
-      if (dealCards) {
-        playersToDeal.push(player);
+    if (player.powerState === GameLogic.OFF) {
+      // player was powered down last turn
+      // -> can choose to stay powered down this turn
+      player.optionalInstantPowerDown = true;
+    } else if (player.powerState === GameLogic.DOWN) {
+      // player announced power down last turn
+      player.powerState = GameLogic.OFF;
+      if (!player.optionalInstantPowerDown) {
+        player.submitted = true;
+        player.damage = 0;
+        dealCards = false;
       }
     }
 
-    // Phase 2: Shuffle the deck once after all cards are returned
-    const deck = await game.getDeckAsync();
-    console.log('Shuffling deck with ' + deck.cards.length + ' cards');
-    deck.cards = shuffle(deck.cards);
-    await Deck.upsertAsync({ gameId: game._id }, deck);
-
-    // Phase 3: Deal cards to all eligible players (randomized order)
-    playersToDeal = shuffle(playersToDeal);
-    for (const player of playersToDeal) {
-      await CardLogic.dealCardsAsync(game, player);
-    }
-
-    await game.setGamePhaseAsync(GameState.PHASE.PROGRAM);
-    const notPoweredDownCnt = await Players.find({
-      gameId: game._id,
-      submitted: false,
-    }).countAsync();
-    if (notPoweredDownCnt === 0) {
-      await game.nextGamePhaseAsync();
+    await Players.updateAsync(player._id, player);
+    await CardLogic.discardCardsAsync(game, player);
+    if (dealCards) {
+      playersToDeal.push(player);
     }
   }
 
-  async function playProgramCardsSubmitted(game) {
+  // Phase 2: Shuffle the deck once after all cards are returned
+  const deck = await game.getDeckAsync();
+  console.log(`Shuffling deck with ${deck.cards.length} cards`);
+  deck.cards = shuffle(deck.cards);
+  await Deck.upsertAsync({ gameId: game._id }, deck);
+
+  // Phase 3: Deal cards to all eligible players (randomized order)
+  playersToDeal = shuffle(playersToDeal);
+  for (const player of playersToDeal) {
+    await CardLogic.dealCardsAsync(game, player);
+  }
+
+  await game.setGamePhaseAsync(GameState.PHASE.PROGRAM);
+  const notPoweredDownCnt = await Players.find({
+    gameId: game._id,
+    submitted: false,
+  }).countAsync();
+  if (notPoweredDownCnt === 0) {
+    await game.nextGamePhaseAsync();
+  }
+}
+
+async function playProgramCardsSubmitted(game) {
+  await Games.updateAsync(game._id, {
+    $set: {
+      gamePhase: GameState.PHASE.PLAY,
+      playPhase: GameState.PLAY_PHASE.IDLE,
+      playPhaseCount: 1,
+    },
+  });
+  await game.nextPlayPhaseAsync();
+}
+
+async function playNextRespawn(game) {
+  if (game.waitingForRespawn.length > 0) {
+    const player = await Players.findOneAsync(game.waitingForRespawn.pop());
+    let nextPhase;
+    const x = player.start.x;
+    const y = player.start.y;
+    if (await game.isPlayerOnTileAsync(x, y)) {
+      nextPhase = GameState.RESPAWN_PHASE.CHOOSE_POSITION;
+    } else {
+      await GameLogic.respawnPlayerAtPosAsync(player, x, y);
+      nextPhase = GameState.RESPAWN_PHASE.CHOOSE_DIRECTION;
+    }
     await Games.updateAsync(game._id, {
       $set: {
-        gamePhase: GameState.PHASE.PLAY,
-        playPhase: GameState.PLAY_PHASE.IDLE,
-        playPhaseCount: 1,
+        respawnPhase: nextPhase,
+        respawnPlayerId: player._id,
+        waitingForRespawn: game.waitingForRespawn,
       },
     });
-    await game.nextPlayPhaseAsync();
-  }
-
-  async function playNextRespawn(game) {
-    if (game.waitingForRespawn.length > 0) {
-      const player = await Players.findOneAsync(game.waitingForRespawn.pop());
-      let nextPhase;
-      const x = player.start.x;
-      const y = player.start.y;
-      if (await game.isPlayerOnTileAsync(x, y)) {
-        nextPhase = GameState.RESPAWN_PHASE.CHOOSE_POSITION;
-      } else {
-        await GameLogic.respawnPlayerAtPosAsync(player, x, y);
-        nextPhase = GameState.RESPAWN_PHASE.CHOOSE_DIRECTION;
-      }
-      await Games.updateAsync(game._id, {
-        $set: {
-          respawnPhase: nextPhase,
-          respawnPlayerId: player._id,
-          waitingForRespawn: game.waitingForRespawn,
-        },
-      });
-      await game.nextRespawnPhaseAsync();
-    } else {
-      await Games.updateAsync(game._id, {
-        $set: {
-          gamePhase: GameState.PHASE.DEAL,
-          respawnUserId: null,
-          respawnPlayerId: null,
-          selectOptions: null,
-        },
-      });
-      await game.nextGamePhaseAsync();
-    }
-  }
-
-  // play phases:
-
-  scope.nextPlayPhaseAsync = async function (gameId) {
-    const game = await Games.findOneAsync(gameId);
-    await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
-    switch (game.playPhase) {
-      case GameState.PLAY_PHASE.IDLE:
-        await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.REVEAL_CARDS);
-        break;
-      case GameState.PLAY_PHASE.REVEAL_CARDS:
-        await playRevealCards(game);
-        break;
-      case GameState.PLAY_PHASE.MOVE_BOTS:
-        await playMoveBots(game);
-        break;
-      case GameState.PLAY_PHASE.MOVE_BOARD:
-        await announceAsync(game, playMoveBoard);
-        break;
-      case GameState.PLAY_PHASE.LASERS:
-        await announceAsync(game, playLasers);
-        break;
-      case GameState.PLAY_PHASE.CHECKPOINTS:
-        await playCheckpoints(game);
-        break;
-      case GameState.PLAY_PHASE.REPAIRS:
-        await announceAsync(game, playRepairs);
-        break;
-    }
-  };
-
-  async function announceAsync(game, fn) {
-    await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_NEXT_PHASE));
-    await fn(game);
-  }
-
-  async function playRevealCards(game) {
-    await Games.updateAsync(game._id, { $set: { playPhase: GameState.PLAY_PHASE.MOVE_BOTS } });
-
-    const players = await game.livingPlayersAsync();
-    for (const player of players) {
-      if (player.isActive()) {
-        const cards = player.cards;
-        const cardIndex = player.playedCardsCnt;
-        const chosenCards = await player.getChosenCardsAsync();
-        console.log('reveal', cardIndex, chosenCards[cardIndex]);
-        cards[cardIndex] = chosenCards[cardIndex];
-        await Players.updateAsync(player._id, { $set: { cards: cards } });
-      }
-    }
-    await GameState.nextPlayPhaseAsync(game._id);
-  }
-
-  async function playMoveBots(game) {
-    const players = await game.activePlayersAsync();
-    // play 1 card per player
-    game.cardsToPlay = [];
-
-    for (const player of players) {
-      const chosenCards = await player.getChosenCardsAsync();
-      const card = {
-        cardId: chosenCards[player.playedCardsCnt],
-      };
-      await Players.updateAsync(player._id, { $inc: { playedCardsCnt: 1 } });
-      if (card.cardId >= 0) {
-        card.playerId = player._id;
-        game.cardsToPlay.push(card);
-      }
-    }
-    game.cardsToPlay.sort(function (a, b) {
-      return b.cardId - a.cardId;
-    }); // cardId has same order as card priority
+    await game.nextRespawnPhaseAsync();
+  } else {
     await Games.updateAsync(game._id, {
       $set: {
+        gamePhase: GameState.PHASE.DEAL,
+        respawnUserId: null,
+        respawnPlayerId: null,
+        selectOptions: null,
+      },
+    });
+    await game.nextGamePhaseAsync();
+  }
+}
+
+// play phases:
+
+async function nextPlayPhaseAsync(gameId) {
+  const game = await Games.findOneAsync(gameId);
+  await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
+  switch (game.playPhase) {
+    case GameState.PLAY_PHASE.IDLE:
+      await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.REVEAL_CARDS);
+      break;
+    case GameState.PLAY_PHASE.REVEAL_CARDS:
+      await playRevealCards(game);
+      break;
+    case GameState.PLAY_PHASE.MOVE_BOTS:
+      await playMoveBots(game);
+      break;
+    case GameState.PLAY_PHASE.MOVE_BOARD:
+      await announceAsync(game, playMoveBoard);
+      break;
+    case GameState.PLAY_PHASE.LASERS:
+      await announceAsync(game, playLasers);
+      break;
+    case GameState.PLAY_PHASE.CHECKPOINTS:
+      await playCheckpoints(game);
+      break;
+    case GameState.PLAY_PHASE.REPAIRS:
+      await announceAsync(game, playRepairs);
+      break;
+  }
+}
+
+async function announceAsync(game, fn) {
+  await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_NEXT_PHASE));
+  await fn(game);
+}
+
+async function playRevealCards(game) {
+  await Games.updateAsync(game._id, { $set: { playPhase: GameState.PLAY_PHASE.MOVE_BOTS } });
+
+  const players = await game.livingPlayersAsync();
+  for (const player of players) {
+    if (player.isActive()) {
+      const cards = player.cards;
+      const cardIndex = player.playedCardsCnt;
+      const chosenCards = await player.getChosenCardsAsync();
+      console.log('reveal', cardIndex, chosenCards[cardIndex]);
+      cards[cardIndex] = chosenCards[cardIndex];
+      await Players.updateAsync(player._id, { $set: { cards: cards } });
+    }
+  }
+  await GameState.nextPlayPhaseAsync(game._id);
+}
+
+async function playMoveBots(game) {
+  const players = await game.activePlayersAsync();
+  // play 1 card per player
+  game.cardsToPlay = [];
+
+  for (const player of players) {
+    const chosenCards = await player.getChosenCardsAsync();
+    const card = {
+      cardId: chosenCards[player.playedCardsCnt],
+    };
+    await Players.updateAsync(player._id, { $inc: { playedCardsCnt: 1 } });
+    if (card.cardId >= 0) {
+      card.playerId = player._id;
+      game.cardsToPlay.push(card);
+    }
+  }
+  // cardId has same order as card priority
+  game.cardsToPlay.sort((a, b) => b.cardId - a.cardId);
+  await Games.updateAsync(game._id, {
+    $set: {
+      cardsToPlay: game.cardsToPlay,
+    },
+  });
+  if (game.cardsToPlay.length > 0) {
+    await playMoveBot(game);
+  } else {
+    await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.MOVE_BOARD);
+  }
+}
+
+async function playMoveBot(game) {
+  const card = game.cardsToPlay.shift();
+  const player = await Players.findOneAsync(card.playerId);
+  // Skip the announce + execute for dead players: their card is dequeued
+  // but their robot is off-board, so flashing their card on the bottom-right
+  // teleport position would just be visual noise.
+  const skip = !player || player.needsRespawn;
+  if (skip) {
+    await Games.updateAsync(game._id, {
+      $set: { cardsToPlay: game.cardsToPlay },
+    });
+  } else {
+    await Games.updateAsync(game._id, {
+      $set: {
+        announceCard: card,
         cardsToPlay: game.cardsToPlay,
       },
     });
-    if (game.cardsToPlay.length > 0) {
-      await playMoveBot(game);
-    } else {
-      await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.MOVE_BOARD);
-    }
+    await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_CARD_TIME));
+    await Games.updateAsync(game._id, {
+      $set: {
+        announceCard: null,
+      },
+    });
+    await GameLogic.playCard(player, card.cardId);
   }
-
-  async function playMoveBot(game) {
-    const card = game.cardsToPlay.shift();
-    const player = await Players.findOneAsync(card.playerId);
-    // Skip the announce + execute for dead players: their card is dequeued
-    // but their robot is off-board, so flashing their card on the bottom-right
-    // teleport position would just be visual noise.
-    const skip = !player || player.needsRespawn;
-    if (skip) {
-      await Games.updateAsync(game._id, {
-        $set: { cardsToPlay: game.cardsToPlay },
-      });
-    } else {
-      await Games.updateAsync(game._id, {
-        $set: {
-          announceCard: card,
-          cardsToPlay: game.cardsToPlay,
-        },
-      });
-      await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_CARD_TIME));
-      await Games.updateAsync(game._id, {
-        $set: {
-          announceCard: null,
-        },
-      });
-      await GameLogic.playCard(player, card.cardId);
-    }
-    if (game.cardsToPlay.length > 0) {
-      if (!skip) {
-        await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));
-      }
-      await playMoveBot(game);
-    } else {
+  if (game.cardsToPlay.length > 0) {
+    if (!skip) {
       await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));
-      await Games.updateAsync(game._id, {
-        $set: {
-          announceCard: null,
-        },
-      });
-      await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.MOVE_BOARD);
     }
-  }
-
-  async function playMoveBoard(game) {
-    const players = await game.playersOnBoardAsync();
-    await GameLogic.executeRollers(players);
-    await GameLogic.executeExpressRollers(players);
-    await GameLogic.executeGears(players);
-    await GameLogic.executePushers(players);
-
-    await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.LASERS);
-  }
-
-  async function playLasers(game) {
-    const players = await game.playersOnBoardAsync();
-    await game.setPlayPhaseAsync(GameState.PLAY_PHASE.CHECKPOINTS);
-    await GameLogic.executeLasers(players);
-    await game.nextPlayPhaseAsync();
-  }
-
-  async function playCheckpoints(game) {
-    if (!(await checkIfWeHaveAWinner(game))) {
-      if (game.playPhaseCount < 5) {
-        await Games.updateAsync(game._id, {
-          $set: { playPhase: GameState.PLAY_PHASE.REVEAL_CARDS },
-          $inc: { playPhaseCount: 1 },
-        });
-        await game.nextPlayPhaseAsync();
-      } else {
-        await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.REPAIRS);
-      }
-    }
-  }
-
-  async function playRepairs(game) {
-    const players = await game.playersOnBoardAsync();
-    await GameLogic.executeRepairs(players);
-    await game.nextGamePhaseAsync();
-  }
-
-  async function checkCheckpoints(player) {
-    const tile = await player.tileAsync();
-
-    if (tile.checkpoint || tile.repair) {
-      player.updateStartPosition();
-      if (tile.checkpoint && tile.checkpoint === player.visited_checkpoints + 1) {
-        player.visited_checkpoints++;
-      }
-      await Players.updateAsync(player._id, player);
-    }
-  }
-
-  async function checkIfWeHaveAWinner(game) {
-    const players = await Players.find({ gameId: game._id }).fetchAsync();
-    const board = game.board();
-    let ended = false;
-    let lastManStanding = false;
-    let livingPlayers = 0;
-    const messages = [];
-
-    for (const i in players) {
-      const player = players[i];
-      await checkCheckpoints(player);
-      if (player.lives > 0) {
-        livingPlayers++;
-        lastManStanding = player;
-      } else {
-        messages.push('Player ' + player.name + ' ran out of lives');
-        console.log('Player ran out of lives: ' + player.name);
-      }
-
-      if (player.visited_checkpoints === board.checkpoints.length) {
-        await Games.updateAsync(game._id, {
-          $set: {
-            gamePhase: GameState.PHASE.ENDED,
-            winner: player.name,
-            stopped: new Date().getTime(),
-          },
-        });
-        messages.push('Player ' + player.name + ' won the game!!');
-        console.log('Player won: ' + player.name);
-        await buildHighscores();
-        console.log('after build highscores');
-        ended = true;
-        break;
-      }
-    }
-
-    if (livingPlayers === 0) {
-      messages.push('All robots are dead');
-      await Games.updateAsync(game._id, {
-        $set: {
-          gamePhase: GameState.PHASE.ENDED,
-          winner: 'Nobody',
-          stopped: new Date().getTime(),
-        },
-      });
-      ended = true;
-    } else if (livingPlayers === 1 && players.length > 1) {
-      messages.push('Player ' + lastManStanding.name + ' won the game!!');
-      console.log('Last player standing: ' + lastManStanding.name);
-      await Games.updateAsync(game._id, {
-        $set: {
-          gamePhase: GameState.PHASE.ENDED,
-          winner: lastManStanding.name,
-          stopped: new Date().getTime(),
-        },
-      });
-      await buildHighscores();
-      ended = true;
-    }
-    for (const msg of messages) {
-      await game.chatAsync(msg);
-    }
-    return ended;
-  }
-
-  // respawn phases
-  scope.nextRespawnPhaseAsync = async function (gameId) {
-    const game = await Games.findOneAsync(gameId);
-    await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
-    switch (game.respawnPhase) {
-      case GameState.RESPAWN_PHASE.CHOOSE_POSITION:
-        await prepareChooseRespawnPosition(game);
-        break;
-      case GameState.RESPAWN_PHASE.CHOOSE_DIRECTION:
-        await prepareChooseRespawnDirection(game);
-        break;
-    }
-  };
-
-  async function prepareChooseRespawnPosition(game) {
-    const player = await Players.findOneAsync(game.respawnPlayerId);
-    const selectOptions = [];
-    const x = player.start.x;
-    const y = player.start.y;
-    const board = game.board();
-    // House rule: the base game says "adjacent space" (radius 1). If every
-    // adjacent square is a pit, off-board, or occupied, expand outward ring
-    // by ring until at least one valid square is found, capped at the board's
-    // longer dimension so the loop always terminates.
-    const maxR = Math.max(board.width, board.height);
-    for (let r = 1; r <= maxR && selectOptions.length === 0; ++r) {
-      for (let dx = -r; dx <= r; ++dx) {
-        for (let dy = -r; dy <= r; ++dy) {
-          // For r > 1, only consider the new ring (skip inner squares
-          // already evaluated at smaller radii).
-          if (r > 1 && Math.max(Math.abs(dx), Math.abs(dy)) < r) continue;
-          if (
-            board.onBoard(x + dx, y + dy) &&
-            !(await game.isPlayerOnTileAsync(x + dx, y + dy)) &&
-            board.getTile(x + dx, y + dy).type !== Tile.VOID
-          ) {
-            selectOptions.push({ x: x + dx, y: y + dy });
-          }
-        }
-      }
-    }
+    await playMoveBot(game);
+  } else {
+    await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));
     await Games.updateAsync(game._id, {
       $set: {
-        selectOptions: selectOptions,
-        respawnUserId: player.userId,
+        announceCard: null,
       },
     });
+    await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.MOVE_BOARD);
   }
+}
 
-  async function prepareChooseRespawnDirection(game) {
-    const player = await Players.findOneAsync(game.respawnPlayerId);
-    const selectOptions = [];
-    const x = player.position.x;
-    const y = player.position.y;
-    let step;
-    if (player.start.x !== x && player.start.y !== y) {
-      for (let i = 0; i < 4; ++i) {
-        step = Board.to_step(i);
-        if (await noPlayerOnNextThreeAsync(x, y, step.x, step.y, game)) {
-          selectOptions.push({ x: x + step.x, y: y + step.y, dir: i });
-        }
-      }
+async function playMoveBoard(game) {
+  const players = await game.playersOnBoardAsync();
+  await GameLogic.executeRollers(players);
+  await GameLogic.executeExpressRollers(players);
+  await GameLogic.executeGears(players);
+  await GameLogic.executePushers(players);
+
+  await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.LASERS);
+}
+
+async function playLasers(game) {
+  const players = await game.playersOnBoardAsync();
+  await game.setPlayPhaseAsync(GameState.PLAY_PHASE.CHECKPOINTS);
+  await GameLogic.executeLasers(players);
+  await game.nextPlayPhaseAsync();
+}
+
+async function playCheckpoints(game) {
+  if (!(await checkIfWeHaveAWinner(game))) {
+    if (game.playPhaseCount < 5) {
+      await Games.updateAsync(game._id, {
+        $set: { playPhase: GameState.PLAY_PHASE.REVEAL_CARDS },
+        $inc: { playPhaseCount: 1 },
+      });
+      await game.nextPlayPhaseAsync();
     } else {
-      for (let j = 0; j < 4; ++j) {
-        step = Board.to_step(j);
-        selectOptions.push({
-          x: x + step.x,
-          y: y + step.y,
-          dir: j,
-        });
-      }
+      await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.REPAIRS);
     }
-    await Games.updateAsync(game._id, {
-      $set: {
-        selectOptions: selectOptions,
-        respawnUserId: player.userId,
-      },
-    });
+  }
+}
+
+async function playRepairs(game) {
+  const players = await game.playersOnBoardAsync();
+  await GameLogic.executeRepairs(players);
+  await game.nextGamePhaseAsync();
+}
+
+async function checkCheckpoints(player) {
+  const tile = await player.tileAsync();
+
+  if (tile.checkpoint || tile.repair) {
+    player.updateStartPosition();
+    if (tile.checkpoint && tile.checkpoint === player.visited_checkpoints + 1) {
+      player.visited_checkpoints++;
+    }
+    await Players.updateAsync(player._id, player);
+  }
+}
+
+async function checkIfWeHaveAWinner(game) {
+  const players = await Players.find({ gameId: game._id }).fetchAsync();
+  const board = game.board();
+  let ended = false;
+  let lastManStanding = false;
+  let livingPlayers = 0;
+  const messages = [];
+
+  for (const i in players) {
+    const player = players[i];
+    await checkCheckpoints(player);
+    if (player.lives > 0) {
+      livingPlayers++;
+      lastManStanding = player;
+    } else {
+      messages.push(`Player ${player.name} ran out of lives`);
+      console.log(`Player ran out of lives: ${player.name}`);
+    }
+
+    if (player.visited_checkpoints === board.checkpoints.length) {
+      await Games.updateAsync(game._id, {
+        $set: {
+          gamePhase: GameState.PHASE.ENDED,
+          winner: player.name,
+          stopped: new Date().getTime(),
+        },
+      });
+      messages.push(`Player ${player.name} won the game!!`);
+      console.log(`Player won: ${player.name}`);
+      await buildHighscores();
+      console.log('after build highscores');
+      ended = true;
+      break;
+    }
   }
 
-  async function noPlayerOnNextThreeAsync(x, y, dx, dy, game) {
-    return (
-      !(await game.isPlayerOnTileAsync(x + dx, y + dy)) &&
-      !(await game.isPlayerOnTileAsync(x + 2 * dx, y + 2 * dy)) &&
-      !(await game.isPlayerOnTileAsync(x + 3 * dx, y + 3 * dy))
-    );
+  if (livingPlayers === 0) {
+    messages.push('All robots are dead');
+    await Games.updateAsync(game._id, {
+      $set: {
+        gamePhase: GameState.PHASE.ENDED,
+        winner: 'Nobody',
+        stopped: new Date().getTime(),
+      },
+    });
+    ended = true;
+  } else if (livingPlayers === 1 && players.length > 1) {
+    messages.push(`Player ${lastManStanding.name} won the game!!`);
+    console.log(`Last player standing: ${lastManStanding.name}`);
+    await Games.updateAsync(game._id, {
+      $set: {
+        gamePhase: GameState.PHASE.ENDED,
+        winner: lastManStanding.name,
+        stopped: new Date().getTime(),
+      },
+    });
+    await buildHighscores();
+    ended = true;
   }
-})(GameState);
+  for (const msg of messages) {
+    await game.chatAsync(msg);
+  }
+  return ended;
+}
+
+// respawn phases
+async function nextRespawnPhaseAsync(gameId) {
+  const game = await Games.findOneAsync(gameId);
+  await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
+  switch (game.respawnPhase) {
+    case GameState.RESPAWN_PHASE.CHOOSE_POSITION:
+      await prepareChooseRespawnPosition(game);
+      break;
+    case GameState.RESPAWN_PHASE.CHOOSE_DIRECTION:
+      await prepareChooseRespawnDirection(game);
+      break;
+  }
+}
+
+async function prepareChooseRespawnPosition(game) {
+  const player = await Players.findOneAsync(game.respawnPlayerId);
+  const selectOptions = [];
+  const x = player.start.x;
+  const y = player.start.y;
+  const board = game.board();
+  // House rule: the base game says "adjacent space" (radius 1). If every
+  // adjacent square is a pit, off-board, or occupied, expand outward ring
+  // by ring until at least one valid square is found, capped at the board's
+  // longer dimension so the loop always terminates.
+  const maxR = Math.max(board.width, board.height);
+  for (let r = 1; r <= maxR && selectOptions.length === 0; ++r) {
+    for (let dx = -r; dx <= r; ++dx) {
+      for (let dy = -r; dy <= r; ++dy) {
+        // For r > 1, only consider the new ring (skip inner squares
+        // already evaluated at smaller radii).
+        if (r > 1 && Math.max(Math.abs(dx), Math.abs(dy)) < r) continue;
+        if (
+          board.onBoard(x + dx, y + dy) &&
+          !(await game.isPlayerOnTileAsync(x + dx, y + dy)) &&
+          board.getTile(x + dx, y + dy).type !== Tile.VOID
+        ) {
+          selectOptions.push({ x: x + dx, y: y + dy });
+        }
+      }
+    }
+  }
+  await Games.updateAsync(game._id, {
+    $set: {
+      selectOptions: selectOptions,
+      respawnUserId: player.userId,
+    },
+  });
+}
+
+async function prepareChooseRespawnDirection(game) {
+  const player = await Players.findOneAsync(game.respawnPlayerId);
+  const selectOptions = [];
+  const x = player.position.x;
+  const y = player.position.y;
+  let step;
+  if (player.start.x !== x && player.start.y !== y) {
+    for (let i = 0; i < 4; ++i) {
+      step = Board.to_step(i);
+      if (await noPlayerOnNextThreeAsync(x, y, step.x, step.y, game)) {
+        selectOptions.push({ x: x + step.x, y: y + step.y, dir: i });
+      }
+    }
+  } else {
+    for (let j = 0; j < 4; ++j) {
+      step = Board.to_step(j);
+      selectOptions.push({
+        x: x + step.x,
+        y: y + step.y,
+        dir: j,
+      });
+    }
+  }
+  await Games.updateAsync(game._id, {
+    $set: {
+      selectOptions: selectOptions,
+      respawnUserId: player.userId,
+    },
+  });
+}
+
+async function noPlayerOnNextThreeAsync(x, y, dx, dy, game) {
+  return (
+    !(await game.isPlayerOnTileAsync(x + dx, y + dy)) &&
+    !(await game.isPlayerOnTileAsync(x + 2 * dx, y + 2 * dy)) &&
+    !(await game.isPlayerOnTileAsync(x + 3 * dx, y + 3 * dy))
+  );
+}
+
+Object.assign(GameState, {
+  nextGamePhaseAsync,
+  nextPlayPhaseAsync,
+  nextRespawnPhaseAsync,
+});

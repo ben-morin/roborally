@@ -13,16 +13,16 @@ Template.applicationLayout.onRendered(function () {
 });
 
 Template.applicationLayout.helpers({
-  loggingIn: function () {
+  loggingIn() {
     const user = Meteor.user();
     return user != null;
   },
-  appHash: function () {
+  appHash() {
     const hash = Meteor.gitCommitHash;
     if (typeof hash !== 'undefined' && hash) return hash;
     else return '';
   },
-  appVersion: function () {
+  appVersion() {
     return Meteor.settings.public?.appVersion || 'development';
   },
 });

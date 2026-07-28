@@ -1,15 +1,13 @@
 import './users.html';
 
 Template.usersPill.helpers({
-  usersOnline: function () {
+  usersOnline() {
     if (!Meteor.userId()) return [];
     return Meteor.users.find();
   },
-  userPillClass: function () {
+  userPillClass() {
     return {
-      class:
-        'users-pill badge ' +
-        (this.status && this.status.idle ? 'text-bg-warning' : 'text-bg-success'),
+      class: `users-pill badge ${this.status?.idle ? 'text-bg-warning' : 'text-bg-success'}`,
     };
   },
 });

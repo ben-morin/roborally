@@ -1,11 +1,3 @@
-/*
- * decaffeinate suggestions:
- * DS101: Remove unnecessary use of Array.from
- * DS102: Remove unnecessary code created because of implicit returns
- * DS207: Consider shorter variations of null checks
- * DS208: Avoid top-level this
- * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
- */
 import { BoardBox } from '../both/board_box.js';
 import { CardLogic } from '../both/cardlogic.js';
 import { GameLogic } from '../both/gamelogic.js';
@@ -15,6 +7,11 @@ import { shuffle } from '../both/shuffle.js';
 import { Chat } from './chat.js';
 import { Deck } from './deck.js';
 import { Players } from './players.js';
+
+// [0, 1, ... count - 1] — the card ids of a full deck.
+function indices(count) {
+  return Array.from({ length: count }, (_, i) => i);
+}
 
 const game = {
   board() {
@@ -32,7 +29,7 @@ const game = {
   async isPlayerOnTileAsync(x, y) {
     let found = null;
     const players = await this.playersAsync();
-    for (const player of Array.from(players)) {
+    for (const player of players) {
       if (player.position.x === x && player.position.y === y) {
         found = player;
       }
@@ -46,9 +43,9 @@ const game = {
       submitted: new Date().getTime(),
     });
     if (debug_info != null) {
-      msg += ' ' + debug_info;
+      msg += ` ${debug_info}`;
     }
-    return console.log(msg);
+    console.log(msg);
   },
   async nextPlayPhaseAsync(phase) {
     if (phase != null) {
@@ -99,14 +96,11 @@ const game = {
   async newDeckAsync() {
     const cnt = await this.playerCntAsync();
     const deckSpec = cnt <= 8 ? CardLogic._8_deck : CardLogic._12_deck;
-    let deckSize = 0;
-    for (const cardTypeCnt of Array.from(deckSpec)) {
-      deckSize += cardTypeCnt;
-    }
+    const deckSize = deckSpec.reduce((total, cardTypeCnt) => total + cardTypeCnt, 0);
     return {
       gameId: this._id,
-      cards: __range__(0, deckSize - 1, true),
-      optionCards: shuffle(__range__(0, CardLogic._option_deck.length - 1, true)),
+      cards: indices(deckSize),
+      optionCards: shuffle(indices(CardLogic._option_deck.length)),
       discardedOptionCards: [],
     };
   },
@@ -155,23 +149,13 @@ export const Games = new Meteor.Collection('games', {
 });
 
 Games.allow({
-  insert(userId, doc) {
+  insert(_userId, _doc) {
     return false;
   },
-  update(userId, doc) {
+  update(_userId, _doc) {
     return false;
   },
   remove(userId, doc) {
     return ownsDocument(userId, doc);
   },
 });
-
-function __range__(left, right, inclusive) {
-  const range = [];
-  const ascending = left < right;
-  const end = !inclusive ? right : ascending ? right + 1 : right - 1;
-  for (let i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
-    range.push(i);
-  }
-  return range;
-}
