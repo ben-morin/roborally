@@ -10,6 +10,14 @@ ENV METEOR_ALLOW_SUPERUSER=1
 ENV BROWSERSLIST_IGNORE_OLD_DATA=1
 ENV METEOR_DISABLE_OPTIMISTIC_CACHING=1
 
+# Applies `"modern": { "watcher": false }` to this build only, without a Docker-specific
+# package.json. METEOR_MODERN is parsed as JSON and takes precedence over package.json's
+# `"meteor": { "modern": … }`, then merges over the same defaults — so the SWC transpiler and
+# minifier stay on and only the watcher changes, from the Parcel-based one to Meteor's legacy
+# fs.watch implementation. Keep this in sync if package.json ever sets other modern flags:
+# because the variable wins outright, any flag set there would be ignored during a Docker build.
+ENV METEOR_MODERN="{\"watcher\":false}"
+
 RUN curl https://install.meteor.com/\?release\=3.4 | sh
 
 WORKDIR /usr/app

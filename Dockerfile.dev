@@ -9,6 +9,12 @@ FROM node:22 AS build
 ENV METEOR_ALLOW_SUPERUSER=1
 ENV BROWSERSLIST_IGNORE_OLD_DATA=1
 
+# Same override as Dockerfile, where the mechanism is explained. It carries more weight here:
+# this container's entrypoint runs a live dev server against the bind-mounted source, so the
+# watcher runs continuously rather than for one build, and `watcher: false` puts file watching
+# on Meteor's legacy fs.watch implementation instead of the Parcel-based one.
+ENV METEOR_MODERN="{\"watcher\":false}"
+
 RUN curl https://install.meteor.com/\?release\=3.4 | sh
 
 WORKDIR /usr/app
