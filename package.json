@@ -15,7 +15,8 @@
   "scripts": {
     "start": "meteor run",
     "dev": "meteor run --settings settings-dev.json",
-    "test": "echo \"Error: no tests\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,json,html,scss,md}\"",
@@ -41,6 +42,7 @@
     "eslint-plugin-meteor": "^7.3.0",
     "globals": "^17.6.0",
     "prettier": "^3.8.3",
-    "sass-embedded": "1.79"
+    "sass-embedded": "1.79",
+    "vitest": "^4.1.10"
   }
 }
