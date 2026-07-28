@@ -19,7 +19,6 @@ const meteorGlobals = {
   check: 'readonly',
   Match: 'readonly',
   Roles: 'readonly',
-  SyncedCron: 'readonly',
   _: 'readonly',
   // Bootstrap 5 (loaded as a global via public/bootstrap.bundle.min.js)
   bootstrap: 'readonly',
@@ -35,9 +34,7 @@ module.exports = [
     ignores: [
       '.meteor/**',
       'node_modules/**',
-      // Local Meteor packages: `api.export` creates bindings that ESLint cannot model,
-      // so the globalizer packages look like assignments to undeclared variables.
-      'packages/**',
+      'packages/meteor-accounts-ui-roborally/**',
       'public/**',
       '_build/**',
     ],

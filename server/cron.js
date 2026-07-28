@@ -6,6 +6,7 @@ import '../both/logging.js';
 import '../both/cardMethods.js';
 import '../collections/users.js';
 
+import { SyncedCron } from 'meteor/quave:synced-cron';
 import { GameState } from '../both/gamestate.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';

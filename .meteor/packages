@@ -31,7 +31,5 @@ accounts-password@3.2.3
 ben-morin:accounts-ui-roborally
 
 ostrio:flow-router-extra
-ben-morin:flow-router-global
 
 quave:synced-cron@2.4.0
-ben-morin:synced-cron-global
