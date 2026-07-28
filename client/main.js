@@ -6,6 +6,15 @@
 // First, so the production `console.log` no-op is installed before anything else runs.
 import '../both/logging.js';
 
+// Bootstrap's JS. Imported for its side effects: each component registers a delegated
+// `data-bs-*` handler on `document` at module load, which is what drives the markup-only
+// widgets (the navbar `collapse`, the board-select `pill` tabs, `data-bs-dismiss` in the
+// modal). Importing the package index rather than individual `bootstrap/js/dist/*`
+// modules keeps every component available to future markup; bootstrap declares no
+// `sideEffects: false`, so nothing here gets tree-shaken away. Code that needs a
+// component's API imports it by name instead — see `helper/modalDialogs.js`.
+import 'bootstrap';
+
 // Stylesheets. `fourseven:scss` used to compile these eagerly and Meteor's own
 // file-ordering rules decided the cascade; under Rspack they are modules, and
 // this import order IS the cascade order. It reproduces what the pre-Rspack

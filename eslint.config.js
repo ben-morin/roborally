@@ -20,8 +20,6 @@ const meteorGlobals = {
   Match: 'readonly',
   Roles: 'readonly',
   _: 'readonly',
-  // Bootstrap 5 (loaded as a global via public/bootstrap.bundle.min.js)
-  bootstrap: 'readonly',
 };
 
 // There is deliberately no `projectGlobals` list any more. Every app symbol is an

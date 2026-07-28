@@ -24,6 +24,8 @@
   }
 */
 
+import { Modal } from 'bootstrap';
+
 export function modalAlert(bodyText) {
   if (bodyText) {
     document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
@@ -33,7 +35,7 @@ export function modalAlert(bodyText) {
   const cancelBtn = modalEl.querySelector('.cancel-button');
   cancelBtn.style.display = 'none';
 
-  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  const modal = Modal.getOrCreateInstance(modalEl);
 
   return new Promise((resolve) => {
     const onClick = (e) => {
@@ -65,7 +67,7 @@ export function modalConfirm(bodyText) {
   }
 
   const modalEl = document.getElementById('notification-modal');
-  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  const modal = Modal.getOrCreateInstance(modalEl);
   let confirmed = false;
 
   return new Promise((resolve) => {

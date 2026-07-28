@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.23.5",
+    "@popperjs/core": "^2.11.8",
     "@swc/helpers": "^0.5.17",
     "bootstrap": "^5.3.8",
     "jquery": "^4.0.0",
