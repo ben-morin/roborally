@@ -34,7 +34,7 @@
       "client": "client/main.js",
       "server": "server/cron.js"
     },
-    "modern": false
+    "modern": true
   },
   "devDependencies": {
     "eslint": "^10.3.0",
