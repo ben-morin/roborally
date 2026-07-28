@@ -1,2 +1,8 @@
+// `../variables.scss` must stay first: it overrides Bootstrap's own Sass
+// defaults ($primary, $danger, $grid-breakpoints, $container-max-widths), so
+// reordering these two lines silently reverts Bootstrap to its stock theme.
 @import '../variables.scss';
-@import '{}/node_modules/bootstrap/scss/bootstrap.scss';
+// Bare specifier, resolved out of node_modules by sass-loader. This was
+// `{}/node_modules/bootstrap/scss/bootstrap.scss` under fourseven:scss, whose
+// `{}/` prefix is not Sass and which sass-loader does not understand.
+@import 'bootstrap/scss/bootstrap.scss';

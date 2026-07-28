@@ -6,6 +6,23 @@
 // First, so the production `console.log` no-op is installed before anything else runs.
 import '../both/logging.js';
 
+// Stylesheets. `fourseven:scss` used to compile these eagerly and Meteor's own
+// file-ordering rules decided the cascade; under Rspack they are modules, and
+// this import order IS the cascade order. It reproduces what the pre-Rspack
+// build emitted, measured from the merged stylesheet rather than assumed:
+// lib/ and modules/ (subdirectories) came before the top-level files, which
+// came in alphabetical order. Bootstrap therefore stays first so that the app's
+// own rules keep winning — notably `base.scss`'s `body{font-size:14px}` and
+// `a{text-decoration:none}`, both of which override Bootstrap's `_reboot`.
+// `_variables.scss` is a partial imported by the others and is never compiled
+// on its own.
+import './stylesheets/lib/bootstrap.scss';
+import './stylesheets/modules/gamecard.scss';
+import './stylesheets/base.scss';
+import './stylesheets/components.scss';
+import './stylesheets/game.scss';
+import './stylesheets/layout.scss';
+
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
 import { Games } from '../collections/games.js';
 

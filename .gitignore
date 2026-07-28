@@ -9,3 +9,9 @@ npm-debug.log
 *.local.json
 *.local.md
 settings-dev.json
+
+# Meteor Modern-Tools build context directories
+_build
+*/build-assets
+*/build-chunks
+.rsdoctor
