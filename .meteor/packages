@@ -22,7 +22,6 @@ mizzao:user-status@2.0.0-rc.2
 mizzao:timesync@1.0.0-beta.2
 linto:fontawesome
 fourseven:scss
-coffeescript@2.7.0
 
 jquery@3.0.2
 email@3.1.2

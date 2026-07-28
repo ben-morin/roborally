@@ -1,7 +1,7 @@
 # roborally
 
 Browser-based [RoboRally](https://en.wikipedia.org/wiki/RoboRally) board game implementation built with [Meteor 3](https://www.meteor.com).
-It uses Blaze for templating, CoffeeScript for core game models, and plain JavaScript for game logic and server methods.
+It uses Blaze for templating and plain JavaScript for the game models, game logic and server methods.
 
 ## port
 

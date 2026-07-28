@@ -65,7 +65,6 @@ module.exports = [
       'packages/meteor-accounts-ui-roborally/**',
       'public/**',
       '_build/**',
-      '**/*.coffee',
     ],
   },
   {
