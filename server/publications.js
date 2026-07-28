@@ -1,3 +1,9 @@
+import { Cards } from '../collections/cards.js';
+import { Chat } from '../collections/chat.js';
+import { Games } from '../collections/games.js';
+import { Highscores } from '../collections/highscores.js';
+import { Players } from '../collections/players.js';
+
 Meteor.publish('games', function () {
   return Games.find({}, { limit: 10, sort: { submitted: -1 } });
 });

@@ -1,3 +1,15 @@
+import { BoardBox } from '../both/board_box.js';
+import { CardLogic } from '../both/cardlogic.js';
+import { GameLogic } from '../both/gamelogic.js';
+import { GameState } from '../both/gamestate.js';
+import { getUsername } from '../both/permissions.js';
+import { Cards } from '../collections/cards.js';
+import { Chat } from '../collections/chat.js';
+import { Deck } from '../collections/deck.js';
+import { Games } from '../collections/games.js';
+import { Players } from '../collections/players.js';
+import { buildHighscores } from './highscores.js';
+
 Meteor.methods({
   createGame: async function (postAttributes) {
     const user = await Meteor.userAsync();
