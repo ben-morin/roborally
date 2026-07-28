@@ -1,4 +1,10 @@
-GameState = {
+import { Board } from './board.js';
+import { CardLogic } from './cardlogic.js';
+import { GameLogic } from './gamelogic.js';
+import { shuffle } from './shuffle.js';
+import { Tile } from './tile.js';
+
+export const GameState = {
   PHASE: {
     IDLE: 'waiting',
     DEAL: 'deal',
@@ -22,6 +28,9 @@ GameState = {
     CHOOSE_DIRECTION: 'choose direction',
   },
 };
+
+// Milestone 2 shim — drop once every reader imports `GameState` directly.
+globalThis.GameState = GameState;
 
 (function (scope) {
   const _NEXT_PHASE_DELAY = 250;

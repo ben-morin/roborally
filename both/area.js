@@ -4,7 +4,7 @@
  * DS206: Consider reworking classes to avoid initClass
  * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
  */
-const Cls = (globalThis.Area = class Area {
+export class Area {
   static initClass() {
     this.start = {
       simple() {
@@ -843,5 +843,8 @@ const Cls = (globalThis.Area = class Area {
     this.addWall(11, 7, 'r');
     return this.addWall(11, 9, 'r');
   }
-});
-Cls.initClass();
+}
+Area.initClass();
+
+// Milestone 2 shim — drop once every reader imports `Area` directly.
+globalThis.Area = Area;

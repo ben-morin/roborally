@@ -5,7 +5,9 @@
  * DS207: Consider shorter variations of null checks
  * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
  */
-const Cls = (globalThis.BoardBox = class BoardBox {
+import { Board } from './board.js';
+
+export class BoardBox {
   static initClass() {
     this.CATALOG = [
       'default',
@@ -430,5 +432,8 @@ const Cls = (globalThis.BoardBox = class BoardBox {
     }
     return this.cache[this.dev_test_board_id];
   }
-});
-Cls.initClass();
+}
+BoardBox.initClass();
+
+// Milestone 2 shim — drop once every reader imports `BoardBox` directly.
+globalThis.BoardBox = BoardBox;

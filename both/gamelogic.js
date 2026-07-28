@@ -1,4 +1,7 @@
-GameLogic = {
+import { CardLogic } from './cardlogic.js';
+import { Tile } from './tile.js';
+
+export const GameLogic = {
   UP: 0,
   RIGHT: 1,
   DOWN: 2,
@@ -13,8 +16,11 @@ GameLogic = {
   MS_PER_TILE: 220,
 };
 
+// Milestone 2 shim — drop once every reader imports `GameLogic` directly.
+globalThis.GameLogic = GameLogic;
+
 (function (scope) {
-  _CARD_PLAY_DELAY = 1000;
+  const _CARD_PLAY_DELAY = 1000;
 
   scope.playCard = async function (player, card) {
     if (player.needsRespawn) return;
@@ -201,7 +207,7 @@ GameLogic = {
       shotDistance++;
       const victim = isPlayerOnTile(players, x, y);
       if (victim) {
-        debug_info =
+        const debug_info =
           'Shot: (' + player.position.x + ',' + player.position.y + ') -> (' + x + ',' + y + ')';
         await victim.chatAsync(
           'was shot by ' + player.name + ', Total damage: ' + (victim.damage + 1),

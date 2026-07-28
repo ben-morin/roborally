@@ -1,9 +1,9 @@
 // check that the userId specified owns the documents
-ownsDocument = function (userId, doc) {
+export const ownsDocument = function (userId, doc) {
   return doc && doc.userId === userId;
 };
 
-getUsername = function (user) {
+export const getUsername = function (user) {
   if (user.profile && user.profile.name) {
     return user.profile.name;
   } else {
@@ -13,3 +13,7 @@ getUsername = function (user) {
       .replace(/ +/g, ' ');
   }
 };
+
+// Milestone 2 shims — drop once every reader imports these directly.
+globalThis.ownsDocument = ownsDocument;
+globalThis.getUsername = getUsername;

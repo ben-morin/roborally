@@ -1,4 +1,4 @@
-shuffle = function (array) {
+export const shuffle = function (array) {
   const result = array.slice();
   for (let i = result.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -8,3 +8,6 @@ shuffle = function (array) {
   }
   return result;
 };
+
+// Milestone 2 shim — drop once every reader imports `shuffle` directly.
+globalThis.shuffle = shuffle;
