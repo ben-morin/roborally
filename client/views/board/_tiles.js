@@ -1,3 +1,6 @@
+import { Players } from '../../../collections/players.js';
+import './_tiles.html';
+
 Template._tiles.helpers({
   visited_checkpoint: function (number) {
     const player = Players.findOne({ userId: Meteor.userId() });

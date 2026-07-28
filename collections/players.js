@@ -242,6 +242,3 @@ Players.allow({
     return false;
   },
 });
-
-// Milestone 2 shim — drop once every reader imports `Players` directly.
-globalThis.Players = Players;

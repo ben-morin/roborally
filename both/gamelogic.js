@@ -20,9 +20,6 @@ export const GameLogic = {
   MS_PER_TILE: 220,
 };
 
-// Milestone 2 shim — drop once every reader imports `GameLogic` directly.
-globalThis.GameLogic = GameLogic;
-
 (function (scope) {
   const _CARD_PLAY_DELAY = 1000;
 

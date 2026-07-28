@@ -1,3 +1,11 @@
+import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { GameState } from '../../../both/gamestate.js';
+import { Chat } from '../../../collections/chat.js';
+import { Games } from '../../../collections/games.js';
+import { Players } from '../../../collections/players.js';
+import { modalAlert, modalConfirm } from '../../helper/modalDialogs.js';
+import './chat.html';
+
 Template.chat.helpers({
   messages: function () {
     return Chat.find();

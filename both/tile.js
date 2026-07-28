@@ -174,9 +174,6 @@ when ending here after a card has been played.`;
 }
 Tile.initClass();
 
-// Milestone 2 shim — drop once every reader imports `Tile` directly.
-globalThis.Tile = Tile;
-
 class Item {
   constructor(type, direction) {
     this.direction = direction;

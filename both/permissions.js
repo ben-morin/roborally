@@ -13,7 +13,3 @@ export const getUsername = function (user) {
       .replace(/ +/g, ' ');
   }
 };
-
-// Milestone 2 shims — drop once every reader imports these directly.
-globalThis.ownsDocument = ownsDocument;
-globalThis.getUsername = getUsername;

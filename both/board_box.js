@@ -434,6 +434,3 @@ export class BoardBox {
   }
 }
 BoardBox.initClass();
-
-// Milestone 2 shim — drop once every reader imports `BoardBox` directly.
-globalThis.BoardBox = BoardBox;

@@ -18,6 +18,3 @@ Deck.allow({
     return false;
   },
 });
-
-// Milestone 2 shim — drop once every reader imports `Deck` directly.
-globalThis.Deck = Deck;

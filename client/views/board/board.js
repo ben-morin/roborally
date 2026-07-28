@@ -1,3 +1,15 @@
+import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { CardLogic } from '../../../both/cardlogic.js';
+import { GameLogic } from '../../../both/gamelogic.js';
+import { GameState } from '../../../both/gamestate.js';
+import { Games } from '../../../collections/games.js';
+import { Players } from '../../../collections/players.js';
+import { modalAlert, modalConfirm } from '../../helper/modalDialogs.js';
+// board.html includes {{> _tiles}} and {{> loading}}.
+import '../layout/applicationLayout.js';
+import './_tiles.js';
+import './board.html';
+
 const tileSizeDep = new Tracker.Dependency();
 
 function getGame() {

@@ -1,3 +1,7 @@
+// applicationLayout.html includes {{> usersPill}}.
+import '../users/users.js';
+import './applicationLayout.html';
+
 Template.applicationLayout.onRendered(function () {
   // Closes the Responsive Menu on Menu Item Click
   document.querySelectorAll('.navbar-collapse ul li a').forEach((link) => {

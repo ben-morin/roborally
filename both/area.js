@@ -845,6 +845,3 @@ export class Area {
   }
 }
 Area.initClass();
-
-// Milestone 2 shim — drop once every reader imports `Area` directly.
-globalThis.Area = Area;

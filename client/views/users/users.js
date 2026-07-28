@@ -1,3 +1,5 @@
+import './users.html';
+
 Template.usersPill.helpers({
   usersOnline: function () {
     if (!Meteor.userId()) return [];

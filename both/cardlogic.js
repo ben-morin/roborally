@@ -369,6 +369,3 @@ export class CardLogic {
   }
 }
 CardLogic.initClass();
-
-// Milestone 2 shim — drop once every reader imports `CardLogic` directly.
-globalThis.CardLogic = CardLogic;

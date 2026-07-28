@@ -1,3 +1,13 @@
+import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { CardLogic } from '../../../both/cardlogic.js';
+import { GameLogic } from '../../../both/gamelogic.js';
+import { GameState } from '../../../both/gamestate.js';
+import { Cards } from '../../../collections/cards.js';
+import { Games } from '../../../collections/games.js';
+import { Players } from '../../../collections/players.js';
+import { modalAlert } from '../../helper/modalDialogs.js';
+import './cards.html';
+
 let timerHandle = null;
 const cardsState = new ReactiveDict();
 
@@ -308,7 +318,7 @@ Template.playerStatus.helpers({
     return addUIData(this.cards || [], false, this.lockedCnt(), false, this.game().playerCnt());
   },
   lives: function () {
-    l = [];
+    const l = [];
     for (let i = 0; i < 3; i++) {
       if (i < this.lives) {
         l.push('fa-heart');

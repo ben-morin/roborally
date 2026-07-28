@@ -424,6 +424,3 @@ export class Board {
   }
 }
 Board.initClass();
-
-// Milestone 2 shim — drop once every reader imports `Board` directly.
-globalThis.Board = Board;

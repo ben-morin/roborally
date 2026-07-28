@@ -24,7 +24,7 @@
   }
 */
 
-modalAlert = function (bodyText) {
+export const modalAlert = function (bodyText) {
   if (bodyText) {
     document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
   }
@@ -59,7 +59,7 @@ modalAlert = function (bodyText) {
   });
 };
 
-modalConfirm = function (bodyText) {
+export const modalConfirm = function (bodyText) {
   if (bodyText) {
     document.querySelector('#notification-modal .modal-body p').textContent = bodyText;
   }

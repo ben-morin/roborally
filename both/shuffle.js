@@ -8,6 +8,3 @@ export const shuffle = function (array) {
   }
   return result;
 };
-
-// Milestone 2 shim — drop once every reader imports `shuffle` directly.
-globalThis.shuffle = shuffle;

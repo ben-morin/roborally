@@ -1,3 +1,8 @@
+import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { Games } from '../../../collections/games.js';
+import { modalAlert } from '../../helper/modalDialogs.js';
+import './game_list.html';
+
 Template.gameList.helpers({
   openGames: function () {
     return Games.find({ winner: null, started: false }, { sort: { submitted: -1 } });

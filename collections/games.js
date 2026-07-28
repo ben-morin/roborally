@@ -154,9 +154,6 @@ export const Games = new Meteor.Collection('games', {
   },
 });
 
-// Milestone 2 shim — drop once every reader imports `Games` directly.
-globalThis.Games = Games;
-
 Games.allow({
   insert(userId, doc) {
     return false;

@@ -1,3 +1,11 @@
+import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { BoardBox } from '../../../both/board_box.js';
+import { Games } from '../../../collections/games.js';
+import { modalAlert } from '../../helper/modalDialogs.js';
+// board_select.html includes {{> thumbnail}}.
+import '../board/thumbnail.js';
+import './board_select.html';
+
 function getGame() {
   const id = FlowRouter.getParam('_id');
   if (id) {

@@ -25,44 +25,19 @@ const meteorGlobals = {
   bootstrap: 'readonly',
 };
 
-// Project-defined globals — declared `writable` because these names are
-// assigned at module top level (e.g. `GameLogic = {...}`) as well as read.
-const projectGlobals = {
-  // Collections (collections/)
-  Games: 'writable',
-  Players: 'writable',
-  Cards: 'writable',
-  Chat: 'writable',
-  Deck: 'writable',
-  Highscores: 'writable',
-  // Game model / logic (both/)
-  GameState: 'writable',
-  GameLogic: 'writable',
-  CardLogic: 'writable',
-  Board: 'writable',
-  BoardBox: 'writable',
-  Tile: 'writable',
-  Area: 'writable',
-  // Routing
-  FlowRouter: 'writable',
-  // Project helpers / shared utilities defined as implicit globals
-  modalAlert: 'writable',
-  modalConfirm: 'writable',
-  animatePosition: 'writable',
-  animateRotation: 'writable',
-  cssPosition: 'writable',
-  getUsername: 'writable',
-  ownsDocument: 'writable',
-  shuffle: 'writable',
-  buildHighscores: 'writable',
-};
+// There is deliberately no `projectGlobals` list any more. Every app symbol is an
+// ES module export as of Milestone 2, so `no-undef` below is what keeps it that way —
+// a reintroduced implicit global is now a lint error rather than something that only
+// shows up as a runtime `ReferenceError` under module strict mode.
 
 module.exports = [
   {
     ignores: [
       '.meteor/**',
       'node_modules/**',
-      'packages/meteor-accounts-ui-roborally/**',
+      // Local Meteor packages: `api.export` creates bindings that ESLint cannot model,
+      // so the globalizer packages look like assignments to undeclared variables.
+      'packages/**',
       'public/**',
       '_build/**',
     ],
@@ -75,10 +50,10 @@ module.exports = [
         ...globals.browser,
         ...globals.node,
         ...meteorGlobals,
-        ...projectGlobals,
       },
     },
     rules: {
+      'no-undef': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
       eqeqeq: ['warn', 'smart'],
