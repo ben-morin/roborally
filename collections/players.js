@@ -1,3 +1,11 @@
+import { CardLogic } from '../both/cardlogic.js';
+import { GameLogic } from '../both/gamelogic.js';
+import { Tile } from '../both/tile.js';
+import { Cards } from './cards.js';
+import { Chat } from './chat.js';
+import { Deck } from './deck.js';
+import { Games } from './games.js';
+
 const player = {
   game: function () {
     return Games.findOne(this.gameId);
@@ -216,7 +224,7 @@ const player = {
   },
 };
 
-Players = new Meteor.Collection('players', {
+export const Players = new Meteor.Collection('players', {
   transform: function (doc) {
     const newInstance = Object.create(player);
     return Object.assign(newInstance, doc);
@@ -234,3 +242,6 @@ Players.allow({
     return false;
   },
 });
+
+// Milestone 2 shim — drop once every reader imports `Players` directly.
+globalThis.Players = Players;

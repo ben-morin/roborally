@@ -6,6 +6,16 @@
  * DS208: Avoid top-level this
  * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
  */
+import { BoardBox } from '../both/board_box.js';
+import { CardLogic } from '../both/cardlogic.js';
+import { GameLogic } from '../both/gamelogic.js';
+import { GameState } from '../both/gamestate.js';
+import { ownsDocument } from '../both/permissions.js';
+import { shuffle } from '../both/shuffle.js';
+import { Chat } from './chat.js';
+import { Deck } from './deck.js';
+import { Players } from './players.js';
+
 const game = {
   board() {
     return BoardBox.getBoard(this.boardId);
@@ -137,12 +147,15 @@ const game = {
   },
 };
 
-globalThis.Games = new Meteor.Collection('games', {
+export const Games = new Meteor.Collection('games', {
   transform(doc) {
     const newInstance = Object.create(game);
     return Object.assign(newInstance, doc);
   },
 });
+
+// Milestone 2 shim — drop once every reader imports `Games` directly.
+globalThis.Games = Games;
 
 Games.allow({
   insert(userId, doc) {

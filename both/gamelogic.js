@@ -1,3 +1,7 @@
+import { Cards } from '../collections/cards.js';
+import { Deck } from '../collections/deck.js';
+import { Games } from '../collections/games.js';
+import { Players } from '../collections/players.js';
 import { CardLogic } from './cardlogic.js';
 import { Tile } from './tile.js';
 

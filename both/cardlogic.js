@@ -7,6 +7,10 @@
  * DS207: Consider shorter variations of null checks
  * Full docs: https://github.com/decaffeinate/decaffeinate/blob/main/docs/suggestions.md
  */
+import { Cards } from '../collections/cards.js';
+import { Deck } from '../collections/deck.js';
+import { Games } from '../collections/games.js';
+import { Players } from '../collections/players.js';
 import { GameLogic } from './gamelogic.js';
 import { GameState } from './gamestate.js';
 

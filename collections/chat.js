@@ -1,4 +1,7 @@
-Chat = new Meteor.Collection('chat');
+export const Chat = new Meteor.Collection('chat');
+
+// Milestone 2 shim — drop once every reader imports `Chat` directly.
+globalThis.Chat = Chat;
 
 Chat.allow({
   insert: function (userId, doc) {

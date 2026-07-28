@@ -1,4 +1,7 @@
-Cards = new Meteor.Collection('cards');
+export const Cards = new Meteor.Collection('cards');
+
+// Milestone 2 shim — drop once every reader imports `Cards` directly.
+globalThis.Cards = Cards;
 
 Cards.allow({
   insert: function (userId, doc) {

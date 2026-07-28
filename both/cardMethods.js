@@ -1,3 +1,5 @@
+import { Players } from '../collections/players.js';
+
 Meteor.methods({
   selectCard: async function (gameId, card, index) {
     const player = await Players.findOneAsync({ gameId: gameId, userId: Meteor.userId() });
