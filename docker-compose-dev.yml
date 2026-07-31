@@ -5,6 +5,9 @@ services:
     container_name: mongo
     ports:
       - 27017:27017
+    volumes:
+      - dev-mongo-data:/data/db
+      - dev-mongo-configdb:/data/configdb
     networks:
       - rrnet
 
@@ -17,24 +20,27 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - 3000:3000
+      - 8080:8080
     depends_on:
       - mongo
     environment:
+      - SETTINGS_FILE=${SETTINGS_FILE:-settings-dev.json}
       - MONGO_URL=mongodb://mongo:27017/roborally
       - ROOT_URL=http://localhost:3000
 #      - MAIL_URL='smtp://user:password@mailhost:port/'
-      - >
-        METEOR_SETTINGS={
-          "ALLOWED_EMAILS": [],
-          "ALLOWED_DOMAINS": [],
-          "VERIFY_EMAILS": false,
-          "MAIL_FROM": ""
-        }
     volumes:
       - .:/usr/app
+      - dev-node-modules:/usr/app/node_modules
+      - dev-meteor-local:/usr/app/.meteor/local
     networks:
       - rrnet
-      
+
+volumes:
+  dev-mongo-data:
+  dev-mongo-configdb:
+  dev-node-modules:
+  dev-meteor-local:
+
 networks:
   rrnet:
     driver: bridge

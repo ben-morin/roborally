@@ -14,7 +14,7 @@ confusion with the original Meteor 1 and 2 versions.
 
 Goals of this project:
 
-- use the latest Meteor release (3.4.1 as of May 2026)
+- use the latest Meteor release (3.5 as of July 2026)
 - modernize the codebase and update dependencies (done, except the Blaze/Bootstrap UI layer)
 - stabilize gameplay
 - run in docker
@@ -33,6 +33,7 @@ services:
       - 27017:27017
     volumes:
       - mongo-data:/data/db
+      - mongo-configdb:/data/configdb
     networks:
       - rrnet
 
@@ -59,15 +60,19 @@ services:
       - rrnet
 volumes:
   mongo-data:
+  mongo-configdb:
 
 networks:
   rrnet:
     driver: bridge
 ```
 
+The image is a production Meteor bundle on `node:24-alpine`, so it reads its settings from
+`METEOR_SETTINGS` as above. `docker-compose.yml` in the repo is the same file.
+
 ## development
 
-Requires Meteor 3.4. `meteor npm` and `meteor node` run npm and node from Meteor's own toolchain,
+Requires Meteor 3.5. `meteor npm` and `meteor node` run npm and node from Meteor's own toolchain,
 which is what the scripts below expect.
 
 ```
@@ -75,18 +80,49 @@ meteor npm install
 meteor run
 ```
 
-The dev server listens on `http://localhost:3000` and starts its own MongoDB. Rspack runs a second
-HMR server on `:8080` alongside it. Blaze templates do not hot-patch under Rspack — every edit
-triggers a full page reload instead, normally visible in well under a second.
+The dev server listens on `http://localhost:3000` and starts its own MongoDB, as a single-node
+replica set on `:3001`. Rspack runs a second HMR server on `:8080` alongside it. Blaze templates do
+not hot-patch under Rspack — every edit triggers a full page reload instead, normally visible in
+well under a second.
+
+For settings, copy `settings-dev.json.example` to `settings-dev.json` (gitignored) and run
+`meteor npm run dev`, which is `meteor run --settings settings-dev.json`.
 
 To develop against the Docker image instead, which mounts the source for live reload:
 
 ```
-docker compose -f docker-compose-dev.yml up
+docker compose -f docker-compose-dev.yml up --build
 ```
+
+That image is `node:24` with Meteor 3.5 installed, listening on 3000 and 8080. Its entrypoint passes
+`--settings $SETTINGS_FILE` (default `settings-dev.json`) to `meteor run` when the file exists, so
+settings stay reactive there too; an inline `METEOR_SETTINGS` still wins if you set one.
+
+`node_modules` and `.meteor/local` live in named volumes rather than in the bind mount, because
+their native bindings and toolchain symlinks are platform-specific and the host's macOS copies do
+not work inside the container. Docker only seeds a volume from the image while the volume is empty,
+so after changing `package.json` the volumes have to be dropped:
+
+```
+docker compose -f docker-compose-dev.yml down -v
+docker compose -f docker-compose-dev.yml up --build
+```
+
+`down -v` takes the dev mongo volumes with it. To keep the database, drop just the two:
+`docker volume rm roborally_dev-node-modules roborally_dev-meteor-local`.
 
 Wipe the build artifacts with `rm -rf _build .meteor/local`, or add `node_modules package-lock.json`
 for a full clean.
+
+### mongo reactivity
+
+`server/mongoReactivity.js` pins the observe-driver order to `oplog > polling`, overriding the
+Change Streams default that Meteor 3.5 introduced. The Change Streams driver does not retire the DDP
+write fence when a write targets a collection carrying a filtered observe the written document does
+not match, which hangs account signup on the login spinner forever. Only absent values are filled
+in, so `--settings`, `METEOR_SETTINGS` and `METEOR_REACTIVITY_ORDER` still win. The startup log
+reports the configured order and the driver behind each live observe. Delete the file once the
+upstream bug is fixed.
 
 ### tests
 

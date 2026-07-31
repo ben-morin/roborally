@@ -1,27 +1,27 @@
 ########################
-### Builder
+### Dev container
 ########################
 
-FROM node:22 AS build
+FROM node:24 AS build
 
 # allows meteor to build in docker VM with 2GB runtime memory
 # ENV TOOL_NODE_FLAGS "--max-old-space-size=1920 --optimize_for_size --gc-interval=100"
 ENV METEOR_ALLOW_SUPERUSER=1
 ENV BROWSERSLIST_IGNORE_OLD_DATA=1
 
-# Same override as Dockerfile, where the mechanism is explained. It carries more weight here:
-# this container's entrypoint runs a live dev server against the bind-mounted source, so the
-# watcher runs continuously rather than for one build, and `watcher: false` puts file watching
-# on Meteor's legacy fs.watch implementation instead of the Parcel-based one.
-ENV METEOR_MODERN="{\"watcher\":false}"
-
-RUN curl https://install.meteor.com/\?release\=3.4 | sh
+ENV CXXFLAGS=-std=gnu++17
+RUN curl https://install.meteor.com/\?release\=3.5 | sh
 
 WORKDIR /usr/app
 
+COPY package.json package-lock.json ./
+RUN meteor npm ci || meteor npm install
+
 ENV PORT=3000
 EXPOSE $PORT
+# Rspack dev server (@meteorjs/rspack defaults to 8080)
+EXPOSE 8080
 
 ENTRYPOINT ["/usr/app/entrypoint.sh"]
-CMD [ "meteor", "npm", "run", "dev" ]
+CMD [ "meteor", "run" ]
 

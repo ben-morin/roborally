@@ -4,9 +4,10 @@ services:
     image: mongo:7.0
     container_name: mongo
     ports:
-      - "27017:27017"
+      - 27017:27017
     volumes:
       - mongo-data:/data/db
+      - mongo-configdb:/data/configdb
     networks:
       - rrnet
 
@@ -34,6 +35,7 @@ services:
 
 volumes:
   mongo-data:
+  mongo-configdb:
 
 networks:
   rrnet:

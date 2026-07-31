@@ -2,6 +2,7 @@
 // the server. The side-effect imports are the files nothing else imports; `logging.js`
 // comes first so it can silence `console.log` in production before anything runs. Every
 // other model and collection loads transitively through these.
+import { checkReactivity } from './mongoReactivity.js';
 import '../both/logging.js';
 import '../both/cardMethods.js';
 import '../collections/users.js';
@@ -13,6 +14,7 @@ import { Players } from '../collections/players.js';
 import { buildHighscores } from './highscores.js';
 import './methods.js';
 import './publications.js';
+
 
 Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};
@@ -151,6 +153,9 @@ Meteor.startup(() => {
 
   console.info('Meteor.startup: cron');
   SyncedCron.start();
+  
+  checkReactivity();
+
 });
 
 async function delay(ms) {
