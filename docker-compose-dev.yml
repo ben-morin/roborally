@@ -4,7 +4,7 @@ services:
     image: mongo:7.0
     container_name: mongo
     ports:
-      - 27017:27017
+      - "27017:27017"
     volumes:
       - dev-mongo-data:/data/db
       - dev-mongo-configdb:/data/configdb
@@ -19,15 +19,15 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - 3000:3000
-      - 8080:8080
+      - "3000:3000"
+      - "8080:8080"
     depends_on:
       - mongo
     environment:
       - SETTINGS_FILE=${SETTINGS_FILE:-settings-dev.json}
       - MONGO_URL=mongodb://mongo:27017/roborally
       - ROOT_URL=http://localhost:3000
-#      - MAIL_URL='smtp://user:password@mailhost:port/'
+#      - MAIL_URL=smtp://user:password@mailhost:port
     volumes:
       - .:/usr/app
       - dev-node-modules:/usr/app/node_modules

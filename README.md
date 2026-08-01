@@ -42,13 +42,13 @@ services:
     image: yieldtoben/roborally:latest
     container_name: roborally
     ports:
-      - 3000:3000
+      - "3000:3000"
     depends_on:
       - mongo
     environment:
       - MONGO_URL=mongodb://mongo:27017/roborally
       - ROOT_URL=http://localhost:3000
-#      - MAIL_URL='smtp://user:password@mailhost:port/'
+#      - MAIL_URL=smtp://user:password@mailhost:port
       - >
         METEOR_SETTINGS={
           "ALLOWED_EMAILS": [],
@@ -58,6 +58,7 @@ services:
         }
     networks:
       - rrnet
+
 volumes:
   mongo-data:
   mongo-configdb:

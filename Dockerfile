@@ -6,6 +6,7 @@ FROM node:24 AS build
 
 # allows meteor to build in docker VM with 2GB runtime memory
 # ENV TOOL_NODE_FLAGS "--max-old-space-size=1920 --optimize_for_size --gc-interval=100"
+
 ENV METEOR_ALLOW_SUPERUSER=1
 ENV BROWSERSLIST_IGNORE_OLD_DATA=1
 ENV METEOR_DISABLE_OPTIMISTIC_CACHING=1
@@ -20,7 +21,7 @@ COPY . /usr/app
 RUN meteor npm ci || meteor npm install
 
 RUN mkdir /tmp/app && meteor build --allow-superuser --directory /tmp/app
-RUN node -p "require('/usr/app/package.json').version" > /tmp/app/bundle/APP_VERSION
+RUN meteor node -p "require('/usr/app/package.json').version" > /tmp/app/bundle/APP_VERSION
 RUN meteor npm prune --production
 RUN cd /tmp/app/bundle/programs/server && meteor npm install --production
 
