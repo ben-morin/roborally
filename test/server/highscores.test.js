@@ -52,11 +52,11 @@ describe('mostWon', () => {
     expect(await listOf('mostWon')).toHaveLength(10);
   });
 
-  // Characterization, not endorsement. `{winner: {$ne: 'Nobody'}}` also matches games
-  // that have no `winner` field at all — every game still in progress — so they all
-  // group under _id: null and land in the list as a nameless entry. With more unfinished
-  // games than any player has wins, that entry takes rank 1. See the review summary.
-  it('groups every unfinished game into a single nameless entry', async () => {
+  // Regression guard. `{$ne: 'Nobody'}` alone also matches games with no `winner` field —
+  // every game still in progress — grouping them under a single `_id: null` bucket that
+  // the ranking page rendered as a blank name. With more games in progress than any
+  // player has wins, it took rank 1. The `$exists: true` in the $match is what stops it.
+  it('ignores games that are still in progress', async () => {
     await Games.insertAsync({ winner: 'ann', started: true });
     for (let i = 0; i < 3; i++) {
       await Games.insertAsync({ name: `in progress ${i}`, started: true });
@@ -64,10 +64,7 @@ describe('mostWon', () => {
 
     await buildHighscores();
 
-    expect(await listOf('mostWon')).toEqual([
-      { name: null, value: 3, rank: 1 },
-      { name: 'ann', value: 1, rank: 2 },
-    ]);
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
   });
 });
 

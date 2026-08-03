@@ -316,15 +316,15 @@ describe('selectBoard', () => {
     expect(await messages(gameId)).toEqual(['Ben selected board checkmate']);
   });
 
-  // Characterization, not endorsement: selectBoard never checks the login, so an
-  // anonymous call gets as far as writing the new board before getUsername(undefined)
-  // throws a bare TypeError instead of a 401. See the note in the review summary.
-  it('writes the board and then throws a TypeError for an anonymous caller', async () => {
+  // Regression guard. selectBoard used to skip the login check every other method makes,
+  // so an anonymous call got as far as writing the new board before getUsername(undefined)
+  // threw a bare TypeError — a write, then the wrong error, from an unauthenticated caller.
+  it('refuses an anonymous caller without touching the game', async () => {
     logout();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('selectBoard', 'checkmate', gameId)).rejects.toThrow(TypeError);
-    expect((await Games.findOneAsync(gameId)).boardId).toBe(BoardBox.getBoardId('checkmate'));
+    await expect(call('selectBoard', 'checkmate', gameId)).rejects.toMatchObject({ error: 401 });
+    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
   });
 });
 

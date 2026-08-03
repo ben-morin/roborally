@@ -8,7 +8,10 @@ export async function buildHighscores() {
 
   const mostWon = await Games.rawCollection()
     .aggregate([
-      { $match: { winner: { $ne: 'Nobody' } } },
+      // `$exists` is load-bearing: on its own, `{$ne: 'Nobody'}` also matches every game
+      // that has no `winner` yet, which would group all games in progress under a single
+      // `_id: null` bucket and rank that nameless entry alongside real winners.
+      { $match: { winner: { $exists: true, $ne: 'Nobody' } } },
       { $group: { _id: '$winner', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },

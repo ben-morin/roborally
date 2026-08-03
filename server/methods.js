@@ -158,6 +158,7 @@ Meteor.methods({
 
   async selectBoard(boardName, gameId) {
     const user = await Meteor.userAsync();
+    if (!user) throw new Meteor.Error(401, 'You need to login to select a board');
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(401, 'Game id not found!');
 
