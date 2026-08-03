@@ -20,6 +20,7 @@ Meteor.settings = Meteor.settings || {};
 Meteor.settings.packages = Meteor.settings.packages || {};
 Meteor.settings.packages.mongo = Meteor.settings.packages.mongo || {};
 Meteor.settings.packages.mongo.reactivity = Meteor.settings.packages.mongo.reactivity || [
+  'changeStreams',
   'oplog',
   'polling',
 ];
