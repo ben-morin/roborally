@@ -2,10 +2,12 @@
 // in-memory aggregate (see the $group/$sum support in test/setup.js) rather than mocking
 // rawCollection, so the pipeline itself — match, group, sort, limit — is what is under
 // test.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
-import { resetFakeCollections } from '../setup.js';
+import { loginAs, resetFakeCollections } from '../setup.js';
+import { runCronJob } from '../stubs/synced-cron.js';
 import { buildHighscores } from '../../server/highscores.js';
+import { GameState } from '../../both/gamestate.js';
 import { Games } from '../../collections/games.js';
 import { Highscores } from '../../collections/highscores.js';
 import { Players } from '../../collections/players.js';
@@ -16,6 +18,7 @@ const listOf = async (type) =>
     .map(({ name, value, rank }) => ({ name, value, rank }));
 
 beforeEach(() => resetFakeCollections());
+afterEach(() => vi.useRealTimers());
 
 describe('mostWon', () => {
   it('counts wins per player and ranks them, highest first', async () => {
@@ -61,6 +64,85 @@ describe('mostWon', () => {
     for (let i = 0; i < 3; i++) {
       await Games.insertAsync({ name: `in progress ${i}`, started: true });
     }
+
+    await buildHighscores();
+
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
+  });
+});
+
+// The three ways a game can end with nobody winning. These drive the real end-of-game
+// code paths rather than writing `winner` by hand, so the exclusion stays anchored to how
+// games actually finish: if a path ever stops using the 'Nobody' sentinel that
+// server/highscores.js filters on, these fail rather than silently crediting a win.
+describe('games nobody won', () => {
+  it('excludes a game where every robot died', async () => {
+    const gameId = await Games.insertAsync({
+      boardId: 0,
+      started: true,
+      gamePhase: GameState.PHASE.PLAY,
+      playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
+      playPhaseCount: 1,
+      waitingForRespawn: [],
+      cardsToPlay: [],
+    });
+    for (const name of ['ann', 'bob']) {
+      await Players.insertAsync({
+        gameId,
+        userId: name,
+        name,
+        lives: 0,
+        position: { x: 0, y: 0 },
+        visited_checkpoints: 0,
+        needsRespawn: false,
+      });
+    }
+
+    vi.useFakeTimers();
+    const running = GameState.nextPlayPhaseAsync(gameId);
+    await vi.advanceTimersByTimeAsync(1000);
+    await running;
+
+    expect((await Games.findOneAsync(gameId)).winner).toBe('Nobody');
+    await buildHighscores();
+    expect(await listOf('mostWon')).toEqual([]);
+  });
+
+  it('excludes a game whose last player left', async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({
+      boardId: 0,
+      started: true,
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
+    await Players.insertAsync({ gameId, userId: user._id, name: 'ann' });
+
+    await Meteor.callAsync('leaveGame', gameId);
+
+    expect((await Games.findOneAsync(gameId)).winner).toBe('Nobody');
+    await buildHighscores();
+    expect(await listOf('mostWon')).toEqual([]);
+  });
+
+  it('excludes a game everyone disconnected from', async () => {
+    await Meteor.users.insertAsync({ _id: 'ann', status: { online: false } });
+    const gameId = await Games.insertAsync({ started: true, min_player: 2 });
+    await Players.insertAsync({ gameId, userId: 'ann', name: 'ann' });
+
+    vi.useFakeTimers();
+    const running = runCronJob('Clean up abandoned games');
+    await vi.advanceTimersByTimeAsync(10_000);
+    await running;
+
+    expect((await Games.findOneAsync(gameId)).winner).toBe('Nobody');
+    await buildHighscores();
+    expect(await listOf('mostWon')).toEqual([]);
+  });
+
+  it('still counts a real win alongside games nobody won', async () => {
+    await Games.insertAsync({ winner: 'ann', started: true });
+    await Games.insertAsync({ winner: 'Nobody', started: true });
+    await Games.insertAsync({ name: 'in progress', started: true });
 
     await buildHighscores();
 
