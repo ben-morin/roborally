@@ -41,5 +41,12 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./test/setup.js', './test/clientSetup.js'],
     include: ['test/**/*.test.js'],
+    // A passing test should say nothing. `both/logging.js` silences only console.log in
+    // production, so console.error stays live in the harness (see test/setup.js) — and
+    // several tests legitimately drive code that calls it, e.g. the exhausted-hand branch
+    // in both/cardlogic.js. Suppressing that for green tests keeps the run readable;
+    // 'passed-only' still prints everything a *failing* test logged, which is the moment
+    // the output is actually worth reading.
+    silent: 'passed-only',
   },
 });

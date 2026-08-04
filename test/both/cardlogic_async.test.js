@@ -134,6 +134,12 @@ describe('submitCardsAsync', () => {
   });
 
   it('replaces an illegal (not-in-hand) card with a random one from the remaining hand, and force-fills unsubmitted slots (characterization)', async () => {
+    // The exhausted-hand branch is a genuine "shouldn't happen" — a full hand always
+    // covers the unlocked slots exactly — so it reports through console.error, which
+    // both/logging.js leaves live in production. Assert on it rather than letting it
+    // print: it is the only signal this path produces, and it belongs in the test
+    // rather than in the suite's output.
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const game = await insertGame();
     const player = await insertPlayer(game._id, { damage: 0, cards: [0, 0, 0, 0, 0] });
     const other = await insertPlayer(game._id);
@@ -145,6 +151,14 @@ describe('submitCardsAsync', () => {
     });
 
     await CardLogic.submitCardsAsync(player);
+
+    // One card in hand fills slot 0, leaving nothing for slots 1-4.
+    expect(errors.mock.calls.map(([msg]) => msg)).toEqual([
+      'No available cards to fill slot 1!',
+      'No available cards to fill slot 2!',
+      'No available cards to fill slot 3!',
+      'No available cards to fill slot 4!',
+    ]);
 
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
     // The only hand card (42) is deterministically picked to replace slot 0 — with a
@@ -207,6 +221,42 @@ describe('submitCardsAsync', () => {
     // last's forced submit makes readyPlayerCnt === playerCnt, so the phase advances.
     expect(nextPhase).toHaveBeenCalledWith(game._id);
 
+    vi.useRealTimers();
+  });
+
+  it('contains a failure inside the auto-submit timer instead of rejecting, and names the game', async () => {
+    vi.useFakeTimers();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const game = await insertGame();
+    const first = await insertPlayer(game._id, { name: 'first' });
+    const last = await insertPlayer(game._id, { name: 'last' });
+    // A legal submission: every chosen card is actually in hand, so this half of the
+    // test contributes no console.error of its own.
+    await insertCards(first._id, game._id, {
+      handCards: [1, 2, 3, 4, 5],
+      chosenCards: [1, 2, 3, 4, 5],
+    });
+    await insertCards(last._id, game._id, { handCards: [], chosenCards: [-1, -1, -1, -1, -1] });
+
+    await CardLogic.submitCardsAsync(first); // arms the 30s timer
+
+    // The game disappears before the timer fires. Not hypothetical: the lobby's delete
+    // button (client/views/game/game_page.js) and the unstarted-game cron both remove
+    // games outright, and the pending setTimeout has no idea.
+    await Games.removeAsync(game._id);
+
+    // The callback is fire-and-forget, so the only thing standing between this and an
+    // unhandled rejection is the .catch().
+    await expect(
+      vi.advanceTimersByTimeAsync(GameLogic.TIMER * 1000 + 2500 + 10)
+    ).resolves.not.toThrow();
+
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(errors.mock.calls[0][0]).toBe(`autoSubmitIfTimedOut failed for game ${game._id}`);
+    expect(errors.mock.calls[0][1]).toBeInstanceOf(TypeError);
+
+    // Characterization of the cost: `last` never got force-submitted, so a game that
+    // still existed would sit in the program phase with nothing left to advance it.
     vi.useRealTimers();
   });
 

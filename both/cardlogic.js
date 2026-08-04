@@ -289,8 +289,13 @@ export class CardLogic {
       await Games.updateAsync(player.gameId, { $set: { timer: 1, timerStartedAt: timerStart } });
       return Meteor.setTimeout(
         Meteor.bindEnvironment(() =>
+          // Fire-and-forget, so the catch is load-bearing: without it a rejection here
+          // becomes an unhandled promise rejection. It cannot recover, though — if this
+          // throws, the last player is never force-submitted and the game sits in the
+          // program phase indefinitely. The gameId is in the message because this log
+          // line is the only trace such a game leaves.
           autoSubmitIfTimedOut(player.gameId, timerStart).catch((err) =>
-            console.error('autoSubmitIfTimedOut error', err)
+            console.error(`autoSubmitIfTimedOut failed for game ${player.gameId}`, err)
           )
         ),
         GameLogic.TIMER * 1000

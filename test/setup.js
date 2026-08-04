@@ -520,8 +520,16 @@ globalThis.Random = { id: () => 'rnd' + Math.random().toString(36).slice(2, 9) }
 // jobs narrate every step. both/logging.js only silences this in production and isn't
 // part of the import graph under test, so silence it here instead of flipping
 // Meteor.isProduction (which would change what the code under test does).
-// console.error stays live: nothing under test writes to it, so anything that shows up
-// there is a genuine surprise.
+// console.error stays live, and deliberately so. both/logging.js silences only
+// console.log in production, which makes warn/error the channels that actually reach a
+// production log — so error is a real signal, not decoration. Two sites use it
+// (both/cardlogic.js: the exhausted-hand branch and the auto-submit timer's catch), and
+// several tests legitimately drive them.
+//
+// Keeping the run quiet is the reporter's job, not this file's: `silent: 'passed-only'`
+// in vitest.config.mjs drops console output from passing tests and keeps every line a
+// failing test produced. Silencing console.error here instead would throw that diagnostic
+// away exactly when it is needed.
 console.log = () => {};
 console.info = () => {};
 console.debug = () => {};
