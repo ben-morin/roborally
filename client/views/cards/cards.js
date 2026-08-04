@@ -5,6 +5,8 @@ import { GameState } from '../../../both/gamestate.js';
 import { Cards } from '../../../collections/cards.js';
 import { Games } from '../../../collections/games.js';
 import { Players } from '../../../collections/players.js';
+import { addUIData } from '../../lib/cardUI.js';
+import { firstEmptySlot, nextEmptySlot } from '../../lib/slots.js';
 import { modalAlert } from '../../helper/modalDialogs.js';
 import './cards.html';
 
@@ -462,24 +464,11 @@ function isEmptySlot(index) {
 }
 
 function getFirstEmptySlotIndex() {
-  const chosen = getChosenCards();
-  for (let i = 0; i < GameLogic.CARD_SLOTS; i++) {
-    if (chosen[i] === CardLogic.EMPTY) {
-      return i;
-    }
-  }
-  return 0;
+  return firstEmptySlot(getChosenCards());
 }
 
 function getNextEmptySlotIndex(currentSlot) {
-  const chosen = getChosenCards();
-  for (let j = currentSlot + 1; j < currentSlot + GameLogic.CARD_SLOTS; j++) {
-    const k = j % GameLogic.CARD_SLOTS;
-    if (chosen[k] === CardLogic.EMPTY) {
-      return k;
-    }
-  }
-  return 0;
+  return nextEmptySlot(getChosenCards(), currentSlot);
 }
 
 function allowSubmit() {
@@ -498,52 +487,4 @@ function submitCards(game) {
       modalAlert(error.reason);
     }
   );
-}
-
-function addUIData(cards, available, locked, selectable, numberOfPlayers, chosenIds) {
-  const uiCards = [];
-  cards.forEach((card, i) => {
-    const cardProp = {
-      cardId: card,
-    };
-    if (selectable) {
-      cardProp.slot = i;
-    }
-    switch (card) {
-      case CardLogic.RANDOM:
-        cardProp.type = 'random';
-        break;
-      case CardLogic.DAMAGE:
-        cardProp.type = 'dmg';
-        break;
-      case CardLogic.COVERED:
-        cardProp.type = 'covered';
-        break;
-      case CardLogic.EMPTY:
-        cardProp.type = 'empty';
-        break;
-      default:
-        if (card !== null && typeof card !== 'undefined') {
-          const ct = CardLogic.cardType(card, numberOfPlayers);
-          if (ct) {
-            cardProp.class = available ? 'available' : 'played';
-            cardProp.priority = CardLogic.priority(card);
-            if (locked && i >= GameLogic.CARD_SLOTS - locked) {
-              cardProp.class += ' locked';
-              cardProp.locked = true;
-            }
-            if (available && chosenIds && chosenIds.has(card)) {
-              cardProp.class += ' chosen';
-              cardProp.chosen = true;
-            }
-            cardProp.type = ct.name;
-          } else {
-            console.warn('Unknown card type for card:', card);
-            cardProp.type = 'empty';
-          }
-        }
-    }
-    uiCards.push(cardProp);
-  });
-  return uiCards;
 }

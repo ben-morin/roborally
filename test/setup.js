@@ -79,9 +79,11 @@ function matchesSelector(doc, selector) {
           case '$lte':
             return some((v) => v <= opVal);
           case '$ne':
-            // Mongo semantics: a missing field also satisfies $ne. server/highscores.js
-            // depends on this (see its test) — do not "fix" it to require presence.
-            return !some((v) => v === opVal);
+            // $ne is the negation of $eq, so it inherits $eq's treatment of null:
+            // `{f: {$ne: 'x'}}` matches a document missing `f`, but `{f: {$ne: null}}`
+            // does *not* — "not null" also means "present". server/highscores.js relies
+            // on the first (see its test) and client/views/chat/chat.js on the second.
+            return opVal === null ? !some((v) => v == null) : !some((v) => v === opVal);
           case '$exists':
             return some((v) => v !== undefined) === opVal;
           default:
@@ -89,6 +91,9 @@ function matchesSelector(doc, selector) {
         }
       });
     }
+    // Mongo treats `{field: null}` as "null or missing", which is how
+    // client/views/game/game_list.js selects the games that have no winner yet.
+    if (cond === null) return some((v) => v == null);
     return some((v) => v === cond);
   });
 }
@@ -308,9 +313,15 @@ class FakeCollection {
   }
 
   removeAsync(selector) {
+    return Promise.resolve(this.remove(selector));
+  }
+
+  // Minimongo keeps the synchronous mutators on the client, and
+  // client/views/game/game_page.js uses this one to cancel a game.
+  remove(selector) {
     const matches = this._rawMatches(selector);
     for (const doc of matches) this._docs.delete(doc._id);
-    return Promise.resolve(matches.length);
+    return matches.length;
   }
 
   allow() {}
