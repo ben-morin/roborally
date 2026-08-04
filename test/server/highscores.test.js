@@ -150,6 +150,91 @@ describe('games nobody won', () => {
   });
 });
 
+// The counterpart to the block above: the three ways a game ends with a surviving player
+// who never reached the last checkpoint. All three count as wins — `winner` records who
+// was left standing, not how — and each path rebuilds the highscores itself as it ends
+// the game, so these assert on the ranking without calling buildHighscores() again.
+describe('wins by default', () => {
+  it('counts the last robot standing after the others were destroyed', async () => {
+    const gameId = await Games.insertAsync({
+      boardId: 0,
+      started: true,
+      gamePhase: GameState.PHASE.PLAY,
+      playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
+      playPhaseCount: 1,
+      waitingForRespawn: [],
+      cardsToPlay: [],
+    });
+    for (const [name, lives] of [
+      ['ann', 3],
+      ['bob', 0],
+    ]) {
+      await Players.insertAsync({
+        gameId,
+        userId: name,
+        name,
+        lives,
+        position: { x: 0, y: 0 },
+        visited_checkpoints: 0,
+        needsRespawn: false,
+      });
+    }
+
+    vi.useFakeTimers();
+    const running = GameState.nextPlayPhaseAsync(gameId);
+    await vi.advanceTimersByTimeAsync(1000);
+    await running;
+
+    expect((await Games.findOneAsync(gameId)).winner).toBe('ann');
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
+  });
+
+  it('counts a win handed over when the only opponent quits', async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({
+      boardId: 0,
+      started: true,
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
+    await Players.insertAsync({ gameId, userId: user._id, name: 'quitter' });
+    await Players.insertAsync({ gameId, userId: 'ann', name: 'ann' });
+
+    await Meteor.callAsync('leaveGame', gameId);
+
+    expect((await Games.findOneAsync(gameId)).winner).toBe('ann');
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
+  });
+
+  it('counts a win left behind when the only opponent disconnects', async () => {
+    await Meteor.users.insertAsync({ _id: 'ann', status: { online: true } });
+    await Meteor.users.insertAsync({ _id: 'bob', status: { online: false } });
+    const gameId = await Games.insertAsync({ started: true, min_player: 2 });
+    await Players.insertAsync({ gameId, userId: 'ann', name: 'ann' });
+    await Players.insertAsync({ gameId, userId: 'bob', name: 'bob' });
+
+    vi.useFakeTimers();
+    const running = runCronJob('Clean up abandoned games');
+    await vi.advanceTimersByTimeAsync(10_000);
+    await running;
+
+    expect((await Games.findOneAsync(gameId)).winner).toBe('ann');
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
+  });
+
+  it('ranks a default win level with a checkpoint win', async () => {
+    await Games.insertAsync({ winner: 'ann', started: true }); // however it was earned
+    await Games.insertAsync({ winner: 'bob', started: true });
+    await Games.insertAsync({ winner: 'bob', started: true });
+
+    await buildHighscores();
+
+    expect(await listOf('mostWon')).toEqual([
+      { name: 'bob', value: 2, rank: 1 },
+      { name: 'ann', value: 1, rank: 2 },
+    ]);
+  });
+});
+
 describe('mostPlayed', () => {
   it('counts games played per player name across every game', async () => {
     await Players.insertAsync({ gameId: 'g1', name: 'ann' });

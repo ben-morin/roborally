@@ -11,6 +11,10 @@ export async function buildHighscores() {
       // `$exists` is load-bearing: on its own, `{$ne: 'Nobody'}` also matches every game
       // that has no `winner` yet, which would group all games in progress under a single
       // `_id: null` bucket and rank that nameless entry alongside real winners.
+      //
+      // 'Nobody' is the only excluded outcome. A win by default — everyone else was
+      // destroyed, quit, or disconnected — counts the same as reaching the last
+      // checkpoint. That is deliberate; `winner` records who was left standing, not how.
       { $match: { winner: { $exists: true, $ne: 'Nobody' } } },
       { $group: { _id: '$winner', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
