@@ -29,21 +29,21 @@ Meteor.settings.packages.mongo.reactivity = Meteor.settings.packages.mongo.react
 const DRIVERS = ['changeStreams', 'oplog', 'polling'];
 
 export function checkReactivity() {
-	// Meteor.settings wins over METEOR_REACTIVITY_ORDER; both are read per-cursor
-	// by the mongo package at observeChanges time, not at connection time.
-	const setting = Meteor.settings?.packages?.mongo?.reactivity;
-	const order = setting
-		? [].concat(setting)
-		: (process.env.METEOR_REACTIVITY_ORDER?.split(',') ?? DRIVERS);
+  // Meteor.settings wins over METEOR_REACTIVITY_ORDER; both are read per-cursor
+  // by the mongo package at observeChanges time, not at connection time.
+  const setting = Meteor.settings?.packages?.mongo?.reactivity;
+  const order = setting
+    ? [].concat(setting)
+    : (process.env.METEOR_REACTIVITY_ORDER?.split(',') ?? DRIVERS);
 
-	console.log('Configured reactivity order:', order.join(' > '));
+  console.log('Configured reactivity order:', order.join(' > '));
 
-	const mongo = MongoInternals.defaultRemoteCollectionDriver().mongo;
+  const mongo = MongoInternals.defaultRemoteCollectionDriver().mongo;
 
-	// The real driver is chosen per live query, so this stays empty until
-	// something is actually being observed.
-	const live = Object.values(mongo._observeMultiplexers)
-		.map(m => m._observeDriver?.constructor.name)
-		.filter(Boolean);
-	console.log('Active observe drivers:', live.length ? live : '(no live observes yet)');
+  // The real driver is chosen per live query, so this stays empty until
+  // something is actually being observed.
+  const live = Object.values(mongo._observeMultiplexers)
+    .map((m) => m._observeDriver?.constructor.name)
+    .filter(Boolean);
+  console.log('Active observe drivers:', live.length ? live : '(no live observes yet)');
 }

@@ -15,7 +15,6 @@ import { buildHighscores } from './highscores.js';
 import './methods.js';
 import './publications.js';
 
-
 Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};
 Meteor.settings.public.appVersion =
@@ -153,9 +152,8 @@ Meteor.startup(() => {
 
   console.info('Meteor.startup: cron');
   SyncedCron.start();
-  
-  checkReactivity();
 
+  checkReactivity();
 });
 
 async function delay(ms) {

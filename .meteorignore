@@ -3,3 +3,8 @@ eslint.config.cjs
 eslint.config.mjs
 .prettierrc.json
 .prettierignore
+
+# The vitest suite. Its files are named *.test.js, which also matches Meteor's
+# test-mode glob — without this, `meteor test` would eagerly load them and blow up
+# (they import from vitest, and test/setup.js replaces globalThis.Meteor).
+test/
