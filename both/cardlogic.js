@@ -5,7 +5,11 @@ import { Players } from '../collections/players.js';
 import { GameLogic } from './gamelogic.js';
 import { GameState } from './gamestate.js';
 
-async function autoSubmitIfTimedOut(gameId, expectedStart) {
+// Exported so the cron watchdog can re-drive a timer the server lost — see
+// "Recover stalled programming timers" in server/cron.js. Recovery deliberately reuses
+// this exact function rather than reimplementing it, so the two cannot drift; the guard
+// below is what makes calling it a second time safe.
+export async function autoSubmitIfTimedOut(gameId, expectedStart) {
   const game = await Games.findOneAsync(gameId);
   // Bail out if the timer has been reset (manual submit completed the turn) or
   // if a new timer instance was started for a later turn — without this check,
@@ -294,9 +298,20 @@ export class CardLogic {
           // throws, the last player is never force-submitted and the game sits in the
           // program phase indefinitely. The gameId is in the message because this log
           // line is the only trace such a game leaves.
-          autoSubmitIfTimedOut(player.gameId, timerStart).catch((err) =>
-            console.error(`autoSubmitIfTimedOut failed for game ${player.gameId}`, err)
-          )
+          autoSubmitIfTimedOut(player.gameId, timerStart).catch(async (err) => {
+            console.error(`autoSubmitIfTimedOut failed for game ${player.gameId}`, err);
+            // Say so in the game chat: without this the turn simply stops and the
+            // players have no idea why. Guarded because the most likely reason for
+            // getting here is that the game no longer exists.
+            try {
+              const game = await Games.findOneAsync(player.gameId);
+              await game?.chatAsync(
+                'The programming timer failed — please submit your cards to continue.'
+              );
+            } catch (announceErr) {
+              console.error(`could not announce timer failure for ${player.gameId}`, announceErr);
+            }
+          })
         ),
         GameLogic.TIMER * 1000
       );

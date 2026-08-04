@@ -8,6 +8,8 @@ import '../both/cardMethods.js';
 import '../collections/users.js';
 
 import { SyncedCron } from 'meteor/quave:synced-cron';
+import { autoSubmitIfTimedOut } from '../both/cardlogic.js';
+import { GameLogic } from '../both/gamelogic.js';
 import { GameState } from '../both/gamestate.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';
@@ -46,6 +48,37 @@ SyncedCron.add({
           await Games.removeAsync(game._id);
         }
       }
+    }
+  },
+});
+
+SyncedCron.add({
+  name: 'Recover stalled programming timers',
+  schedule: (parser) => parser.text('every 1 minute'),
+  job: async () => {
+    // The programming timer is a `Meteor.setTimeout`, so it lives in this process and
+    // does not survive a restart. A deploy landing mid-turn therefore leaves the game on
+    // `timer: 1` forever — and nothing else recovers it: the client only auto-submits
+    // when it sees `timer: 0`, so with the timer stuck at 1 both ends wait for each
+    // other. This is the routine cause of a game hanging in the program phase.
+    //
+    // Only the program phase is swept. A game stuck part-way through the play phase is
+    // a different problem and is NOT safe to re-drive: those phases consume cards and
+    // move robots as they go, so re-entering one could apply a turn twice.
+    const cutoff = new Date(Date.now() - (GameLogic.TIMER + 30) * 1000);
+    const stalled = await Games.find({
+      started: true,
+      gamePhase: GameState.PHASE.PROGRAM,
+      timer: 1,
+      timerStartedAt: { $lt: cutoff },
+    }).fetchAsync();
+
+    for (const game of stalled) {
+      console.log(`Recovering stalled programming timer for game ${game._id}`);
+      // Hand back to the very code the lost timeout would have run. Its own guard
+      // re-reads the game and checks it is still acting on this timer instance, so a
+      // race with a player submitting in the meantime resolves harmlessly.
+      await autoSubmitIfTimedOut(game._id, game.timerStartedAt);
     }
   },
 });

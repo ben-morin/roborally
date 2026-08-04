@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import { resetFakeCollections, runStartup } from '../setup.js';
 import { cronSchedule, cronStarted, registeredCronJobs, runCronJob } from '../stubs/synced-cron.js';
+import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
+import { GameLogic } from '../../both/gamelogic.js';
 import { GameState } from '../../both/gamestate.js';
 import { Chat } from '../../collections/chat.js';
 import { Games } from '../../collections/games.js';
@@ -18,6 +20,7 @@ import { Players } from '../../collections/players.js';
 const UNSTARTED = 'Clean up unstarted games';
 const ABANDONED = 'Clean up abandoned games';
 const HIGHSCORES = 'Build highscore lists';
+const STALLED = 'Recover stalled programming timers';
 
 async function user(_id, { online = true, lastActivity = new Date() } = {}) {
   await Meteor.users.insertAsync({
@@ -42,10 +45,11 @@ beforeEach(() => resetFakeCollections());
 afterEach(() => vi.useRealTimers());
 
 describe('registration', () => {
-  it('registers all three jobs on the documented schedules', () => {
-    expect(registeredCronJobs()).toEqual([HIGHSCORES, UNSTARTED, ABANDONED]);
+  it('registers all four jobs on the documented schedules', () => {
+    expect(registeredCronJobs()).toEqual([HIGHSCORES, UNSTARTED, STALLED, ABANDONED]);
     expect(cronSchedule(HIGHSCORES)).toBe('every 1 hour');
     expect(cronSchedule(UNSTARTED)).toBe('every 5 minutes');
+    expect(cronSchedule(STALLED)).toBe('every 1 minute');
     expect(cronSchedule(ABANDONED)).toBe('every 1 minute');
   });
 
@@ -62,6 +66,85 @@ describe(HIGHSCORES, () => {
     await runCronJob(HIGHSCORES);
 
     expect(await Highscores.findOneAsync({ type: 'mostWon' })).toMatchObject({ name: 'ann' });
+  });
+});
+
+describe(STALLED, () => {
+  beforeEach(() => vi.useFakeTimers());
+
+  // A programming timer is a Meteor.setTimeout, so it dies with the process. These set
+  // up the state a restart leaves behind — timer still 1, timerStartedAt long past —
+  // which nothing else in the system recovers from.
+  async function stalledGame({ startedAt, gamePhase = GameState.PHASE.PROGRAM, timer = 1 } = {}) {
+    const game = await insertGame({ gamePhase, timer, timerStartedAt: startedAt });
+    const quick = await insertPlayer(game._id, { userId: 'a', name: 'ann', submitted: true });
+    const slow = await insertPlayer(game._id, { userId: 'b', name: 'bob', submitted: false });
+    // A legal hand, so the force-submit is an ordinary submission rather than the
+    // exhausted-hand repair path.
+    await insertCards(slow._id, game._id, {
+      userId: 'b',
+      handCards: [1, 2, 3, 4, 5],
+      chosenCards: [1, 2, 3, 4, 5],
+    });
+    return { gameId: game._id, quick: quick._id, slow: slow._id };
+  }
+
+  const longAgo = () => new Date(Date.now() - (GameLogic.TIMER + 120) * 1000);
+
+  it('force-submits the straggler when the timer died with the process', async () => {
+    const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+    const { gameId, slow } = await stalledGame({ startedAt: longAgo() });
+
+    const running = runCronJob(STALLED);
+    await vi.advanceTimersByTimeAsync(5000); // the job's own 2500ms settle delay
+    await running;
+
+    expect((await Players.findOneAsync(slow)).submitted).toBe(true);
+    expect((await Games.findOneAsync(gameId)).timer).toBe(-1);
+    expect(nextPhase).toHaveBeenCalledWith(gameId);
+  });
+
+  it('leaves a timer that is still within its window alone', async () => {
+    const { gameId, slow } = await stalledGame({ startedAt: new Date(Date.now() - 5000) });
+
+    const running = runCronJob(STALLED);
+    await vi.advanceTimersByTimeAsync(5000);
+    await running;
+
+    expect((await Players.findOneAsync(slow)).submitted).toBe(false);
+    expect((await Games.findOneAsync(gameId)).timer).toBe(1);
+  });
+
+  it('ignores a game that is not in the program phase', async () => {
+    const { gameId, slow } = await stalledGame({
+      startedAt: longAgo(),
+      gamePhase: GameState.PHASE.PLAY,
+    });
+
+    const running = runCronJob(STALLED);
+    await vi.advanceTimersByTimeAsync(5000);
+    await running;
+
+    expect((await Players.findOneAsync(slow)).submitted).toBe(false);
+    expect((await Games.findOneAsync(gameId)).timer).toBe(1);
+  });
+
+  it('ignores a game with no timer running', async () => {
+    const { gameId, slow } = await stalledGame({ startedAt: longAgo(), timer: -1 });
+
+    const running = runCronJob(STALLED);
+    await vi.advanceTimersByTimeAsync(5000);
+    await running;
+
+    expect((await Players.findOneAsync(slow)).submitted).toBe(false);
+    expect((await Games.findOneAsync(gameId)).timer).toBe(-1);
+  });
+
+  it('is a no-op when nothing has stalled', async () => {
+    const running = runCronJob(STALLED);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await expect(running).resolves.not.toThrow();
   });
 });
 

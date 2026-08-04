@@ -7,6 +7,7 @@ import { GameState } from '../../both/gamestate.js';
 import { Games } from '../../collections/games.js';
 import { Players } from '../../collections/players.js';
 import { Cards } from '../../collections/cards.js';
+import { Chat } from '../../collections/chat.js';
 import { Deck } from '../../collections/deck.js';
 
 beforeEach(() => resetFakeCollections());
@@ -255,8 +256,38 @@ describe('submitCardsAsync', () => {
     expect(errors.mock.calls[0][0]).toBe(`autoSubmitIfTimedOut failed for game ${game._id}`);
     expect(errors.mock.calls[0][1]).toBeInstanceOf(TypeError);
 
-    // Characterization of the cost: `last` never got force-submitted, so a game that
-    // still existed would sit in the program phase with nothing left to advance it.
+    // Nothing is announced here: the game is gone, so there is no chat to announce into.
+    expect(await Chat.find().countAsync()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('tells the players when the auto-submit fails on a game that still exists', async () => {
+    vi.useFakeTimers();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const game = await insertGame();
+    const first = await insertPlayer(game._id, { name: 'first' });
+    const last = await insertPlayer(game._id, { name: 'last' });
+    await insertCards(first._id, game._id, {
+      handCards: [1, 2, 3, 4, 5],
+      chosenCards: [1, 2, 3, 4, 5],
+    });
+    await insertCards(last._id, game._id, { handCards: [], chosenCards: [-1, -1, -1, -1, -1] });
+
+    await CardLogic.submitCardsAsync(first); // arms the timer
+
+    // Break the force-submit the timer will attempt. Spying only now means the call
+    // above still ran for real and armed the timer.
+    vi.spyOn(CardLogic, 'submitCardsAsync').mockRejectedValue(new Error('boom'));
+
+    await vi.advanceTimersByTimeAsync(GameLogic.TIMER * 1000 + 2500 + 10);
+
+    expect(errors.mock.calls[0][0]).toBe(`autoSubmitIfTimedOut failed for game ${game._id}`);
+    // Without this line the turn just stops and nobody knows why. The wording points at
+    // the manual submit, which still works and re-drives the turn.
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages).toContain(
+      'The programming timer failed — please submit your cards to continue.'
+    );
     vi.useRealTimers();
   });
 
