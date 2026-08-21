@@ -129,6 +129,15 @@ Meteor.methods({
           await Deck.updateAsync(deck._id, deck);
         }
       }
+      // Held option cards go to the discard pile the same way, announced per card.
+      // Each discard re-reads the deck doc, so this must stay after the whole-doc
+      // deck update above or that write would clobber the discards.
+      const leavingPlayer = await Players.findOneAsync({ gameId: game._id, userId: user._id });
+      if (leavingPlayer) {
+        for (const name of Object.keys(leavingPlayer.optionCards ?? {})) {
+          await leavingPlayer.discardOptionCardAsync(name);
+        }
+      }
     }
     await Cards.removeAsync({ gameId: game._id, userId: user._id });
     await Players.removeAsync({ gameId: game._id, userId: user._id });

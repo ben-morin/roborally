@@ -434,7 +434,6 @@ async function checkRespawnsAndUpdateDb(player, cleanups) {
     player.lives--;
     player.needsRespawn = true;
     player.optionalInstantPowerDown = true;
-    player.optionCards = {};
     await Players.updateAsync(player._id, player);
     if (player.lives > 0) {
       const game = await player.gameAsync();
@@ -442,6 +441,13 @@ async function checkRespawnsAndUpdateDb(player, cleanups) {
       await Games.updateAsync(game._id, game);
     }
     await player.chatAsync(`died! (lives: ${player.lives}, damage: ${player.damage})`);
+    // A destroyed robot loses its option cards to the discard pile (announced per
+    // card), from where they can return to play once the option draw pile runs dry.
+    // The emptied map is persisted by removePlayerWithDelay below, which also
+    // defensively re-clears it.
+    for (const name of Object.keys(player.optionCards)) {
+      await player.discardOptionCardAsync(name);
+    }
     if (cleanups) {
       cleanups.push(() => removePlayerWithDelay(player));
     } else {

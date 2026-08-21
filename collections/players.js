@@ -1,5 +1,6 @@
 import { CardLogic } from '../both/cardlogic.js';
 import { GameLogic } from '../both/gamelogic.js';
+import { shuffle } from '../both/shuffle.js';
 import { Tile } from '../both/tile.js';
 import { Cards } from './cards.js';
 import { Chat } from './chat.js';
@@ -203,13 +204,18 @@ const player = {
     const game = await this.gameAsync();
     const gameId = game._id;
     const deckDoc = await Deck.findOneAsync({ gameId });
-    const { optionCards } = deckDoc;
-    //Ensure that there are option cards to choose from and then update game deck.
+    let { optionCards, discardedOptionCards } = deckDoc;
+    // An empty draw pile takes the shuffled discard pile as its refill; with both
+    // piles empty no card is drawn and the player simply gets nothing.
+    if (!optionCards.length && discardedOptionCards.length) {
+      optionCards = shuffle(discardedOptionCards);
+      discardedOptionCards = [];
+    }
     if (optionCards.length) {
       const optionId = optionCards.pop();
       const name = CardLogic.getOptionName(optionId);
       this.optionCards[name] = true;
-      await Deck.updateAsync({ gameId }, { $set: { optionCards } });
+      await Deck.updateAsync({ gameId }, { $set: { optionCards, discardedOptionCards } });
       // Announce the draw: it happens inside the repairs phase with no other visual,
       // so without this line players only discover the card by inspecting the panel.
       await this.chatAsync(`drew option card ${CardLogic.getOptionTitle(name)}`);

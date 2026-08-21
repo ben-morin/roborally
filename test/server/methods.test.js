@@ -229,6 +229,30 @@ describe('leaveGame', () => {
     expect(await Players.find({ gameId, userId: user._id }).countAsync()).toBe(0);
   });
 
+  it("sends a leaver's option cards to the discard pile, announced in chat", async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({
+      boardId: 0,
+      started: true,
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
+    await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      optionCards: { extra_memory: true },
+    });
+    await Players.insertAsync({ gameId, userId: 'other', name: 'other' });
+    await Deck.insertAsync({ gameId, cards: [], optionCards: [], discardedOptionCards: [] });
+
+    await call('leaveGame', gameId);
+
+    const deck = await Deck.findOneAsync({ gameId });
+    expect(deck.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
+    expect(await messages(gameId)).toContain('ben discarded option card Extra Memory');
+    expect(await Players.find({ gameId, userId: user._id }).countAsync()).toBe(0);
+  });
+
   it('ends the game and rebuilds the highscores when one player is left', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({

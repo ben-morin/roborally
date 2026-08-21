@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
 import { GameLogic } from '../../both/gamelogic.js';
+import { CardLogic } from '../../both/cardlogic.js';
 import { Board } from '../../both/board.js';
 import { Tile } from '../../both/tile.js';
 import { BoardBox } from '../../both/board_box.js';
@@ -215,6 +216,32 @@ describe('playCard: falling off the board / into a void', () => {
     const deckDoc = await Deck.findOneAsync({ gameId: game._id });
     expect([...deckDoc.cards].sort((a, b) => a - b)).toEqual([1, 2, 3, 11, 12]);
 
+    vi.useRealTimers();
+  });
+
+  it("death sends the robot's option cards to the discard pile, announced in chat", async () => {
+    vi.useFakeTimers();
+    const board = stubBoard();
+    board.getTile(3, 1).type = Tile.VOID;
+    void board;
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, {
+      direction: GameLogic.RIGHT,
+      position: { x: 2, y: 1 },
+      optionCards: { extra_memory: true },
+    });
+    await insertCards(player._id, game._id, { handCards: [] });
+    await insertDeck(game._id, { cards: [] });
+
+    const cardPromise = GameLogic.playCard(player, CARD.STEP_FORWARD);
+    await vi.advanceTimersByTimeAsync(2000);
+    await cardPromise;
+
+    expect((await Players.findOneAsync(player._id)).optionCards).toEqual({});
+    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    expect(deckDoc.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages).toContain('bot discarded option card Extra Memory');
     vi.useRealTimers();
   });
 
@@ -537,6 +564,42 @@ describe('executeRepairs', () => {
     // announce itself (with the card's display title) in chat.
     const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
     expect(messages).toContain('bot drew option card Rear-firing Laser');
+  });
+
+  it('recycles the shuffled discard pile into the option draw pile when it runs dry', async () => {
+    const board = stubBoard();
+    board.getTile(1, 1).option = true;
+    board.getTile(1, 1).repair = true;
+    void board;
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, { position: { x: 1, y: 1 }, damage: 0 });
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [2] });
+
+    await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
+
+    const doc = await Players.findOneAsync(player._id);
+    expect(doc.optionCards['rear-firing_laser']).toBe(true);
+    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    expect(deckDoc.optionCards).toEqual([]); // the recycled pile's only card was drawn
+    expect(deckDoc.discardedOptionCards).toEqual([]); // moved out, not copied
+  });
+
+  it('draws nothing when both option piles are empty (the tile still heals)', async () => {
+    const board = stubBoard();
+    board.getTile(1, 1).option = true;
+    board.getTile(1, 1).repair = true;
+    void board;
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, { position: { x: 1, y: 1 }, damage: 5 });
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [] });
+
+    await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
+
+    const doc = await Players.findOneAsync(player._id);
+    expect(doc.optionCards).toEqual({});
+    expect(doc.damage).toBe(4);
+    // no draw happened, so nothing to announce
+    expect(await Chat.find({ gameId: game._id }).countAsync()).toBe(0);
     const deckDoc = await Deck.findOneAsync({ gameId: game._id });
     expect(deckDoc.optionCards).toEqual([]);
   });
