@@ -161,13 +161,16 @@ async function executeLasers(players) {
 async function executeRepairs(players) {
   for (const player of players) {
     const tile = await player.tileAsync();
+    // Rules.pdf p.8 ("Repairs & Upgrades"): every repair space discards 1 Damage
+    // token, and a wrench/hammer (option) space also draws an Option card. Checkpoint
+    // flags count as single repair sites — setup places a number sticker and a single
+    // wrench on each flag. The chain stays if/else-if because option and checkpoint
+    // tiles also carry `.repair = true`: a tile must heal only once.
     if (tile.option) {
       await player.drawOptionCardAsync();
       player.damage = Math.max(player.damage - 1, 0);
-    } else if (tile.checkpoint) {
+    } else if (tile.checkpoint || tile.repair) {
       player.damage = Math.max(player.damage - 1, 0);
-    } else if (tile.repair) {
-      player.damage = Math.max(player.damage - 3, 0);
     }
     await Players.updateAsync(player._id, player);
   }

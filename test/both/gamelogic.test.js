@@ -473,16 +473,13 @@ describe('executeLasers', () => {
   });
 });
 
-// RULES.PDF DISCREPANCY (see "Repairs & Upgrades", p.8): the rulebook only ever
-// removes damage via a wrench (repair) or wrench/hammer (option) space — 1 Damage
-// token either way, plus an Option card draw on the wrench/hammer space. It says
-// nothing about flags/checkpoints healing damage at all. This codebase instead heals
-// 3 on a plain repair tile (not 1) and 1 on a checkpoint tile (not documented in the
-// rules at all). Both are locked in below as characterization, not asserted as "the
-// rule" — this is the discrepancy called out for Milestone 3, not something this
-// milestone changes.
+// Rules.pdf p.8 ("Repairs & Upgrades"): every repair space discards 1 Damage token,
+// and a wrench/hammer (option) space also draws an Option card. Checkpoint flags count
+// as single repair sites — setup places a number sticker and a single wrench on each
+// flag. (Until 2026-08-21 a plain repair tile healed 3; that was the Milestone 3
+// characterization, now fixed to the rule.)
 describe('executeRepairs', () => {
-  it('a plain repair tile heals 3 damage (characterization — Rules.pdf says repair sites should heal only 1)', async () => {
+  it('a plain repair tile heals 1 damage', async () => {
     const board = stubBoard();
     board.getTile(1, 1).repair = true;
     void board;
@@ -491,7 +488,7 @@ describe('executeRepairs', () => {
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 
-    expect((await Players.findOneAsync(player._id)).damage).toBe(2);
+    expect((await Players.findOneAsync(player._id)).damage).toBe(4);
   });
 
   it('never heals below 0 damage', async () => {
@@ -499,14 +496,14 @@ describe('executeRepairs', () => {
     board.getTile(1, 1).repair = true;
     void board;
     const game = await insertGame();
-    const player = await insertPlayer(game._id, { position: { x: 1, y: 1 }, damage: 1 });
+    const player = await insertPlayer(game._id, { position: { x: 1, y: 1 }, damage: 0 });
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 
     expect((await Players.findOneAsync(player._id)).damage).toBe(0);
   });
 
-  it('a checkpoint tile heals 1 damage (characterization — Rules.pdf does not have checkpoints heal damage at all), taking priority over its own `.repair` flag since option/checkpoint/repair is an if/else-if chain, not additive', async () => {
+  it('a checkpoint tile heals 1 damage (its flag carries a single wrench), and only once despite also carrying `.repair`', async () => {
     const board = stubBoard();
     board.getTile(1, 1).addCheckpoint(1); // sets checkpoint=1 AND repair=true
     void board;
@@ -515,7 +512,7 @@ describe('executeRepairs', () => {
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 
-    expect((await Players.findOneAsync(player._id)).damage).toBe(4); // -1, not -3
+    expect((await Players.findOneAsync(player._id)).damage).toBe(4); // -1 once, not -2
   });
 
   it('an option tile draws a card and heals 1, taking priority over its own `.repair` flag', async () => {
@@ -534,7 +531,7 @@ describe('executeRepairs', () => {
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 
     const doc = await Players.findOneAsync(player._id);
-    expect(doc.damage).toBe(4); // -1, not -3
+    expect(doc.damage).toBe(4); // -1 once, not -2
     expect(doc.optionCards['rear-firing_laser']).toBe(true);
     const deckDoc = await Deck.findOneAsync({ gameId: game._id });
     expect(deckDoc.optionCards).toEqual([]);
