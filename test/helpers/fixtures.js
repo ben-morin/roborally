@@ -16,6 +16,7 @@ export async function insertGame(overrides = {}) {
     gamePhase: GameState.PHASE.PROGRAM,
     playPhase: GameState.PLAY_PHASE.IDLE,
     playPhaseCount: 1,
+    programRound: 1,
     waitingForRespawn: [],
     cardsToPlay: [],
     timer: -1,

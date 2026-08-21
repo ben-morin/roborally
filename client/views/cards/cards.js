@@ -108,7 +108,17 @@ Template.cards.helpers({
       timerHandle = null;
     }
 
-    if (game.timer === 0 && !isNonPlayer) {
+    // Auto-submit exactly once per expired timer. This helper re-runs on every
+    // reactive invalidation while the server holds `timer` at 0 (the timeout grace
+    // window), and each extra playCards call would queue behind the first — whose
+    // result only arrives after the whole turn has played out, because the final
+    // submit awaits the entire phase machine — so a duplicate would execute against
+    // the NEXT turn's program phase. The submitted check also keeps every other
+    // player's client, which sees the same `timer: 0`, from calling in at all.
+    if (game.timer !== 0) {
+      cardsState.set('autoSubmitted', false);
+    } else if (!isNonPlayer && !player.submitted && !cardsState.get('autoSubmitted')) {
+      cardsState.set('autoSubmitted', true);
       submitCards(game);
     }
 
@@ -480,7 +490,9 @@ function submitCards(game) {
   document
     .querySelectorAll('.right-panel .card')
     .forEach((el) => el.classList.remove('countdown', 'finish'));
-  Meteor.callAsync('playCards', game._id).then(
+  // The round number lets the server reject this call if it arrives after the turn
+  // it was meant for (queued duplicate, or a Meteor retry after a reconnect).
+  Meteor.callAsync('playCards', game._id, game.programRound).then(
     () => cardsState.set('selectedSlot', 0),
     (error) => {
       cardsState.set('selectedSlot', 0);

@@ -63,6 +63,9 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     const gameDoc = await Games.findOneAsync(game._id);
     expect(gameDoc.started).toBe(true);
     expect(gameDoc.gamePhase).toBe(GameState.PHASE.PROGRAM);
+    // Each deal opens a new programming round; playCards uses this to reject a
+    // submit that arrives after the turn it was meant for.
+    expect(gameDoc.programRound).toBe(2); // fixture seeds 1
 
     const playerDoc = await Players.findOneAsync(player._id);
     expect(playerDoc.playedCardsCnt).toBe(0);

@@ -31,6 +31,7 @@ Meteor.methods({
       playPhase: GameState.PLAY_PHASE.IDLE,
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
       playPhaseCount: 0,
+      programRound: 0,
       boardId: 0,
       waitingForRespawn: [],
       announce: false,
@@ -198,16 +199,39 @@ Meteor.methods({
     await GameState.nextGamePhaseAsync(gameId);
   },
 
-  async playCards(gameId) {
+  async playCards(gameId, programRound) {
+    const game = await Games.findOneAsync(gameId);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
-    if (!player) throw new Meteor.Error(401, `Game/Player not found! ${gameId}`);
+    if (!game || !player) throw new Meteor.Error(401, `Game/Player not found! ${gameId}`);
 
-    if (!player.submitted) {
-      await player.chatAsync('submitted cards');
-      await CardLogic.submitCardsAsync(player);
-    } else {
-      console.warn('Player already submitted his cards.');
+    // A submit can arrive a whole turn late: the final submitter's call spans the
+    // entire turn (submitCardsAsync awaits the phase machine), so a duplicate queued
+    // behind it on the same connection — or a Meteor retry after a reconnect —
+    // executes against the NEXT program phase, where `submitted` has been reset and
+    // the check below passes again. The round number pins a submission to the turn
+    // the client actually saw.
+    if (programRound !== game.programRound) {
+      throw new Meteor.Error(409, 'This submission was for a previous turn.');
     }
+
+    if (player.submitted) {
+      console.warn('Player already submitted his cards.');
+      return;
+    }
+
+    // Filling empty slots with random cards is the timeout penalty, not a player
+    // choice: outside the expired-timer window an incomplete program can only be a
+    // stale or hand-crafted call, so refuse it rather than submit five random cards.
+    if (
+      !player.isPoweredDown() &&
+      (player.chosenCardsCnt ?? 0) < GameLogic.CARD_SLOTS &&
+      game.timer !== 0
+    ) {
+      throw new Meteor.Error(403, 'Not all program slots are filled.');
+    }
+
+    await player.chatAsync('submitted cards');
+    await CardLogic.submitCardsAsync(player);
   },
 
   async selectRespawnPosition(gameId, x, y) {

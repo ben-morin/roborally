@@ -11,6 +11,7 @@ import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { CardLogic } from '../../both/cardlogic.js';
 import { GameLogic } from '../../both/gamelogic.js';
 import { GameState } from '../../both/gamestate.js';
+import { Games } from '../../collections/games.js';
 
 const E = CardLogic.EMPTY;
 const TURN_RIGHT = 6;
@@ -323,13 +324,49 @@ describe('countdown timer', () => {
     expect(classesOfCards()).toEqual([['card'], ['card']]);
   });
 
-  it('auto-submits when the server timer reaches zero', async () => {
+  it('auto-submits, tagged with the current programming round, when the server timer reaches zero', async () => {
+    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
+    const { game } = await seat({ game: { timer: 0, programRound: 3 } });
+
+    callHelper('cards', 'timer');
+
+    expect(call).toHaveBeenCalledWith('playCards', game._id, 3);
+  });
+
+  // Regression: the helper re-runs on every reactive invalidation while the timer sits
+  // at 0, and every run used to fire another playCards. The duplicates queued behind
+  // the first call — which only returns after the whole turn has played out — and then
+  // executed against the NEXT turn's program phase, submitting five random cards.
+  it('auto-submits only once while the timer stays at zero', async () => {
+    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
+    await seat({ game: { timer: 0 } });
+
+    callHelper('cards', 'timer');
+    callHelper('cards', 'timer');
+
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-arms the auto-submit once the timer leaves zero', async () => {
     const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
     const { game } = await seat({ game: { timer: 0 } });
 
     callHelper('cards', 'timer');
+    await Games.updateAsync(game._id, { $set: { timer: -1 } });
+    callHelper('cards', 'timer');
+    await Games.updateAsync(game._id, { $set: { timer: 0 } });
+    callHelper('cards', 'timer');
 
-    expect(call).toHaveBeenCalledWith('playCards', game._id);
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not auto-submit for a player who already submitted', async () => {
+    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
+    await seat({ game: { timer: 0 }, player: { submitted: true } });
+
+    callHelper('cards', 'timer');
+
+    expect(call).not.toHaveBeenCalled();
   });
 
   it('does not auto-submit on behalf of a spectator', async () => {

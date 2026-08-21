@@ -75,6 +75,7 @@ describe('createGame', () => {
       gamePhase: GameState.PHASE.IDLE,
       playPhase: GameState.PLAY_PHASE.IDLE,
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
+      programRound: 0,
       boardId: 0,
       waitingForRespawn: [],
       cardsToPlay: [],
@@ -375,18 +376,19 @@ describe('playCards', () => {
     await expect(call('playCards', gameId)).rejects.toMatchObject({ error: 401 });
   });
 
-  it('submits the caller’s cards and announces it', async () => {
+  it('submits the caller’s full program and announces it', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardId: 0, programRound: 2, timer: -1 });
     const playerId = await Players.insertAsync({
       gameId,
       userId: user._id,
       name: 'ben',
       submitted: false,
+      chosenCardsCnt: GameLogic.CARD_SLOTS,
     });
 
-    await call('playCards', gameId);
+    await call('playCards', gameId, 2);
 
     expect(submit).toHaveBeenCalledTimes(1);
     expect(submit.mock.calls[0][0]._id).toBe(playerId);
@@ -396,13 +398,86 @@ describe('playCards', () => {
   it('ignores a second submission from an already-submitted player', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1 });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben', submitted: true });
 
-    await call('playCards', gameId);
+    await call('playCards', gameId, 1);
 
     expect(submit).not.toHaveBeenCalled();
     expect(await messages(gameId)).toEqual([]);
+  });
+
+  // Regression: the final submitter's playCards spans the entire turn (the submit
+  // awaits the phase machine), so a duplicate queued behind it on the same connection
+  // — or a Meteor retry after a reconnect — used to execute against the NEXT program
+  // phase, pass the freshly-reset `!submitted` check, and submit five random cards on
+  // the player's behalf at the start of the turn.
+  it('rejects a submission carrying a previous turn’s round number', async () => {
+    const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, programRound: 2, timer: -1 });
+    await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      submitted: false,
+      chosenCardsCnt: GameLogic.CARD_SLOTS,
+    });
+
+    await expect(call('playCards', gameId, 1)).rejects.toMatchObject({ error: 409 });
+    expect(submit).not.toHaveBeenCalled();
+    expect(await messages(gameId)).toEqual([]);
+  });
+
+  it('refuses an incomplete program while the timer has not expired', async () => {
+    const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1, timer: -1 });
+    await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      submitted: false,
+      chosenCardsCnt: 3,
+    });
+
+    await expect(call('playCards', gameId, 1)).rejects.toMatchObject({ error: 403 });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('random-fills an incomplete program while the expired-timer window is open', async () => {
+    const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1, timer: 0 });
+    await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      submitted: false,
+      chosenCardsCnt: 0,
+    });
+
+    await call('playCards', gameId, 1);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a powered-down player submit an empty program regardless of the timer', async () => {
+    const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1, timer: -1 });
+    await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      submitted: false,
+      powerState: GameLogic.OFF,
+      chosenCardsCnt: 0,
+    });
+
+    await call('playCards', gameId, 1);
+
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -133,7 +133,14 @@ async function playDealPhase(game) {
     await CardLogic.dealCardsAsync(game, player);
   }
 
-  await game.setGamePhaseAsync(GameState.PHASE.PROGRAM);
+  // Entering PROGRAM opens a new programming round. The counter gives every
+  // submission a turn identity: playCards rejects a round number that no longer
+  // matches, which is what stops a stale or replayed submit from a previous turn
+  // from being accepted as this turn's program.
+  await Games.updateAsync(game._id, {
+    $set: { gamePhase: GameState.PHASE.PROGRAM },
+    $inc: { programRound: 1 },
+  });
   const notPoweredDownCnt = await Players.find({
     gameId: game._id,
     submitted: false,
