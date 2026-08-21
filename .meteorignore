@@ -8,3 +8,7 @@ eslint.config.mjs
 # test-mode glob — without this, `meteor test` would eagerly load them and blow up
 # (they import from vitest, and test/setup.js replaces globalThis.Meteor).
 test/
+
+# Profiler run output. A profiler writing a log during `meteor run` would otherwise
+# be picked up by the file watcher and trigger a pointless rebuild.
+logs/

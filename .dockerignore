@@ -17,6 +17,9 @@ _build
 */build-chunks
 .rsdoctor
 
+# profiler run output (mirrors .gitignore)
+logs/
+
 .gitignore
 .git
 Dockerfile

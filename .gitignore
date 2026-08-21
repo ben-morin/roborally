@@ -15,3 +15,6 @@ _build
 */build-assets
 */build-chunks
 .rsdoctor
+
+# profiler run output
+logs/
