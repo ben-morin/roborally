@@ -45,36 +45,44 @@ async function verifySubmittedCardsAsync(player) {
   const notLockedCnt = player.notLockedCnt();
   const notLockedCardsList =
     player.lockedCnt() === GameLogic.CARD_SLOTS ? [] : submittedCards.slice(0, notLockedCnt);
+
+  // Phase 1: reserve every legally-programmed card. Placing a card in a register does
+  // not remove it from the hand, so the hand still contains the programmed cards — a
+  // single check-and-fill pass let the random draw for an earlier empty slot consume a
+  // card programmed in a later slot, which was then evicted as "illegal". Reserving
+  // first means the fills below only ever draw from the unprogrammed remainder.
+  const legal = new Array(notLockedCardsList.length).fill(false);
   for (let i = 0; i < notLockedCardsList.length; i++) {
     const card = notLockedCardsList[i];
-    let found = false;
     if (card >= 0) {
       const handIndex = availableCards.indexOf(card);
       if (handIndex !== -1) {
         availableCards.splice(handIndex, 1);
-        found = true;
+        legal[i] = true;
       } else {
         console.warn(`illegal card detected: ${card}! (removing card)`);
       }
     } else {
       console.warn('Not enough cards submitted');
     }
+  }
 
-    if (card < 0 || !found) {
-      if (availableCards.length > 0) {
-        // grab card from hand
-        const cardIdFromHand = availableCards.splice(
-          Math.floor(Math.random() * availableCards.length),
-          1
-        )[0];
-        console.warn('Handing out random card', cardIdFromHand);
-        submittedCards[i] = cardIdFromHand;
-        player.cards[i] = CardLogic.RANDOM;
-      } else {
-        console.error(`No available cards to fill slot ${i}!`);
-        submittedCards[i] = CardLogic.EMPTY;
-        player.cards[i] = CardLogic.EMPTY;
-      }
+  // Phase 2: random-fill the empty and illegal slots from what remains.
+  for (let i = 0; i < notLockedCardsList.length; i++) {
+    if (legal[i]) continue;
+    if (availableCards.length > 0) {
+      // grab card from hand
+      const cardIdFromHand = availableCards.splice(
+        Math.floor(Math.random() * availableCards.length),
+        1
+      )[0];
+      console.warn('Handing out random card', cardIdFromHand);
+      submittedCards[i] = cardIdFromHand;
+      player.cards[i] = CardLogic.RANDOM;
+    } else {
+      console.error(`No available cards to fill slot ${i}!`);
+      submittedCards[i] = CardLogic.EMPTY;
+      player.cards[i] = CardLogic.EMPTY;
     }
   }
 

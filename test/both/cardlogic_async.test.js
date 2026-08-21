@@ -175,6 +175,46 @@ describe('submitCardsAsync', () => {
     void other;
   });
 
+  // Regression: placing a card in a register does not remove it from the hand, so the
+  // old single-pass verify let the random draw for an earlier EMPTY slot consume a card
+  // programmed in a LATER slot — which was then evicted as "illegal" and replaced.
+  // Observed live: program [-1, -1, 2, -1, -1], the slot-1 draw took card 2 out of the
+  // hand, and the player's own pick got logged as `illegal card detected: 2!`.
+  it('never steals a programmed card to random-fill an earlier empty slot', async () => {
+    // Math.random pinned to 0 makes every draw take the first card of the pool — with
+    // the programmed card first in hand, the old code stole it deterministically.
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, {
+      damage: 0,
+      cards: [-1, -1, CardLogic.COVERED, -1, -1],
+    });
+    const other = await insertPlayer(game._id); // keeps readyPlayerCnt below playerCnt
+    await insertCards(player._id, game._id, {
+      handCards: [2, 28, 76, 60, 10, 55],
+      chosenCards: [-1, -1, 2, -1, -1],
+    });
+
+    await CardLogic.submitCardsAsync(player);
+
+    const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
+    // The player's pick stays in its register; the reserved card is never drawn, so
+    // the four fills take the rest of the hand in order (Math.random = 0).
+    expect(cardsDoc.chosenCards).toEqual([28, 76, 2, 60, 10]);
+    expect(cardsDoc.handCards).toEqual([55]);
+
+    const playerDoc = await Players.findOneAsync(player._id);
+    // Slot 2 keeps its covered back — it was not re-marked as randomly assigned.
+    expect(playerDoc.cards).toEqual([
+      CardLogic.RANDOM,
+      CardLogic.RANDOM,
+      CardLogic.COVERED,
+      CardLogic.RANDOM,
+      CardLogic.RANDOM,
+    ]);
+    void other;
+  });
+
   it('passes exactly-in-hand submitted cards through untouched', async () => {
     const game = await insertGame();
     const player = await insertPlayer(game._id, { damage: 0, cards: [9, 9, 9, 9, 9] });
