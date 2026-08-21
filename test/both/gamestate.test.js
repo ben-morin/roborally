@@ -9,6 +9,7 @@ import { BoardBox } from '../../both/board_box.js';
 import { Games } from '../../collections/games.js';
 import { Players } from '../../collections/players.js';
 import { Cards } from '../../collections/cards.js';
+import { Chat } from '../../collections/chat.js';
 import { Deck } from '../../collections/deck.js';
 
 function stubBoard(width = 6, height = 6) {
@@ -76,7 +77,7 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     expect(cardsDoc.chosenCards).toEqual([-1, -1, -1, -1, -1]); // old selection discarded
   });
 
-  it('circuit_breaker at 3+ damage forces the robot fully OFF in the SAME deal phase (characterization: not just "announced" for next turn)', async () => {
+  it('circuit_breaker at 3+ damage powers the robot fully OFF for the turn being dealt, announcing the trigger and the discard in chat', async () => {
     stubBoard();
     const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
     const player = await insertPlayer(game._id, {
@@ -103,6 +104,12 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     expect(playerDoc.optionCards.circuit_breaker).toBeUndefined();
     const deckDoc = await Deck.findOneAsync({ gameId: game._id });
     expect(deckDoc.discardedOptionCards).toContain(CardLogic.getOptionId('circuit_breaker'));
+    // All three facts land in the same deal pass, far too fast to follow from the UI,
+    // so each must leave a chat line.
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages).toContain('bot powers down — Circuit Breaker triggered at 30%+ damage');
+    expect(messages).toContain('bot discarded option card Circuit Breaker');
+    expect(messages).toContain('bot is powered down this turn');
   });
 
   it('a player who announced power-down goes OFF, auto-submits with 0 damage, and is dealt no cards', async () => {
@@ -127,6 +134,10 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     expect(playerDoc.damage).toBe(0);
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
     expect(cardsDoc.handCards).toEqual([]);
+    // The only prior trace of any power-down was the panel badge; the moment it takes
+    // effect now reaches the chat history too.
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages).toContain('bot is powered down this turn');
   });
 
   it('auto-advances past PROGRAM when every living player ends the deal phase already submitted', async () => {

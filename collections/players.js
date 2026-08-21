@@ -207,8 +207,12 @@ const player = {
     //Ensure that there are option cards to choose from and then update game deck.
     if (optionCards.length) {
       const optionId = optionCards.pop();
-      this.optionCards[CardLogic.getOptionName(optionId)] = true;
+      const name = CardLogic.getOptionName(optionId);
+      this.optionCards[name] = true;
       await Deck.updateAsync({ gameId }, { $set: { optionCards } });
+      // Announce the draw: it happens inside the repairs phase with no other visual,
+      // so without this line players only discover the card by inspecting the panel.
+      await this.chatAsync(`drew option card ${CardLogic.getOptionTitle(name)}`);
     }
   },
   async discardOptionCardAsync(name) {
@@ -219,6 +223,9 @@ const player = {
     const discarded = deckDoc.discardedOptionCards;
     discarded.push(CardLogic.getOptionId(name));
     await Deck.updateAsync({ gameId }, { $set: { discardedOptionCards: discarded } });
+    // Announce the discard for the same reason as the draw: both circuit_breaker
+    // (deal phase) and ablative_coat (mid-laser-fire) discard with no visual cue.
+    await this.chatAsync(`discarded option card ${CardLogic.getOptionTitle(name)}`);
   },
 };
 

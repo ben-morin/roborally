@@ -113,12 +113,12 @@ describe('option deck', () => {
     expect(CardLogic.getOptionId('not-a-real-option')).toBeUndefined();
   });
 
-  it('getOptionTitle title-cases the name but does not actually replace underscores (characterization: literal string, not a regex)', () => {
-    // `.replace('/_/g', ' ')` is a *string* search for the literal text "/_/g", which
-    // never appears in an option name — so underscores survive untouched. Only the
-    // second `.replace(/\w\S*/g, ...)` (word-capitalization) actually runs.
-    expect(CardLogic.getOptionTitle('rear-firing_laser')).toBe('Rear-firing_laser');
-    expect(CardLogic.getOptionTitle('extra_memory')).toBe('Extra_memory');
+  it('getOptionTitle replaces underscores with spaces and title-cases each word', () => {
+    // Was `.replace('/_/g', ' ')` — a *string* search for the literal text "/_/g" that
+    // never matched, so titles kept their underscores ("Extra_memory"). Fixed to a real
+    // regex 2026-08-21 when option titles started appearing in chat messages.
+    expect(CardLogic.getOptionTitle('rear-firing_laser')).toBe('Rear-firing Laser');
+    expect(CardLogic.getOptionTitle('extra_memory')).toBe('Extra Memory');
   });
 });
 

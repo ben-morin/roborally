@@ -97,6 +97,9 @@ async function playDealPhase(game) {
     player.submitted = false;
     if (player.hasOptionCard('circuit_breaker') && player.damage >= 3) {
       player.powerState = GameLogic.DOWN;
+      // Say why in chat: the trigger, the power-down and the discard all land in the
+      // same deal pass, far too fast to follow from the UI alone.
+      await player.chatAsync('powers down — Circuit Breaker triggered at 30%+ damage');
       await player.discardOptionCardAsync('circuit_breaker');
     }
 
@@ -111,6 +114,9 @@ async function playDealPhase(game) {
         player.submitted = true;
         player.damage = 0;
         dealCards = false;
+        // Covers announced power-downs too — until now no power-down ever reached
+        // the chat (togglePowerDown only console.logs), only the panel badge.
+        await player.chatAsync('is powered down this turn');
       }
     }
 

@@ -533,6 +533,10 @@ describe('executeRepairs', () => {
     const doc = await Players.findOneAsync(player._id);
     expect(doc.damage).toBe(4); // -1 once, not -2
     expect(doc.optionCards['rear-firing_laser']).toBe(true);
+    // The draw happens inside the repairs phase with no other visual, so it must
+    // announce itself (with the card's display title) in chat.
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages).toContain('bot drew option card Rear-firing Laser');
     const deckDoc = await Deck.findOneAsync({ gameId: game._id });
     expect(deckDoc.optionCards).toEqual([]);
   });
