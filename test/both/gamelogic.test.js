@@ -15,8 +15,8 @@ import { Chat } from '../../collections/chat.js';
 // GameLogic always reaches the board through `player.boardAsync() -> game.board() ->
 // BoardBox.getBoard(boardId)`. Stubbing BoardBox.getBoard lets every test build an
 // exact, minimal board with `new Board(...)` + direct tile mutation, independent of
-// the real catalog (see MODERNIZATION.local.md: "mocking the thin collection
-// touchpoints" was the intended seam for exercising GameLogic).
+// the real catalog — mocking the thin collection touchpoints is the seam for
+// exercising GameLogic.
 function stubBoard(width = 6, height = 6) {
   const board = new Board('gamelogic-test', 1, 8, width, height);
   vi.spyOn(BoardBox, 'getBoard').mockReturnValue(board);

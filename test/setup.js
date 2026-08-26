@@ -1,6 +1,6 @@
 // Vitest setupFile: makes the game model and the server importable outside Meteor.
 //
-// Ground truth (see MODERNIZATION.local.md, Milestone 3 kickoff): the M2 import graph
+// Ground truth: the M2 import graph
 // means even "pure" classes like Tile transitively import collections that call
 // `new Meteor.Collection(...)` at module-body time. Without a `Meteor` global, every
 // both/*.js file except area.js and shuffle.js throws `ReferenceError: Meteor is not
