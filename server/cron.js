@@ -118,9 +118,9 @@ SyncedCron.add({
       console.log(`Game ${game._id}: ${playersOnline} of ${numPlayers} players online.`);
 
       if (playersOnline === 0) {
-        await endGame(game._id, 'Nobody');
+        await endGame(game._id, null);
       } else if (playersOnline === 1 && game.min_player > 1) {
-        await endGame(game._id, lastManStanding.name);
+        await endGame(game._id, lastManStanding);
         await buildHighscores();
       }
     }
@@ -198,12 +198,15 @@ async function delay(ms) {
   return new Promise((resolve) => Meteor.setTimeout(resolve, ms));
 }
 
-async function endGame(gameId, winner) {
+// `player` is the last one standing, or null when nobody was left. Only a real winner
+// gets a `winnerUserId` — its absence is what server/highscores.js reads as "no win here".
+async function endGame(gameId, player) {
   console.log(`Ending abandoned game: ${gameId}`);
   await Games.updateAsync(gameId, {
     $set: {
       gamePhase: GameState.PHASE.ENDED,
-      winner,
+      winner: player ? player.name : 'Nobody',
+      ...(player ? { winnerUserId: player.userId } : {}),
       stopped: Date.now(),
     },
   });

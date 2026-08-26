@@ -1,10 +1,14 @@
 // buildHighscores() is the only aggregation in the app. These run it against the
-// in-memory aggregate (see the $group/$sum support in test/setup.js) rather than mocking
-// rawCollection, so the pipeline itself — match, group, sort, limit — is what is under
-// test.
+// in-memory aggregate (see the $group/$sum/$last support in test/setup.js) rather than
+// mocking rawCollection, so the pipeline itself — match, group, sort, limit — is what is
+// under test.
+//
+// Both lists group on the account's userId, never on a display name: display names are
+// the local part of an email address and two domains produce the same one. The
+// 'accounts that share a display name' cases below are the guard on that.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
-import { loginAs, resetFakeCollections } from '../setup.js';
+import { loginAs, resetFakeCollections, runStartup } from '../setup.js';
 import { runCronJob } from '../stubs/synced-cron.js';
 import { buildHighscores } from '../../server/highscores.js';
 import { GameState } from '../../both/gamestate.js';
@@ -17,13 +21,26 @@ const listOf = async (type) =>
     .sort((a, b) => a.rank - b.rank)
     .map(({ name, value, rank }) => ({ name, value, rank }));
 
+// A finished game carries both fields: `winner` is the display name the board and the
+// game list render, `winnerUserId` is the aggregation key. This keeps the pair consistent
+// the way every end-of-game path in the app does. With no account behind the id,
+// addToHighscores falls back to the stamped name — so these assertions still read as
+// names without every test having to seat a user document.
+const wonGame = (name, userId = `id_${name}`, extra = {}) =>
+  Games.insertAsync({ winner: name, winnerUserId: userId, started: true, ...extra });
+
+// A player of a game, as joinGame writes one: the account id it belongs to, plus the
+// display name that account resolved to at the time.
+const playedGame = (gameId, name, userId = `id_${name}`) =>
+  Players.insertAsync({ gameId, userId, name });
+
 beforeEach(() => resetFakeCollections());
 afterEach(() => vi.useRealTimers());
 
 describe('mostWon', () => {
   it('counts wins per player and ranks them, highest first', async () => {
     for (const winner of ['ann', 'ann', 'ann', 'bob', 'bob', 'cy']) {
-      await Games.insertAsync({ winner, started: true });
+      await wonGame(winner);
     }
 
     await buildHighscores();
@@ -38,7 +55,7 @@ describe('mostWon', () => {
   it("excludes games won by 'Nobody'", async () => {
     await Games.insertAsync({ winner: 'Nobody' });
     await Games.insertAsync({ winner: 'Nobody' });
-    await Games.insertAsync({ winner: 'ann' });
+    await wonGame('ann');
 
     await buildHighscores();
 
@@ -47,7 +64,7 @@ describe('mostWon', () => {
 
   it('keeps at most ten entries', async () => {
     for (let i = 0; i < 15; i++) {
-      await Games.insertAsync({ winner: `player${i}` });
+      await wonGame(`player${i}`);
     }
 
     await buildHighscores();
@@ -55,12 +72,14 @@ describe('mostWon', () => {
     expect(await listOf('mostWon')).toHaveLength(10);
   });
 
-  // Regression guard. `{$ne: 'Nobody'}` alone also matches games with no `winner` field —
-  // every game still in progress — grouping them under a single `_id: null` bucket that
-  // the ranking page rendered as a blank name. With more games in progress than any
-  // player has wins, it took rank 1. The `$exists: true` in the $match is what stops it.
+  // Regression guard, kept from when the $match was `{winner: {$exists: true, $ne:
+  // 'Nobody'}}`: `$ne` alone also matched every game still in progress, grouping them
+  // under a single `_id: null` bucket the ranking page rendered as a blank name, and with
+  // more games in progress than anyone had wins it took rank 1. Matching on
+  // `winnerUserId` makes that structural — an unfinished game has no such field — but the
+  // outcome is worth pinning either way.
   it('ignores games that are still in progress', async () => {
-    await Games.insertAsync({ winner: 'ann', started: true });
+    await wonGame('ann');
     for (let i = 0; i < 3; i++) {
       await Games.insertAsync({ name: `in progress ${i}`, started: true });
     }
@@ -140,7 +159,7 @@ describe('games nobody won', () => {
   });
 
   it('still counts a real win alongside games nobody won', async () => {
-    await Games.insertAsync({ winner: 'ann', started: true });
+    await wonGame('ann');
     await Games.insertAsync({ winner: 'Nobody', started: true });
     await Games.insertAsync({ name: 'in progress', started: true });
 
@@ -222,9 +241,9 @@ describe('wins by default', () => {
   });
 
   it('ranks a default win level with a checkpoint win', async () => {
-    await Games.insertAsync({ winner: 'ann', started: true }); // however it was earned
-    await Games.insertAsync({ winner: 'bob', started: true });
-    await Games.insertAsync({ winner: 'bob', started: true });
+    await wonGame('ann'); // however it was earned
+    await wonGame('bob');
+    await wonGame('bob');
 
     await buildHighscores();
 
@@ -236,10 +255,10 @@ describe('wins by default', () => {
 });
 
 describe('mostPlayed', () => {
-  it('counts games played per player name across every game', async () => {
-    await Players.insertAsync({ gameId: 'g1', name: 'ann' });
-    await Players.insertAsync({ gameId: 'g2', name: 'ann' });
-    await Players.insertAsync({ gameId: 'g1', name: 'bob' });
+  it('counts games played per account across every game', async () => {
+    await playedGame('g1', 'ann');
+    await playedGame('g2', 'ann');
+    await playedGame('g1', 'bob');
 
     await buildHighscores();
 
@@ -251,7 +270,7 @@ describe('mostPlayed', () => {
 
   it('keeps at most ten entries', async () => {
     for (let i = 0; i < 12; i++) {
-      await Players.insertAsync({ gameId: `g${i}`, name: `player${i}` });
+      await playedGame(`g${i}`, `player${i}`);
     }
 
     await buildHighscores();
@@ -260,9 +279,121 @@ describe('mostPlayed', () => {
   });
 });
 
+// The reason both pipelines group on userId. `profile.name` is the local part of an
+// email address, so user@domain1.com and user@domain2.com are two accounts with one
+// name; grouping on the name added their wins together and showed a single row with a
+// total neither of them had. Two rows that look alike is the accepted cost.
+describe('accounts that share a display name', () => {
+  const seat = (_id, name) => Meteor.users.insertAsync({ _id, profile: { name } });
+
+  it('counts wins per account, not per name', async () => {
+    await seat('u1', 'user');
+    await seat('u2', 'user');
+    await wonGame('user', 'u1');
+    await wonGame('user', 'u2');
+    await wonGame('user', 'u2');
+
+    await buildHighscores();
+
+    expect(await listOf('mostWon')).toEqual([
+      { name: 'user', value: 2, rank: 1 },
+      { name: 'user', value: 1, rank: 2 },
+    ]);
+  });
+
+  it('counts games played per account, not per name', async () => {
+    await seat('u1', 'user');
+    await seat('u2', 'user');
+    await playedGame('g1', 'user', 'u1');
+    await playedGame('g2', 'user', 'u2');
+    await playedGame('g3', 'user', 'u2');
+
+    await buildHighscores();
+
+    expect(await listOf('mostPlayed')).toEqual([
+      { name: 'user', value: 2, rank: 1 },
+      { name: 'user', value: 1, rank: 2 },
+    ]);
+  });
+
+  // Resolved from the account at build time, not read off the game document — so the day
+  // players can rename themselves, an old game does not keep showing the old name.
+  it('labels a row with the name the account has now', async () => {
+    await seat('u1', 'renamed');
+    await wonGame('name at the time', 'u1');
+
+    await buildHighscores();
+
+    expect(await listOf('mostWon')).toEqual([{ name: 'renamed', value: 1, rank: 1 }]);
+  });
+
+  // Nothing in the app deletes an account, so this is the defensive branch: the name
+  // stamped on the game is a better label than a placeholder.
+  it('falls back to the stamped name when the account is gone', async () => {
+    await wonGame('vanished', 'deleted-account');
+
+    await buildHighscores();
+
+    expect(await listOf('mostWon')).toEqual([{ name: 'vanished', value: 1, rank: 1 }]);
+  });
+});
+
+// Games that finished before winnerUserId was recorded would drop out of mostWon
+// entirely, so startup resolves them from each game's own players.
+describe('winnerUserId backfill', () => {
+  it('resolves a historical winner from that game’s players', async () => {
+    const gameId = await Games.insertAsync({ winner: 'ann', started: true });
+    await playedGame(gameId, 'ann', 'u1');
+    await playedGame(gameId, 'bob', 'u2');
+
+    await runStartup();
+
+    expect((await Games.findOneAsync(gameId)).winnerUserId).toBe('u1');
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
+  });
+
+  it('leaves a game alone when two of its players shared the winning name', async () => {
+    const gameId = await Games.insertAsync({ winner: 'user', started: true });
+    await playedGame(gameId, 'user', 'u1');
+    await playedGame(gameId, 'user', 'u2');
+
+    await runStartup();
+
+    // Guessing which of them won would credit the wrong account; a missing row is better.
+    expect((await Games.findOneAsync(gameId)).winnerUserId).toBeUndefined();
+  });
+
+  it('leaves a game alone when the winner’s player document is gone', async () => {
+    // leaveGame deletes the Players document, so a winner who later left is unresolvable.
+    const gameId = await Games.insertAsync({ winner: 'departed', started: true });
+
+    await runStartup();
+
+    expect((await Games.findOneAsync(gameId)).winnerUserId).toBeUndefined();
+  });
+
+  it('does not touch a game that nobody won', async () => {
+    const gameId = await Games.insertAsync({ winner: 'Nobody', started: true });
+    await playedGame(gameId, 'Nobody', 'u1');
+
+    await runStartup();
+
+    expect((await Games.findOneAsync(gameId)).winnerUserId).toBeUndefined();
+  });
+
+  it('does not overwrite a userId that is already recorded', async () => {
+    const gameId = await wonGame('ann', 'the-real-winner');
+    await playedGame(gameId, 'ann', 'someone-else');
+
+    await runStartup();
+
+    expect((await Games.findOneAsync(gameId)).winnerUserId).toBe('the-real-winner');
+  });
+});
+
 describe('rebuilding', () => {
   it('replaces the previous lists rather than appending to them', async () => {
-    await Games.insertAsync({ winner: 'ann' });
+    await wonGame('ann');
     await buildHighscores();
     await buildHighscores();
     await buildHighscores();

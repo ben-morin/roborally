@@ -240,6 +240,7 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     });
     const winner = await insertPlayer(game._id, {
       name: 'winner',
+      userId: 'winner_account',
       position: { x: 0, y: 0 },
       visited_checkpoints: 0,
     });
@@ -253,6 +254,8 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     const gameDoc = await Games.findOneAsync(game._id);
     expect(gameDoc.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(gameDoc.winner).toBe('winner');
+    // The name is for the board; the userId is what server/highscores.js groups on.
+    expect(gameDoc.winnerUserId).toBe(winner.userId);
     expect(highscores).toHaveBeenCalled();
     const winnerDoc = await Players.findOneAsync(winner._id);
     expect(winnerDoc.visited_checkpoints).toBe(1);
@@ -275,6 +278,8 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     const gameDoc = await Games.findOneAsync(game._id);
     expect(gameDoc.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(gameDoc.winner).toBe('Nobody');
+    // No winnerUserId: its absence is what keeps this game out of the ranking.
+    expect(gameDoc.winnerUserId).toBeUndefined();
   });
 
   it('declares the last robot standing the winner when only one of several players has lives left', async () => {
@@ -283,8 +288,12 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
       playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
       playPhaseCount: 1,
     });
-    const survivor = await insertPlayer(game._id, { name: 'survivor', lives: 1 });
-    await insertPlayer(game._id, { lives: 0 });
+    const survivor = await insertPlayer(game._id, {
+      name: 'survivor',
+      userId: 'survivor_account',
+      lives: 1,
+    });
+    await insertPlayer(game._id, { userId: 'other_account', lives: 0 });
 
     const p = GameState.nextPlayPhaseAsync(game._id);
     await vi.runAllTimersAsync();
@@ -293,6 +302,7 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     const gameDoc = await Games.findOneAsync(game._id);
     expect(gameDoc.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(gameDoc.winner).toBe(survivor.name);
+    expect(gameDoc.winnerUserId).toBe(survivor.userId);
   });
 
   it('loops back to REVEAL_CARDS (incrementing playPhaseCount) when nobody has won and fewer than 5 registers have played', async () => {

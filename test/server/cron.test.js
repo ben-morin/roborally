@@ -22,9 +22,14 @@ const ABANDONED = 'Clean up abandoned games';
 const HIGHSCORES = 'Build highscore lists';
 const STALLED = 'Recover stalled programming timers';
 
-async function user(_id, { online = true, lastActivity = new Date() } = {}) {
+// `name` is the display name the account resolves to, which in production always matches
+// the `name` on that user's Players document — joinGame stamps both from getUsername().
+// The ranking resolves names from the account, so a fixture where they disagree would be
+// testing something that cannot happen.
+async function user(_id, { online = true, lastActivity = new Date(), name = _id } = {}) {
   await Meteor.users.insertAsync({
     _id,
+    profile: { name },
     emails: [{ address: `${_id}@example.com`, verified: true }],
     status: { online, lastActivity },
   });
@@ -61,7 +66,8 @@ describe('registration', () => {
 
 describe(HIGHSCORES, () => {
   it('rebuilds the lists', async () => {
-    await Games.insertAsync({ winner: 'ann' });
+    await user('u1', { name: 'ann' });
+    await Games.insertAsync({ winner: 'ann', winnerUserId: 'u1' });
 
     await runCronJob(HIGHSCORES);
 
@@ -211,12 +217,14 @@ describe(ABANDONED, () => {
     const game = await Games.findOneAsync(gameId);
     expect(game.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(game.winner).toBe('Nobody');
+    // No winnerUserId: its absence is exactly what keeps this game out of the ranking.
+    expect(game.winnerUserId).toBeUndefined();
     expect(game.stopped).toBeTypeOf('number');
   });
 
   it('awards the win to the last player still connected', async () => {
-    await user('a', { online: true });
-    await user('b', { online: false });
+    await user('a', { online: true, name: 'ann' });
+    await user('b', { online: false, name: 'bob' });
     const gameId = await Games.insertAsync({ started: true, min_player: 2 });
     await Players.insertAsync({ gameId, userId: 'a', name: 'ann' });
     await Players.insertAsync({ gameId, userId: 'b', name: 'bob' });
@@ -226,6 +234,8 @@ describe(ABANDONED, () => {
     const game = await Games.findOneAsync(gameId);
     expect(game.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(game.winner).toBe('ann');
+    // The display name is for the board; the userId is what the ranking groups on.
+    expect(game.winnerUserId).toBe('a');
     // The last-man-standing branch rebuilds the highscores; the 'Nobody' one does not.
     expect(await Highscores.findOneAsync({ type: 'mostWon' })).toMatchObject({ name: 'ann' });
   });

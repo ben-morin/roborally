@@ -397,6 +397,9 @@ async function checkIfWeHaveAWinner(game) {
         $set: {
           gamePhase: GameState.PHASE.ENDED,
           winner: player.name,
+          // The aggregation key. `winner` is a display name and display names are not
+          // unique; server/highscores.js counts wins per account, so it needs this.
+          winnerUserId: player.userId,
           stopped: new Date().getTime(),
         },
       });
@@ -426,6 +429,7 @@ async function checkIfWeHaveAWinner(game) {
       $set: {
         gamePhase: GameState.PHASE.ENDED,
         winner: lastManStanding.name,
+        winnerUserId: lastManStanding.userId,
         stopped: new Date().getTime(),
       },
     });

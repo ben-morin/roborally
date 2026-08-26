@@ -148,6 +148,7 @@ Meteor.methods({
           $set: {
             gamePhase: GameState.PHASE.ENDED,
             winner: players[0].name,
+            winnerUserId: players[0].userId,
             stopped: new Date().getTime(),
           },
         });
