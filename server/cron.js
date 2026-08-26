@@ -14,8 +14,10 @@ import { GameState } from '../both/gamestate.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';
 import { buildHighscores } from './highscores.js';
+import './accounts.js';
 import './methods.js';
 import './publications.js';
+import './rateLimits.js';
 
 Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};
@@ -134,6 +136,9 @@ SyncedCron.add({
   },
 });
 
+// The account configuration that depends on Meteor.settings. The rest of the Accounts
+// setup — the display name every user document carries and the write rules on
+// Meteor.users — is in ./accounts.js.
 Meteor.startup(() => {
   Accounts.config({
     ambiguousErrorMessages: false,

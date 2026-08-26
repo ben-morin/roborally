@@ -269,6 +269,19 @@ describe('online users pill', () => {
     expect(callHelper('usersPill', 'usersOnline').fetch().length).toBeGreaterThan(0);
   });
 
+  // The publication sends `profile.name` and presence and nothing else, so the pill has
+  // no address to fall back on — this is the helper that turned the old
+  // `{{emails.[0].address}}` into a name.
+  it('labels a pill with the published display name', () => {
+    expect(callHelper('usersPill', 'userLabel', { _id: 'u1', profile: { name: 'Ben' } })).toBe(
+      'Ben'
+    );
+  });
+
+  it('falls back to the id for a user the backfill has not reached', () => {
+    expect(callHelper('usersPill', 'userLabel', { _id: 'u1' })).toBe('u1');
+  });
+
   it('colours an idle user differently from an active one', () => {
     expect(callHelper('usersPill', 'userPillClass', { status: { idle: true } })).toEqual({
       class: 'users-pill badge text-bg-warning',

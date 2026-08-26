@@ -30,6 +30,7 @@ export default defineConfig({
     alias: [
       { find: /^meteor\/meteor$/, replacement: stub('meteor-meteor.js') },
       { find: /^meteor\/mongo$/, replacement: stub('meteor-mongo.js') },
+      { find: /^meteor\/ddp-rate-limiter$/, replacement: stub('ddp-rate-limiter.js') },
       { find: /^meteor\/quave:synced-cron$/, replacement: stub('synced-cron.js') },
       { find: /^meteor\/ostrio:flow-router-extra$/, replacement: stub('flow-router.js') },
       { find: /^bootstrap$/, replacement: stub('bootstrap.js') },

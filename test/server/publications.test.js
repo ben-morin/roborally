@@ -1,10 +1,18 @@
 // Publications are cursor factories, so these run the real handler with `this.userId`
-// bound the way the DDP layer binds it and assert on what the cursor yields. The
-// `cards` case is the security-relevant one: it is the only publication that scopes to
-// the subscriber.
-import { beforeEach, describe, expect, it } from 'vitest';
+// bound the way the DDP layer binds it and assert on what the cursor yields. Two of them
+// are security-relevant and both are pinned here: `cards` is the only publication scoped
+// to the subscriber, and `onlineUsers` is the only one that hands out documents belonging
+// to somebody else — so it is the only one whose *fields* have to be asserted, not just
+// which documents come back.
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
-import { loginAs, registeredPublications, resetFakeCollections, runPublication } from '../setup.js';
+import {
+  loginAs,
+  logout,
+  registeredPublications,
+  resetFakeCollections,
+  runPublication,
+} from '../setup.js';
 import { Cards } from '../../collections/cards.js';
 import { Chat } from '../../collections/chat.js';
 import { Games } from '../../collections/games.js';
@@ -84,14 +92,87 @@ describe('chat', () => {
 });
 
 describe('onlineUsers', () => {
+  // A user document as accounts-password and mizzao:user-status actually leave it: the
+  // bcrypt hash, the resume login tokens, the forgot-password and email-verification
+  // tokens, and the IP address and user agent of the last login. Every one of these was
+  // going to every connected browser before the projection was added, so the fixture
+  // carries them all and the assertions below are what pins them in.
+  const seatUser = (_id, status) =>
+    Meteor.users.insertAsync({
+      _id,
+      profile: { name: `Player ${_id}` },
+      emails: [{ address: `${_id}@example.com`, verified: true }],
+      status,
+      services: {
+        password: {
+          bcrypt: '$2b$10$notarealhash',
+          reset: { token: 'reset-token', email: `${_id}@example.com` },
+        },
+        resume: { loginTokens: [{ hashedToken: 'resume-token' }] },
+        email: { verificationTokens: [{ token: 'verify-token' }] },
+      },
+    });
+
   it('publishes only users currently marked online', async () => {
-    await Meteor.users.insertAsync({ _id: 'on', status: { online: true } });
-    await Meteor.users.insertAsync({ _id: 'off', status: { online: false } });
-    await Meteor.users.insertAsync({ _id: 'never', status: {} });
+    await loginAs('viewer');
+    await seatUser('on', { online: true });
+    await seatUser('off', { online: false });
+    await seatUser('never', {});
 
     const users = (await runPublication('onlineUsers')).fetch();
 
-    expect(users.map((u) => u._id)).toEqual(['on']);
+    expect(users.map((u) => u._id).sort()).toEqual(['on', 'viewer']);
+  });
+
+  it('sends a display name and presence, and nothing else', async () => {
+    await loginAs('viewer');
+    await seatUser('other', {
+      online: true,
+      idle: true,
+      lastActivity: new Date(0),
+      lastLogin: { date: new Date(0), ipAddr: '203.0.113.7', userAgent: 'Firefox' },
+    });
+
+    const other = (await runPublication('onlineUsers')).fetch().find((u) => u._id === 'other');
+
+    expect(other).toEqual({
+      _id: 'other',
+      profile: { name: 'Player other' },
+      status: { online: true, idle: true },
+    });
+  });
+
+  it('leaks no credential material for any published user', async () => {
+    await loginAs('viewer');
+    await seatUser('other', {
+      online: true,
+      lastLogin: { ipAddr: '203.0.113.7', userAgent: 'Firefox' },
+    });
+
+    const published = JSON.stringify((await runPublication('onlineUsers')).fetch());
+
+    for (const secret of [
+      'notarealhash',
+      'reset-token',
+      'resume-token',
+      'verify-token',
+      'other@example.com',
+      '203.0.113.7',
+      'Firefox',
+    ]) {
+      expect(published).not.toContain(secret);
+    }
+  });
+
+  it('publishes nothing at all to a logged-out subscriber', async () => {
+    logout();
+    await seatUser('on', { online: true });
+    const ready = vi.fn();
+
+    // The handler returns no cursor; it marks the subscription ready so the client stops
+    // waiting rather than leaving it hanging.
+    expect(await runPublication('onlineUsers', { ready })).toBeUndefined();
+    expect(ready).toHaveBeenCalled();
   });
 });
 

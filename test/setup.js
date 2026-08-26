@@ -10,9 +10,9 @@
 // stub: CardLogic/GameLogic/GameState tests drive genuine read-mutate-updateAsync
 // round trips through Games/Players/Cards/Deck, the same way the app does. Only the
 // operators actually used by both/, collections/ and server/ are implemented (equality,
-// dotted paths, $gt/$gte/$lt/$lte/$ne/$exists, $set/$inc on write, sort/skip/limit on
-// find, and a four-stage aggregate) — anything wider throws loudly rather than silently
-// mismatching.
+// dotted paths, $gt/$gte/$lt/$lte/$ne/$exists, $set/$inc on write, sort/skip/limit and
+// inclusion-only `fields` on find, and a four-stage aggregate) — anything wider throws
+// loudly rather than silently mismatching.
 //
 // The second half of this file is the server harness: Meteor.methods/publish/startup
 // capture what server/ registers instead of discarding it, Meteor.callAsync dispatches
@@ -143,7 +143,7 @@ function applyModifier(doc, modifier) {
 }
 
 // The only aggregation in the app is server/highscores.js, which uses exactly these
-// four stages with a single $sum accumulator. Anything else throws.
+// four stages with a $sum and a $last accumulator. Anything else throws.
 function aggregate(docs, pipeline) {
   let result = docs.map((d) => structuredClone(d));
   for (const stage of pipeline) {
@@ -166,14 +166,24 @@ function aggregate(docs, pipeline) {
           const group = groups.get(mapKey);
           for (const [name, accSpec] of Object.entries(accumulators)) {
             const [accOp, accArg] = Object.entries(accSpec)[0];
-            if (accOp !== '$sum') {
-              throw new Error(`FakeCollection: unsupported accumulator "${accOp}"`);
-            }
-            const addend =
+            const argValue = (fallback) =>
               typeof accArg === 'string' && accArg.startsWith('$')
-                ? getPath(doc, accArg.slice(1)) || 0
+                ? (getPath(doc, accArg.slice(1)) ?? fallback)
                 : accArg;
-            group[name] = (group[name] || 0) + addend;
+            switch (accOp) {
+              case '$sum':
+                group[name] = (group[name] || 0) + (argValue(0) || 0);
+                break;
+              // Documents arrive in insertion order, so the last one to be seen wins —
+              // which is what Mongo does for an unsorted group. server/highscores.js uses
+              // it only to carry a fallback label out of the group, so which member of the
+              // group supplies it does not matter.
+              case '$last':
+                group[name] = argValue(undefined);
+                break;
+              default:
+                throw new Error(`FakeCollection: unsupported accumulator "${accOp}"`);
+            }
           }
         }
         result = [...groups.values()];
@@ -192,17 +202,44 @@ function aggregate(docs, pipeline) {
   return result;
 }
 
-const SUPPORTED_FIND_OPTIONS = ['sort', 'skip', 'limit'];
+// Mongo field projection. Inclusion only, which is all the app asks for: the
+// `onlineUsers` publication names the three fields it is willing to send, and the
+// profile-name backfill in server/accounts.js asks for `emails` alone. An exclusion
+// projection (`{field: 0}`) throws rather than being approximated — the point of the
+// option here is that a test can prove a field did NOT go out, so a silently wrong
+// projection would be worse than none.
+function project(doc, fields) {
+  const entries = Object.entries(fields).filter(([path]) => path !== '_id');
+  if (entries.some(([, include]) => !include)) {
+    throw new Error('FakeCollection: only inclusion projections are supported');
+  }
+  // Mongo includes _id unless it is explicitly excluded.
+  const result = fields._id === 0 || fields._id === false ? {} : { _id: doc._id };
+  for (const [path] of entries) {
+    const value = getPath(doc, path);
+    // Cloned like the unprojected path does: `doc` is the stored document, and a caller
+    // holding a live reference into it could mutate the collection behind its own back.
+    if (value !== undefined) setPath(result, path, structuredClone(value));
+  }
+  return result;
+}
+
+// `fields` is Meteor's spelling; `projection` (the raw driver's) is deliberately absent
+// so that reaching for it fails loudly instead of being ignored.
+const SUPPORTED_FIND_OPTIONS = ['sort', 'skip', 'limit', 'fields'];
 
 class FakeCursor {
-  constructor(docs, transform) {
+  constructor(docs, transform, fields) {
     this._docs = docs;
     this._transform = transform;
+    this._fields = fields;
   }
 
+  // Projection before transform, the order Mongo and Meteor apply them in: a transform
+  // only ever sees the fields the projection let through.
   _snapshot() {
     return this._docs.map((d) => {
-      const clone = structuredClone(d);
+      const clone = this._fields ? project(d, this._fields) : structuredClone(d);
       return this._transform ? this._transform(clone) : clone;
     });
   }
@@ -236,6 +273,8 @@ class FakeCollection {
     this._docs = new Map();
     this._seq = 0;
     this._transform = options.transform;
+    this._allowRules = [];
+    this._denyRules = [];
     allFakeCollections.push(this);
   }
 
@@ -262,18 +301,19 @@ class FakeCollection {
     if (options.sort) docs = sortDocs(docs, options.sort);
     if (options.skip) docs = docs.slice(options.skip);
     if (options.limit != null) docs = docs.slice(0, options.limit);
-    return new FakeCursor(docs, this._transform);
+    return new FakeCursor(docs, this._transform, options.fields);
   }
 
-  findOne(selector) {
-    const [doc] = this._rawMatches(selector);
-    if (!doc) return undefined;
-    const clone = structuredClone(doc);
-    return this._transform ? this._transform(clone) : clone;
+  // Delegates to find() so it inherits the same option validation and projection —
+  // otherwise a `fields` option here would be silently ignored, which is the one thing
+  // this fake is built not to do.
+  findOne(selector, options = {}) {
+    const [doc] = this.find(selector, { ...options, limit: 1 }).fetch();
+    return doc;
   }
 
-  findOneAsync(selector) {
-    return Promise.resolve(this.findOne(selector));
+  findOneAsync(selector, options) {
+    return Promise.resolve(this.findOne(selector, options));
   }
 
   insertAsync(doc) {
@@ -324,8 +364,17 @@ class FakeCollection {
     return matches.length;
   }
 
-  allow() {}
-  deny() {}
+  // Recorded rather than discarded: server/accounts.js's `Meteor.users.deny({update})` is
+  // the only thing standing between a client and its own profile.name, and a rule that
+  // silently vanished would be untestable. Registered at import time, so unlike the
+  // documents these survive _reset().
+  allow(rules) {
+    this._allowRules.push(rules);
+  }
+
+  deny(rules) {
+    this._denyRules.push(rules);
+  }
 
   rawCollection() {
     const docs = () => [...this._docs.values()];
@@ -396,6 +445,11 @@ export function registeredPublications() {
   return [...publications.keys()].sort();
 }
 
+/** The allow/deny rules a collection was given at import time. */
+export function collectionRules(collection) {
+  return { allow: collection._allowRules, deny: collection._denyRules };
+}
+
 /**
  * Invoke a publication the way the DDP layer does, with `this.userId` bound to the
  * current login. Returns whatever the handler returns (a cursor, or a promise of one
@@ -427,6 +481,7 @@ export async function runStartup() {
 const accountsState = {
   validateNewUser: [],
   validateLoginAttempt: [],
+  onCreateUser: [],
   verificationEmails: [],
 };
 
@@ -437,6 +492,7 @@ export function accountsHooks() {
 export function resetAccounts() {
   accountsState.validateNewUser.length = 0;
   accountsState.validateLoginAttempt.length = 0;
+  accountsState.onCreateUser.length = 0;
   accountsState.verificationEmails.length = 0;
   globalThis.Accounts._options = {};
   globalThis.Accounts.emailTemplates = {};
@@ -507,6 +563,12 @@ globalThis.Accounts = {
   },
   validateLoginAttempt(fn) {
     accountsState.validateLoginAttempt.push(fn);
+  },
+  // Real Meteor throws on a second registration; the harness re-runs startup once per
+  // test, so it collects instead — accountsHooks().onCreateUser is expected to hold
+  // exactly one entry after a single runStartup().
+  onCreateUser(fn) {
+    accountsState.onCreateUser.push(fn);
   },
   sendVerificationEmail(userId) {
     accountsState.verificationEmails.push(userId);
