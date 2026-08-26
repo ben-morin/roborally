@@ -9,6 +9,17 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 2
+    # Rspack 2 breaks `meteor build`: Meteor's own glue package
+    # (@meteorjs/rspack) still emits `meteor/<package>` externals as bare
+    # identifiers under it, so the server bundle fails to parse
+    # ("const quave_synced_cron_namespaceObject = meteor/quave:synced-cron;").
+    # Nothing in rspack.config.js can fix that — the externals are Meteor's.
+    # Drop these two entries once @meteorjs/rspack supports Rspack 2.
+    ignore:
+      - dependency-name: '@rspack/cli'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@rspack/core'
+        update-types: ['version-update:semver-major']
     groups:
       dev-dependencies:
         dependency-type: development
