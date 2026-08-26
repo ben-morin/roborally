@@ -39,17 +39,17 @@
   },
   "devDependencies": {
     "@meteorjs/rspack": "^2.1.0",
-    "@rsdoctor/rspack-plugin": "^1.5.7",
+    "@rsdoctor/rspack-plugin": "^1.6.3",
     "@rspack/cli": "^1.7.1",
     "@rspack/core": "^1.7.1",
-    "eslint": "^10.3.0",
+    "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-meteor": "^7.3.0",
-    "globals": "^17.6.0",
+    "globals": "^17.11.0",
     "jsdom": "^30.0.1",
     "prettier": "^3.8.3",
-    "sass-embedded": "1.79",
+    "sass-embedded": "1.103",
     "sass-loader": "^17.0.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
