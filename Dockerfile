@@ -13,18 +13,17 @@ ENV METEOR_DISABLE_OPTIMISTIC_CACHING=1
 ENV METEOR_WATCH_FORCE_POLLING=true
 
 ENV CXXFLAGS=-std=gnu++17
-RUN curl https://install.meteor.com/\?release\=3.5.1 | sh
+
+COPY .meteor/release /tmp/meteor-release
+RUN METEOR_RELEASE="$(tr -d '[:space:]' < /tmp/meteor-release | sed 's/^METEOR@//')" \
+    && echo "Installing Meteor ${METEOR_RELEASE} (from .meteor/release)" \
+    && curl "https://install.meteor.com/?release=${METEOR_RELEASE}" | sh \
+    && rm /tmp/meteor-release
 
 WORKDIR /usr/app
 
 COPY . /usr/app
 
-# Warm up the Meteor tool before any `meteor npm` call. The first meteor
-# invocation in a cold image runs its own first-time setup, during which
-# `meteor npm ci` silently installs only the production tree (and still exits
-# 0, so a `|| meteor npm install` fallback never fires). That leaves
-# node_modules without @meteorjs/rspack, and the build below then dies with
-# "Could not find rspack.config.js" — the config ships inside that package.
 RUN meteor --version
 RUN meteor npm ci || meteor npm install
 
@@ -36,7 +35,7 @@ RUN cd /tmp/app/bundle/programs/server && meteor npm install --production
 ### Runtime container
 ########################
 
-FROM node:24-alpine AS app
+FROM node:24-slim AS app
 
 WORKDIR /usr/app
 
