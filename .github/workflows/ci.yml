@@ -1,0 +1,42 @@
+name: CI
+
+# Fast checks. No Meteor toolchain, no Docker, no MongoDB — the vitest suite
+# shims Meteor (test/setup.js), so plain `npm ci` is enough. Verified locally:
+# lint, format:check and 489 tests all pass under plain npm in ~1.3s.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch/PR cancels the previous run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, format, test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm test

@@ -11,7 +11,12 @@ ENV METEOR_ALLOW_SUPERUSER=1
 ENV BROWSERSLIST_IGNORE_OLD_DATA=1
 
 ENV CXXFLAGS=-std=gnu++17
-RUN curl https://install.meteor.com/\?release\=3.5 | sh
+
+COPY .meteor/release /tmp/meteor-release
+RUN METEOR_RELEASE="$(tr -d '[:space:]' < /tmp/meteor-release | sed 's/^METEOR@//')" \
+    && echo "Installing Meteor ${METEOR_RELEASE} (from .meteor/release)" \
+    && curl "https://install.meteor.com/?release=${METEOR_RELEASE}" | sh \
+    && rm /tmp/meteor-release
 
 WORKDIR /usr/app
 

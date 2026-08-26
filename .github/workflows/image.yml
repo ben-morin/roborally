@@ -1,0 +1,180 @@
+name: Image
+
+# Two jobs' worth of work, two triggers:
+#
+#   pull_request -> build amd64 only, do NOT push. This is the only check that
+#                   catches a broken `meteor build`; the vitest suite cannot.
+#   tag push     -> guard, build linux/amd64 + linux/arm64 on native runners,
+#                   then merge the two into one multi-arch manifest and push.
+#
+# Docker Hub tags carry NO leading `v` (3.5.1-1), git tags DO (v3.5.1-1).
+# The guard job strips it once and every later job reuses the result.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# Queue, never cancel, a tag run: being interrupted between the per-arch push
+# and the manifest merge would leave the release half-published. Superseded PR
+# builds are cheap to redo, so those do get canceled.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: docker.io/yieldtoben/roborally
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fails in seconds, before any 15-minute Meteor build starts.
+  # ---------------------------------------------------------------------------
+  guard:
+    name: Guard the tag
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # need history for the ancestor check below
+
+      - name: Tag matches package.json, and sits on main
+        id: check
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          pkg="$(node -p "require('./package.json').version")"
+
+          echo "git tag          : ${tag}"
+          echo "docker tag to be : ${version}"
+          echo "package.json     : ${pkg}"
+
+          if [ "${version}" != "${pkg}" ]; then
+            echo "::error::Tag '${tag}' implies version '${version}' but package.json says '${pkg}'. Bump package.json and retag, or delete the tag."
+            exit 1
+          fi
+
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main; then
+            echo "::error::Tag '${tag}' is not on origin/main. Push main first, then tag."
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "OK — will publish ${IMAGE}:${version} and ${IMAGE}:latest"
+
+  # ---------------------------------------------------------------------------
+  # PR: prove the image still builds. Single arch, nothing leaves the runner.
+  # ---------------------------------------------------------------------------
+  pr-build:
+    name: Build (amd64, no push)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+
+  # ---------------------------------------------------------------------------
+  # Tag: one native runner per architecture. Do NOT use QEMU here — a Meteor
+  # build under emulation runs for over an hour. ubuntu-24.04-arm is free on
+  # public repos, which this one is.
+  #
+  # Each job pushes an untagged blob addressed by digest. Untagged digests are
+  # invisible on Docker Hub, so a half-finished release leaves no bad tag.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: guard
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Name the artifact after the platform
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Both architectures are up. Bind them under the real tags. This is the step
+  # that makes the release visible on Docker Hub.
+  # ---------------------------------------------------------------------------
+  merge:
+    name: Push multi-arch manifest
+    needs: [guard, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create the manifest list and push it
+        working-directory: /tmp/digests
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            -t "${IMAGE}:latest" \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Show what was published
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
