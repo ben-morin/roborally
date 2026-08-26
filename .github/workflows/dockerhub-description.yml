@@ -1,0 +1,45 @@
+name: Docker Hub description
+
+# Pushes README.md to the Docker Hub repository description.
+#
+# Deliberately NOT a final job in image.yml. That workflow answers one question
+# — "did the release ship?" — and a cosmetic failure here (expired token, wrong
+# scope, Docker Hub API hiccup) would mark a successful release run red after
+# the image already published. Failing on its own keeps that signal honest.
+#
+# Reuses DOCKERHUB_TOKEN, the same secret image.yml pushes with. The action
+# requires read/write/DELETE scope, so that token carries Delete as well —
+# wider than pushing images alone needs. Keep that in mind when rotating it.
+# See docs/RELEASE.local.md.
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/workflows/dockerhub-description.yml
+  workflow_dispatch: # re-sync by hand after a token rotation
+
+# Never race two description writes; the last one would win arbitrarily.
+concurrency:
+  group: dockerhub-description
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  describe:
+    name: Push README to Docker Hub
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: yieldtoben/roborally
+          short-description: ${{ github.event.repository.description }}
+          # enable-url-completion is left off on purpose: it also rewrites
+          # relative links inside code blocks. README.md's only link is already
+          # absolute — keep it that way rather than turning this on.
