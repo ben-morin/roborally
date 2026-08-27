@@ -21,11 +21,14 @@ receive or to decline.
    meteor npm test
    ```
 
-   All three must be clean. `format` rewrites files, so re-check `git status` afterwards.
+   All three must be clean. `format` rewrites files, so re-check `git status` afterwards. The
+   browser smoke test (`meteor npm run test:e2e`, see [tests](#tests)) is optional locally — CI
+   runs it on every PR — but worth a run if you touched the build config, a stylesheet or a
+   template.
 
 5. **Open a pull request against `main`.** Say what changed and why. If it fixes an issue, link it.
-6. **CI runs automatically** — lint, format, the vitest suite, and a full production Docker build.
-   All of it must pass. See [ci](#ci) below for what each job does.
+6. **CI runs automatically** — lint, format, the vitest suite, the browser smoke test, and a full
+   production Docker build. All of it must pass. See [ci](#ci) below for what each job does.
 
 Some things worth knowing:
 
@@ -99,19 +102,49 @@ upstream bug is fixed.
 
 ## tests
 
+Two suites, both under `test/`.
+
+### unit and integration — vitest
+
 ```
 meteor npm test
 meteor npm run test:watch
 ```
 
-A [vitest](https://vitest.dev) suite covering the game model: board composition and wall/movement
-queries, deck composition and dealing, movement/conveyor/gear/pusher/laser resolution, and the phase
-machine. The tests import the ES modules directly and need no Meteor, no MongoDB and no network, so
-the suite runs in a fraction of a second and is CI-ready as-is.
+A [vitest](https://vitest.dev) suite (`test/both`, `test/server`, `test/client`) covering the game
+model — board composition and wall/movement queries, deck composition and dealing,
+movement/conveyor/gear/pusher/laser resolution, the phase machine — plus the server methods,
+publications, cron jobs and account rules through a small Meteor shim (`test/setup.js`), and the
+Blaze helpers and event handlers through a `Template` capture (`test/clientSetup.js`). The tests
+import the ES modules directly and need no Meteor, no MongoDB and no network, so the whole suite
+runs in about a second. Its config is `test/vitest.config.mjs`.
 
-Two things it does not do. It never builds a bundle, evaluates a stylesheet or loads a Blaze
-template, so it stays green through a broken build-config change and is no evidence about one — a
-browser is the only oracle there. And `client/` and `server/` have no automated coverage at all.
+What it cannot see: it never builds a bundle, evaluates a stylesheet or renders a Blaze template,
+so it stays green through a broken build-config change. That is what the next suite is for.
+
+### browser smoke test — Playwright
+
+```
+meteor npm run e2e:install   # once per machine: downloads Chromium
+meteor npm run test:e2e
+```
+
+One [Playwright](https://playwright.dev) journey, `test/e2e/smoke.spec.js`: a fresh account signs
+up, creates a game, changes the board, starts a solo game, programs five cards and watches the first
+register resolve, with one computed-style assertion per stylesheet layer and a check that the
+browser logged no errors. It is the only test that sees the build.
+
+`test:e2e` starts `meteor run --settings test/e2e/settings.json` itself, waits for port 3000, runs
+the journey and shuts the server down again — about 15 seconds when the build cache is warm. Port
+3000 must be free, so stop a running dev server first. For a faster loop, start that exact command
+in another terminal and re-run `test:e2e` as often as you like; Playwright reuses a server it finds
+on 3000. Do not point it at `meteor npm run dev`, though: if your `settings-dev.json` has an email
+allowlist, the sign-up step fails with a 403.
+
+On a failure the HTML report opens with a trace of the run. Reports and traces land in
+`test/e2e/playwright-report/` and `test/e2e/test-results/`, both gitignored.
+`meteor npm run test:e2e:ui` opens Playwright's UI mode. After a `@playwright/test` version bump,
+run `e2e:install` again so the browser matches.
 
 ## lint and format
 
@@ -126,7 +159,9 @@ commands should stay at zero errors and zero warnings.
 
 ## ci
 
-Two GitHub Actions workflows, in `.github/workflows/`:
+Three GitHub Actions workflows gate a change, in `.github/workflows/` (a fourth,
+`dockerhub-description.yml`, only syncs the Docker Hub description from `README.md` on pushes to
+`main`):
 
 - `ci.yml` — on every push to `main` and every PR. Runs `npm ci`, `npm run lint`,
   `npm run format:check` and `npm test` on Node 24. No Meteor, no Docker, no MongoDB: the vitest
@@ -135,6 +170,10 @@ Two GitHub Actions workflows, in `.github/workflows/`:
   result away. This is the only check that catches a broken `meteor build`; the vitest suite
   cannot. On a `v*` tag it builds both architectures and publishes the image to Docker Hub;
   releases are cut by the maintainer.
+- `e2e.yml` — on every push to `main` and every PR. Installs Meteor from `.meteor/release` and
+  Chromium, then runs the Playwright smoke test against `meteor run` on the runner — a little under
+  two minutes end to end, most of it downloads. The HTML report is uploaded as a workflow artifact;
+  after a failure it carries the trace.
 
 Dependabot runs weekly against npm and the actions, grouped into one PR per group. `@rspack/cli`
 and `@rspack/core` majors are ignored — Rspack 2 breaks `meteor build`, because `@meteorjs/rspack`

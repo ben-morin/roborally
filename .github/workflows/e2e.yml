@@ -8,7 +8,11 @@ name: E2E
 #
 # `CI=true` is set by GitHub, and test/e2e/playwright.config.js keys off it: one retry
 # (shown as "flaky" in the report, so it cannot hide a real failure), `forbidOnly`, a
-# fresh server rather than a reused one, and a long webServer timeout for the cold start.
+# fresh server rather than a reused one.
+#
+# Measured on the first run (2026-08-27): 1 min 43 s end to end — Meteor install 19 s,
+# `meteor npm ci` 11 s, Chromium 25 s, and 42 s for the smoke step, of which 26 s was the
+# cold `meteor run` and 16 s the journey itself.
 on:
   push:
     branches: [main]
@@ -27,9 +31,9 @@ jobs:
   smoke:
     name: Playwright smoke
     runs-on: ubuntu-24.04
-    # A broken build never answers on :3000, so Playwright only fails at its webServer
-    # timeout (10 min in CI). This bounds the damage above that.
-    timeout-minutes: 25
+    # A broken build never answers on :3000, so Playwright only fails at its 3-minute
+    # webServer timeout; with setup that is a ~4 min failure. This bounds anything worse.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
