@@ -1,0 +1,75 @@
+name: E2E
+
+# The Playwright smoke test (test/e2e/). This is the one check that sees the build: it
+# runs `meteor run` on the runner, drives a real Chromium through sign-up → create game →
+# start → a resolved register, and asserts one computed style per stylesheet layer. Kept
+# out of ci.yml on purpose — that workflow promises "no Meteor toolchain, no MongoDB" and
+# finishes in half a minute; this one installs Meteor and takes minutes.
+#
+# `CI=true` is set by GitHub, and test/e2e/playwright.config.js keys off it: one retry
+# (shown as "flaky" in the report, so it cannot hide a real failure), `forbidOnly`, a
+# fresh server rather than a reused one, and a long webServer timeout for the cold start.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch/PR cancels the previous run.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Playwright smoke
+    runs-on: ubuntu-24.04
+    # A broken build never answers on :3000, so Playwright only fails at its webServer
+    # timeout (10 min in CI). This bounds the damage above that.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Same idiom as the Dockerfile: the release comes from .meteor/release, so the
+      # project pin stays the single source of truth. The installer symlinks into
+      # /usr/local/bin when it can; the PATH line covers the case where it cannot.
+      - name: Install Meteor
+        run: |
+          set -euo pipefail
+          release="$(tr -d '[:space:]' < .meteor/release | sed 's/^METEOR@//')"
+          echo "Installing Meteor ${release} (from .meteor/release)"
+          curl "https://install.meteor.com/?release=${release}" | sh
+          echo "$HOME/.meteor" >> "$GITHUB_PATH"
+
+      - run: meteor --version
+
+      - name: Install
+        run: meteor npm ci
+
+      # The browser is a separate download pinned by the @playwright/test version;
+      # --with-deps also installs the shared libraries Chromium needs on Ubuntu. Not
+      # cached: Playwright's own guidance is that restoring the cache takes about as long
+      # as the download, and the apt step cannot be cached at all.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Playwright starts `meteor run --settings test/e2e/settings.json` itself, waits for
+      # :3000, runs the journey and shuts the server down (webServer in the config).
+      - name: Smoke test
+        run: meteor npm run test:e2e
+
+      # The HTML report carries the trace of any failed attempt.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: test/e2e/playwright-report/
+          retention-days: 7
