@@ -35,6 +35,8 @@ module.exports = [
       'packages/meteor-accounts-ui-roborally/**',
       'public/**',
       '_build/**',
+      'test/e2e/playwright-report/**',
+      'test/e2e/test-results/**',
     ],
   },
   {
