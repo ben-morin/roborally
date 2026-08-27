@@ -1,7 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-const stub = (file) => fileURLToPath(new URL(`./test/stubs/${file}`, import.meta.url));
+// This file lives in test/, beside the suite it configures, so vitest has to be told where
+// it is (`--config test/vitest.config.mjs` in the package.json scripts) and where the
+// project is: `root` would otherwise default to whatever directory vitest was launched
+// from, and `include` and `setupFiles` below are resolved against it.
+const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+const stub = (file) => fileURLToPath(new URL(`./stubs/${file}`, import.meta.url));
 
 // Blaze templates are compiled by Meteor's build, so `import './cards.html'` has nothing
 // to resolve to out here. The view modules import them purely for the side effect of
@@ -21,6 +26,7 @@ const blazeHtmlStub = {
 };
 
 export default defineConfig({
+  root: projectRoot,
   plugins: [blazeHtmlStub],
   // The `meteor/...` specifiers the app reaches, plus `bootstrap`, whose real bundle
   // touches `document` as it loads. Anchored regexes rather than plain string keys so a

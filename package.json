@@ -15,8 +15,8 @@
   "scripts": {
     "start": "meteor run",
     "dev": "meteor run --settings settings-dev.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config test/vitest.config.mjs",
+    "test:watch": "vitest --config test/vitest.config.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,json,html,scss,md}\"",
