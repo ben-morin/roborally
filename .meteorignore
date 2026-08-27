@@ -4,9 +4,11 @@ eslint.config.mjs
 .prettierrc.json
 .prettierignore
 
-# The vitest suite. Its files are named *.test.js, which also matches Meteor's
-# test-mode glob — without this, `meteor test` would eagerly load them and blow up
-# (they import from vitest, and test/setup.js replaces globalThis.Meteor).
+# The test suites: vitest (*.test.js) and Playwright (test/e2e/*.spec.js). Both
+# names match Meteor's test-mode glob — without this, `meteor test` would eagerly
+# load them and blow up (they import from vitest / @playwright/test, and
+# test/setup.js replaces globalThis.Meteor). It also keeps the file watcher from
+# rebuilding the app when a spec is edited while `meteor run` is up.
 test/
 
 # Profiler run output. A profiler writing a log during `meteor run` would otherwise

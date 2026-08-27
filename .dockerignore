@@ -20,6 +20,10 @@ _build
 # profiler run output (mirrors .gitignore)
 logs/
 
+# The test suites (vitest and Playwright). .meteorignore already keeps them out of
+# the bundle; this keeps them out of the build context.
+test/
+
 .gitignore
 .git
 Dockerfile

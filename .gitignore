@@ -18,3 +18,7 @@ _build
 
 # profiler run output
 logs/
+
+# Playwright output (test/e2e/playwright.config.js keeps both beside the suite)
+test/e2e/test-results/
+test/e2e/playwright-report/

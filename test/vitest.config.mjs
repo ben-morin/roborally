@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // This file lives in test/, beside the suite it configures, so vitest has to be told where
 // it is (`--config test/vitest.config.mjs` in the package.json scripts) and where the
@@ -48,6 +48,10 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./test/setup.js', './test/clientSetup.js'],
     include: ['test/**/*.test.js'],
+    // The Playwright suite shares the folder. Its files are *.spec.js, which `include`
+    // would never match anyway — this writes the boundary down. Setting `exclude`
+    // replaces vitest's defaults (node_modules and friends), hence the spread.
+    exclude: [...configDefaults.exclude, 'test/e2e/**'],
     // A passing test should say nothing. `both/logging.js` silences only console.log in
     // production, so console.error stays live in the harness (see test/setup.js) — and
     // several tests legitimately drive code that calls it, e.g. the exhausted-hand branch
