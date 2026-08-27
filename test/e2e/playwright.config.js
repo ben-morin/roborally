@@ -30,9 +30,12 @@ export default defineConfig({
     cwd: '../..',
     command: 'meteor run --settings test/e2e/settings.json',
     url: 'http://localhost:3000',
-    // A cold `meteor run` in CI downloads Atmosphere packages and then does a cold Rspack
-    // build before it answers; locally the build cache makes it far quicker.
-    timeout: CI ? 600_000 : 180_000,
+    // Measured 2026-08-27 on a fresh ubuntu-24.04 runner: a cold `meteor run` — Atmosphere
+    // downloads plus a cold Rspack build — answered on :3000 after 26 s; warm and local it
+    // is ~5 s. Three minutes is roomy for either. Keep it tight on purpose: a broken build
+    // never answers (Meteor sits in "waiting for file change"), so this timeout is exactly
+    // how long such a failure takes to surface, in CI and locally alike.
+    timeout: 180_000,
     // Locally, reuse a server that is already up — start it with the same settings file
     // (`meteor run --settings test/e2e/settings.json`), NOT `meteor npm run dev`: that
     // settings file has an email allowlist, and the sign-up step would get a 403.
