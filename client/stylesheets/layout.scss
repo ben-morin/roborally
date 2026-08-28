@@ -14,6 +14,23 @@ header {
     display: block;
     margin: 0 auto 20px;
   }
+
+  // The landing card's one long paragraph, pulled in so it does not run the full width of
+  // the card. Only from `md` up: on a phone 20% a side would leave a column a few words
+  // wide, so there it keeps the card's own padding.
+  .game-description {
+    @include media-up(md) {
+      padding-left: 20%;
+      padding-right: 20%;
+    }
+  }
+
+  // The Source buttons sit right under the credits and right on the card's bottom padding,
+  // so they get their own breathing room on both sides.
+  .source-link {
+    margin-top: 1em;
+    margin-bottom: 1em;
+  }
 }
 
 @include media-up(md) {
