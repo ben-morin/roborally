@@ -80,6 +80,8 @@ describe('createGame', () => {
       waitingForRespawn: [],
       cardsToPlay: [],
       announce: false,
+      step: 0,
+      lastStepAt: null,
     });
     // createGame delegates the seating to joinGame rather than duplicating it.
     expect(await Players.find({ gameId }).countAsync()).toBe(1);

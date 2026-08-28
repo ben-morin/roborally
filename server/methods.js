@@ -36,6 +36,10 @@ Meteor.methods({
       waitingForRespawn: [],
       announce: false,
       cardsToPlay: [],
+      // The compare-and-set counter every turn-chain write claims through, and when the
+      // last claim landed. See `advanceAsync` in collections/games.js.
+      step: 0,
+      lastStepAt: null,
     };
     const board_id = BoardBox.getBoardId(game.name);
     if (board_id >= 0) game.boardId = board_id;

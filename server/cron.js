@@ -139,7 +139,17 @@ SyncedCron.add({
 // The account configuration that depends on Meteor.settings. The rest of the Accounts
 // setup — the display name every user document carries and the write rules on
 // Meteor.users — is in ./accounts.js.
-Meteor.startup(() => {
+Meteor.startup(async () => {
+  // Games created before resumable turns have no `step`, and `advanceAsync`'s selector can
+  // never match a missing field — such a game would refuse every write in its turn chain.
+  // Seed them first, before the cron jobs start and before a client can reach a method.
+  const backfilled = await Games.updateAsync(
+    { step: { $exists: false } },
+    { $set: { step: 0, lastStepAt: null } },
+    { multi: true }
+  );
+  if (backfilled > 0) console.log(`Backfilled step on ${backfilled} game(s)`);
+
   Accounts.config({
     ambiguousErrorMessages: false,
     sendVerificationEmail: Meteor.settings?.VERIFY_EMAILS || false,

@@ -62,6 +62,22 @@ describe('games', () => {
 
     expect((await runPublication('games')).fetch()).toHaveLength(1);
   });
+
+  // Server-side turn bookkeeping: several kilobytes of players, cards and deck that no
+  // template reads, on a publication that ships whole documents to everyone.
+  it('withholds the segment snapshot and keeps the rest of the document', async () => {
+    await Games.insertAsync({
+      name: 'only',
+      submitted: 1,
+      step: 4,
+      segmentSnapshot: { segment: 'play', players: [{ _id: 'p1' }] },
+    });
+
+    const [published] = (await runPublication('games')).fetch();
+
+    expect(published.segmentSnapshot).toBeUndefined();
+    expect(published).toMatchObject({ name: 'only', step: 4 });
+  });
 });
 
 describe('chat', () => {

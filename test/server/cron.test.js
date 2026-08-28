@@ -64,6 +64,22 @@ describe('registration', () => {
   });
 });
 
+describe('startup backfill', () => {
+  // A game without `step` refuses every claim its turn chain makes, so games already in
+  // flight when this ships have to be seeded before anything can drive them.
+  it('seeds step on games that predate it and leaves the others alone', async () => {
+    await Games.insertAsync({ name: 'old', started: true });
+    await Games.insertAsync({ name: 'mid-turn', started: true, step: 7, lastStepAt: new Date(1) });
+
+    await runStartup();
+
+    expect(await Games.findOneAsync({ name: 'old' })).toMatchObject({ step: 0, lastStepAt: null });
+    const untouched = await Games.findOneAsync({ name: 'mid-turn' });
+    expect(untouched.step).toBe(7);
+    expect(untouched.lastStepAt).toEqual(new Date(1));
+  });
+});
+
 describe(HIGHSCORES, () => {
   it('rebuilds the lists', async () => {
     await user('u1', { name: 'ann' });

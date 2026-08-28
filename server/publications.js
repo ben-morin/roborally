@@ -4,8 +4,11 @@ import { Games } from '../collections/games.js';
 import { Highscores } from '../collections/highscores.js';
 import { Players } from '../collections/players.js';
 
+// Whole game documents go out to every client here, so the per-turn snapshot — a copy of
+// the players, cards and deck as they were when the current segment started — is projected
+// away. It is several kilobytes, it is server-only bookkeeping, and no template reads it.
 Meteor.publish('games', function () {
-  return Games.find({}, { limit: 10, sort: { submitted: -1 } });
+  return Games.find({}, { limit: 10, sort: { submitted: -1 }, fields: { segmentSnapshot: 0 } });
 });
 
 Meteor.publish('chat', async function (gameId) {

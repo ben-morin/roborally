@@ -47,6 +47,31 @@ const game = {
     }
     console.log(msg);
   },
+  // The compare-and-set that every write in the turn chain goes through. The selector
+  // pins the game's `step`, so the write lands only if nothing else has advanced the game
+  // since this instance was read, and `$inc: { step: 1 }` guarantees the update actually
+  // modifies the document — Meteor's `updateAsync` resolves to a modifiedCount, so a write
+  // that changed nothing is indistinguishable from one that matched nothing.
+  //
+  // `false` means another driver owns the game now. That is a normal outcome, not an
+  // error: the caller returns and lets the winner carry on. `true` leaves this instance
+  // current with what was written, so the caller can keep using it.
+  //
+  // Every game document carries `step` — seeded by createGame, backfilled at startup for
+  // games already in flight — because a selector on a missing field can never match.
+  // `$set` paths are plain field names for the same reason the instance is updated with a
+  // bare Object.assign: nothing in the chain sets a dotted path.
+  async advanceAsync(modifier = {}) {
+    const $set = { ...(modifier.$set ?? {}), lastStepAt: new Date() };
+    const modified = await Games.updateAsync(
+      { _id: this._id, step: this.step },
+      { ...modifier, $set, $inc: { ...(modifier.$inc ?? {}), step: 1 } }
+    );
+    if (modified === 0) return false;
+    this.step += 1;
+    Object.assign(this, $set);
+    return true;
+  },
   async nextPlayPhaseAsync(phase) {
     if (phase != null) {
       await this.setPlayPhaseAsync(phase);

@@ -23,6 +23,7 @@ export async function insertGame(overrides = {}) {
     timerStartedAt: null,
     announce: false,
     started: true,
+    step: 0,
     ...overrides,
   });
   return Games.findOneAsync(id);
