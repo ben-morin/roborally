@@ -8,12 +8,13 @@ import '../both/cardMethods.js';
 import '../collections/users.js';
 
 import { SyncedCron } from 'meteor/quave:synced-cron';
-import { autoSubmitIfTimedOut } from '../both/cardlogic.js';
+import { autoSubmitIfTimedOut, forceSubmitStragglerAsync } from '../both/cardlogic.js';
 import { GameLogic } from '../both/gamelogic.js';
 import { GameState } from '../both/gamestate.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';
 import { buildHighscores } from './highscores.js';
+import { resumeStalledTurnsAsync } from './resume.js';
 import './accounts.js';
 import './methods.js';
 import './publications.js';
@@ -23,6 +24,14 @@ Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};
 Meteor.settings.public.appVersion =
   process.env.APP_VERSION || process.env.npm_package_version || 'development';
+
+// When this process came up — stamped in Meteor.startup, before the scheduler starts.
+// mizzao:user-status marks every user offline in its own startup hook, and clients take
+// a few seconds to reconnect — after a long outage, up to five minutes of DDP back-off.
+// Until they do, every live game looks abandoned; `Clean up abandoned games` sits out
+// the grace so a restart cannot end a game as "Nobody" or hand it to the first player back.
+const BOOT_GRACE_MS = 5 * 60 * 1000;
+let bootedAt = 0;
 
 SyncedCron.config({ log: false });
 
@@ -64,9 +73,8 @@ SyncedCron.add({
     // when it sees `timer: 0`, so with the timer stuck at 1 both ends wait for each
     // other. This is the routine cause of a game hanging in the program phase.
     //
-    // Only the program phase is swept. A game stuck part-way through the play phase is
-    // a different problem and is NOT safe to re-drive: those phases consume cards and
-    // move robots as they go, so re-entering one could apply a turn twice.
+    // Only the programming timer is handled here. A game stalled inside the turn itself
+    // is `Recover stalled turns`' business, below.
     const cutoff = new Date(Date.now() - (GameLogic.TIMER + 30) * 1000);
     const stalled = await Games.find({
       started: true,
@@ -82,13 +90,42 @@ SyncedCron.add({
       // race with a player submitting in the meantime resolves harmlessly.
       await autoSubmitIfTimedOut(game._id, game.timerStartedAt);
     }
+
+    // The other place the timer can die: inside the 2.5 s grace after it fired, with
+    // `timer: 0` and `timerStartedAt` already cleared. An open tab re-sends its submit on
+    // reconnect; a closed one leaves the game there forever. `lastStepAt` is the arming
+    // claim's stamp, so the same cutoff means the grace ended at least 27 s ago and the
+    // force-submit cannot overlap a live one.
+    const inGrace = await Games.find({
+      started: true,
+      gamePhase: GameState.PHASE.PROGRAM,
+      timer: 0,
+      lastStepAt: { $lt: cutoff },
+    }).fetchAsync();
+
+    for (const game of inGrace) {
+      console.log(`Recovering programming timer lost in its grace for game ${game._id}`);
+      await forceSubmitStragglerAsync(game._id);
+    }
   },
+});
+
+SyncedCron.add({
+  name: 'Recover stalled turns',
+  schedule: (parser) => parser.text('every 1 minute'),
+  // Fire-and-forget by design — see server/resume.js. Awaiting the replays would hold
+  // this job for the rest of the turn and push back its next tick.
+  job: () => resumeStalledTurnsAsync(),
 });
 
 SyncedCron.add({
   name: 'Clean up abandoned games',
   schedule: (parser) => parser.text('every 1 minute'),
   job: async () => {
+    if (Date.now() - bootedAt < BOOT_GRACE_MS) {
+      console.log('Skipping abandoned-game check: the server booted less than five minutes ago');
+      return;
+    }
     const liveGames = await Games.find({ started: true, winner: { $exists: false } }).fetchAsync();
     for (const game of liveGames) {
       const players = await Players.find({ gameId: game._id }).fetchAsync();
@@ -140,6 +177,8 @@ SyncedCron.add({
 // setup — the display name every user document carries and the write rules on
 // Meteor.users — is in ./accounts.js.
 Meteor.startup(async () => {
+  bootedAt = Date.now();
+
   // Games created before resumable turns have no `step`, and `advanceAsync`'s selector can
   // never match a missing field — such a game would refuse every write in its turn chain.
   // Seed them first, before the cron jobs start and before a client can reach a method.
@@ -149,6 +188,11 @@ Meteor.startup(async () => {
     { multi: true }
   );
   if (backfilled > 0) console.log(`Backfilled step on ${backfilled} game(s)`);
+
+  // A game whose turn died with the previous process is picked up here rather than at the
+  // first cron tick — with the same stall threshold, which is what keeps a booting
+  // instance off a game a still-running one is driving during a rolling deploy.
+  await resumeStalledTurnsAsync();
 
   Accounts.config({
     ambiguousErrorMessages: false,

@@ -72,6 +72,18 @@ function getPathValues(obj, path) {
   return current;
 }
 
+// Mongo's range operators only order values of the same type: null and a missing field
+// never satisfy `{ $lt: <Date> }`, and a Date never satisfies `{ $lt: 5 }`. Plain JS `<`
+// would coerce both (`null < new Date()` is true). The sweep in server/resume.js relies
+// on the first: a game whose `lastStepAt` is still null is never "stalled".
+function ordered(v, bound) {
+  if (v == null || bound == null) return false;
+  if (v instanceof Date || bound instanceof Date) {
+    return v instanceof Date && bound instanceof Date;
+  }
+  return typeof v === typeof bound;
+}
+
 function matchesSelector(doc, selector) {
   if (typeof selector === 'string') return doc._id === selector;
   return Object.entries(selector).every(([key, cond]) => {
@@ -91,13 +103,13 @@ function matchesSelector(doc, selector) {
       return Object.entries(cond).every(([op, opVal]) => {
         switch (op) {
           case '$gt':
-            return some((v) => v > opVal);
+            return some((v) => ordered(v, opVal) && v > opVal);
           case '$gte':
-            return some((v) => v >= opVal);
+            return some((v) => ordered(v, opVal) && v >= opVal);
           case '$lt':
-            return some((v) => v < opVal);
+            return some((v) => ordered(v, opVal) && v < opVal);
           case '$lte':
-            return some((v) => v <= opVal);
+            return some((v) => ordered(v, opVal) && v <= opVal);
           case '$ne':
             // $ne is the negation of $eq, so it inherits $eq's treatment of null:
             // `{f: {$ne: 'x'}}` matches a document missing `f`, but `{f: {$ne: null}}`

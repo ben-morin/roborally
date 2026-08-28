@@ -56,6 +56,23 @@ describe('selector equality', () => {
     expect(docs.find({ at: new Date(at.getTime() + 1) }).count()).toBe(0);
     expect(docs.find({ at: at.getTime() }).count()).toBe(0); // a number is not a Date
   });
+
+  // Mongo's range operators only order values of the same type; plain JS `<` coerces, and
+  // `null < new Date()` is true. server/resume.js selects on `lastStepAt: { $lt: cutoff }`
+  // over games whose `lastStepAt` may still be null, and must find none of those.
+  it('never orders null, a missing field or a number against a Date', async () => {
+    const cutoff = new Date(1_700_000_000_000);
+    await docs.insertAsync({ tag: 'null', at: null });
+    await docs.insertAsync({ tag: 'missing' });
+    await docs.insertAsync({ tag: 'number', at: 0 });
+    await docs.insertAsync({ tag: 'older', at: new Date(cutoff.getTime() - 1) });
+    const tags = async (selector) => (await docs.find(selector).fetchAsync()).map((d) => d.tag);
+
+    expect(await tags({ at: { $lt: cutoff } })).toEqual(['older']);
+    expect(await tags({ at: { $gt: new Date(0) } })).toEqual(['older']);
+    expect(await tags({ at: { $lte: 0 } })).toEqual(['number']);
+    expect(await tags({ at: { $gte: 0 } })).toEqual(['number']);
+  });
 });
 
 describe('field projection', () => {

@@ -4,23 +4,12 @@ import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fi
 import { GameState, setBuildHighscores } from '../../both/gamestate.js';
 import { GameLogic } from '../../both/gamelogic.js';
 import { CardLogic } from '../../both/cardlogic.js';
-import { Board } from '../../both/board.js';
-import { BoardBox } from '../../both/board_box.js';
 import { Games } from '../../collections/games.js';
 import { Players } from '../../collections/players.js';
 import { Cards } from '../../collections/cards.js';
 import { Chat } from '../../collections/chat.js';
 import { Deck } from '../../collections/deck.js';
-
-function stubBoard(width = 6, height = 6) {
-  const board = new Board('gamestate-test', 1, 8, width, height);
-  // An unreachable-by-default checkpoint, so a fresh player's `visited_checkpoints`
-  // (0) never accidentally equals `board.checkpoints.length` (which would otherwise
-  // be 0 on a bare board and immediately "win" the game in checkIfWeHaveAWinner).
-  board.checkpoints = [{ x: -1, y: -1, number: 1 }];
-  vi.spyOn(BoardBox, 'getBoard').mockReturnValue(board);
-  return board;
-}
+import { stubBoard } from '../helpers/board.js';
 
 // GameState's phase-dispatch methods (nextGamePhaseAsync/nextPlayPhaseAsync) often
 // end by recursively calling themselves to advance to the next phase. Letting that
@@ -823,7 +812,9 @@ describe('resumeAsync', () => {
     });
 
     it('PROGRAM with every living player submitted is kicked into the turn', async () => {
-      const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+      // `timer: 0` is what a timeout leaves when it finds nobody left to submit — the
+      // shape of a last submit whose claim lost to a concurrent one.
+      const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM, timer: 0 });
       await insertPlayer(game._id, { submitted: true });
       await insertPlayer(game._id, { submitted: false, lives: 0 }); // dead: does not count
       const d = spyDispatchers();
@@ -831,6 +822,9 @@ describe('resumeAsync', () => {
       await drive(() => GameState.resumeAsync(game._id));
 
       expect(d.game).toHaveBeenCalledWith(game._id);
+      // The kick writes what the lost claim would have: a stale 0 would follow the game
+      // into its next program phase, where every client auto-submits on sight of it.
+      expect(await Games.findOneAsync(game._id)).toMatchObject({ timer: -1, timerStartedAt: null });
     });
 
     it('PROGRAM with someone still programming is untouched, however long it takes', async () => {

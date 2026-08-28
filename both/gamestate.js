@@ -602,13 +602,21 @@ async function resumeStepFor(game) {
       return null;
     case GameState.PHASE.PROGRAM: {
       // Everyone submitted and nobody drove on: the process died in the ~250 ms between
-      // the last submit and the PLAY write. No human is expected to act, so kick it.
+      // the last submit and the PLAY write, or the last submitter's claim lost to another
+      // player's concurrent submit. No human is expected to act, so kick it.
       const programming = await Players.find({
         gameId: game._id,
         lives: { $gt: 0 },
         submitted: false,
       }).countAsync();
-      return programming === 0 ? () => GameState.nextGamePhaseAsync(game._id) : null;
+      if (programming > 0) return null;
+      return async () => {
+        // What the last submitter's claim would have written. Without it a `timer: 0`
+        // left behind by a timeout that found nobody left to submit would follow the game
+        // into its next program phase — where every client auto-submits on sight of it.
+        if (!(await game.advanceAsync({ $set: { timer: -1, timerStartedAt: null } }))) return;
+        await GameState.nextGamePhaseAsync(game._id);
+      };
     }
     default:
       // IDLE and ENDED: nothing to resume.

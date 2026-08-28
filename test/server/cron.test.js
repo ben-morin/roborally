@@ -1,6 +1,6 @@
-// The three scheduled jobs in server/cron.js hold real cleanup logic that is otherwise
-// unreachable without waiting out a schedule. The stub for `meteor/quave:synced-cron`
-// records each job by name so these can invoke the body directly.
+// The scheduled jobs in server/cron.js hold real cleanup and recovery logic that is
+// otherwise unreachable without waiting out a schedule. The stub for
+// `meteor/quave:synced-cron` records each job by name so these can invoke the body directly.
 //
 // Every offline check is a two-step: see the user offline, wait five seconds, look
 // again. Fake timers drive that window, which also lets a test reconnect a user
@@ -9,18 +9,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import { resetFakeCollections, runStartup } from '../setup.js';
 import { cronSchedule, cronStarted, registeredCronJobs, runCronJob } from '../stubs/synced-cron.js';
-import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
+import { insertCards, insertDeck, insertGame, insertPlayer } from '../helpers/fixtures.js';
+import { stubBoard } from '../helpers/board.js';
 import { GameLogic } from '../../both/gamelogic.js';
 import { GameState } from '../../both/gamestate.js';
 import { Chat } from '../../collections/chat.js';
 import { Games } from '../../collections/games.js';
 import { Highscores } from '../../collections/highscores.js';
 import { Players } from '../../collections/players.js';
+import { STALL_MS } from '../../server/resume.js';
 
 const UNSTARTED = 'Clean up unstarted games';
 const ABANDONED = 'Clean up abandoned games';
 const HIGHSCORES = 'Build highscore lists';
 const STALLED = 'Recover stalled programming timers';
+const RESUME = 'Recover stalled turns';
+
+const RESUME_CHAT = 'Server restarted — replaying this turn from the start';
+// `Clean up abandoned games` sits out this long after boot — see server/cron.js.
+const BOOT_GRACE_MS = 5 * 60 * 1000;
 
 // `name` is the display name the account resolves to, which in production always matches
 // the `name` on that user's Players document — joinGame stamps both from getUsername().
@@ -47,14 +54,18 @@ async function runWithRecheck(name, duringWait = async () => {}) {
 }
 
 beforeEach(() => resetFakeCollections());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe('registration', () => {
-  it('registers all four jobs on the documented schedules', () => {
-    expect(registeredCronJobs()).toEqual([HIGHSCORES, UNSTARTED, STALLED, ABANDONED]);
+  it('registers all five jobs on the documented schedules', () => {
+    expect(registeredCronJobs()).toEqual([HIGHSCORES, UNSTARTED, STALLED, RESUME, ABANDONED]);
     expect(cronSchedule(HIGHSCORES)).toBe('every 1 hour');
     expect(cronSchedule(UNSTARTED)).toBe('every 5 minutes');
     expect(cronSchedule(STALLED)).toBe('every 1 minute');
+    expect(cronSchedule(RESUME)).toBe('every 1 minute');
     expect(cronSchedule(ABANDONED)).toBe('every 1 minute');
   });
 
@@ -78,6 +89,24 @@ describe('startup backfill', () => {
     expect(untouched.step).toBe(7);
     expect(untouched.lastStepAt).toEqual(new Date(1));
   });
+
+  // A turn that died with the previous process is picked up as the new one boots, not a
+  // cron tick later. Same threshold as the job, so a game a still-running instance is
+  // driving (rolling deploy) is left alone.
+  it('sweeps for stalled turns once at startup', async () => {
+    const resume = vi.spyOn(GameState, 'resumeAsync').mockResolvedValue();
+    const dead = await insertGame({
+      gamePhase: GameState.PHASE.RESPAWN,
+      respawnPlayerId: null,
+      lastStepAt: new Date(Date.now() - 2 * STALL_MS),
+    });
+    await insertGame({ gamePhase: GameState.PHASE.PLAY, lastStepAt: new Date() }); // live
+
+    await runStartup();
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(resume).toHaveBeenCalledWith(dead._id);
+  });
 });
 
 describe(HIGHSCORES, () => {
@@ -97,8 +126,13 @@ describe(STALLED, () => {
   // A programming timer is a Meteor.setTimeout, so it dies with the process. These set
   // up the state a restart leaves behind — timer still 1, timerStartedAt long past —
   // which nothing else in the system recovers from.
-  async function stalledGame({ startedAt, gamePhase = GameState.PHASE.PROGRAM, timer = 1 } = {}) {
-    const game = await insertGame({ gamePhase, timer, timerStartedAt: startedAt });
+  async function stalledGame({
+    startedAt = null,
+    gamePhase = GameState.PHASE.PROGRAM,
+    timer = 1,
+    lastStepAt = null,
+  } = {}) {
+    const game = await insertGame({ gamePhase, timer, timerStartedAt: startedAt, lastStepAt });
     const quick = await insertPlayer(game._id, { userId: 'a', name: 'ann', submitted: true });
     const slow = await insertPlayer(game._id, { userId: 'b', name: 'bob', submitted: false });
     // A legal hand, so the force-submit is an ordinary submission rather than the
@@ -168,6 +202,257 @@ describe(STALLED, () => {
 
     await expect(running).resolves.not.toThrow();
   });
+
+  // The timer can also die inside the 2.5 s grace after it fired: `timer: 0`,
+  // `timerStartedAt` already cleared, and — if the straggler's tab is gone — nothing left
+  // to re-send the submit. The arming claim's `lastStepAt` is the only clock that state has.
+  describe('a timer lost in its grace window', () => {
+    it('force-submits the straggler once the grace is long over', async () => {
+      const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+      const { gameId, slow } = await stalledGame({ timer: 0, lastStepAt: longAgo() });
+
+      await runCronJob(STALLED);
+
+      expect((await Players.findOneAsync(slow)).submitted).toBe(true);
+      expect((await Games.findOneAsync(gameId)).timer).toBe(-1);
+      expect(nextPhase).toHaveBeenCalledWith(gameId);
+    });
+
+    it('leaves a grace that may still be running to the live timeout', async () => {
+      const { gameId, slow } = await stalledGame({
+        timer: 0,
+        lastStepAt: new Date(Date.now() - (GameLogic.TIMER + 5) * 1000),
+      });
+
+      await runCronJob(STALLED);
+
+      expect((await Players.findOneAsync(slow)).submitted).toBe(false);
+      expect((await Games.findOneAsync(gameId)).timer).toBe(0);
+    });
+
+    it('skips a dead robot and submits for the living straggler', async () => {
+      const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+      const game = await insertGame({
+        gamePhase: GameState.PHASE.PROGRAM,
+        timer: 0,
+        lastStepAt: longAgo(),
+      });
+      // Out of lives, still `submitted: false` — inserted first, so a lookup without the
+      // lives filter would pick it and re-arm the timer for a robot that cannot answer.
+      const dead = await insertPlayer(game._id, {
+        userId: 'x',
+        name: 'x',
+        lives: 0,
+        submitted: false,
+      });
+      const quick = await insertPlayer(game._id, { userId: 'a', name: 'ann', submitted: true });
+      const slow = await insertPlayer(game._id, { userId: 'b', name: 'bob', submitted: false });
+      await insertCards(slow._id, game._id, {
+        userId: 'b',
+        handCards: [1, 2, 3, 4, 5],
+        chosenCards: [1, 2, 3, 4, 5],
+      });
+
+      await runCronJob(STALLED);
+
+      expect((await Players.findOneAsync(slow._id)).submitted).toBe(true);
+      expect((await Players.findOneAsync(dead._id)).submitted).toBe(false);
+      expect((await Players.findOneAsync(quick._id)).submitted).toBe(true);
+      expect((await Games.findOneAsync(game._id)).timer).toBe(-1);
+      expect(nextPhase).toHaveBeenCalledWith(game._id);
+    });
+  });
+});
+
+describe(RESUME, () => {
+  beforeEach(() => vi.useFakeTimers());
+
+  const stale = () => new Date(Date.now() - 2 * STALL_MS);
+  const minimalSnapshot = (segment) => ({ segment, players: [], cards: [], deck: null });
+
+  // Run the job, let every replay it started play out, and hand back its promises.
+  async function sweep() {
+    const replays = await runCronJob(RESUME);
+    await vi.runAllTimersAsync();
+    await Promise.all(replays);
+    return replays;
+  }
+
+  function spyDispatchers() {
+    return {
+      game: vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue(),
+      play: vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue(),
+      respawn: vi.spyOn(GameState, 'nextRespawnPhaseAsync').mockResolvedValue(),
+    };
+  }
+
+  const chatLines = async (gameId) =>
+    (await Chat.find({ gameId }).fetchAsync()).map((c) => c.message);
+
+  it('replays a turn whose driver died mid-register, and the turn runs to the next deal', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    const player = await insertPlayer(game._id, {
+      submitted: true,
+      cards: [-2, -2, -2, -2, -2],
+    });
+    // u-turn, turn-right, turn-left, turn-right, turn-left: five registers that leave the
+    // robot on its square, so the replayed turn's outcome is easy to state.
+    await insertCards(player._id, game._id, {
+      handCards: [60, 61, 62, 63],
+      chosenCards: [0, 6, 24, 7, 25],
+    });
+    await insertDeck(game._id, { cards: Array.from({ length: 30 }, (_, i) => 30 + i) });
+    // Into PLAY for real — that claim takes the snapshot — but hold before register 1.
+    const hold = vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    const entering = GameState.nextGamePhaseAsync(game._id);
+    await vi.runAllTimersAsync();
+    await entering;
+    hold.mockRestore();
+    expect((await Games.findOneAsync(game._id)).segmentSnapshot.segment).toBe(GameState.PHASE.PLAY);
+    // What a process dying in register 3 leaves behind: the robot has moved and taken
+    // damage, the document says mid-turn, and nothing has claimed the game since.
+    await Players.updateAsync(player._id, { $set: { position: { x: 3, y: 3 }, damage: 2 } });
+    await Games.updateAsync(game._id, {
+      $set: { playPhase: GameState.PLAY_PHASE.MOVE_BOTS, playPhaseCount: 3, lastStepAt: stale() },
+    });
+
+    await sweep();
+
+    // Registers 1–5, repairs, the next deal: a fresh program phase, everything reset.
+    expect(await Games.findOneAsync(game._id)).toMatchObject({
+      gamePhase: GameState.PHASE.PROGRAM,
+      programRound: 2,
+      playPhaseCount: 5,
+    });
+    expect(await Players.findOneAsync(player._id)).toMatchObject({
+      position: { x: 0, y: 0 },
+      damage: 0,
+      submitted: false,
+      playedCardsCnt: 0,
+    });
+    const messages = await chatLines(game._id);
+    expect(messages.filter((m) => m === RESUME_CHAT)).toHaveLength(1);
+  });
+
+  it('leaves a game whose last claim is recent alone', async () => {
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PLAY,
+      lastStepAt: new Date(Date.now() - STALL_MS / 2),
+      segmentSnapshot: minimalSnapshot(GameState.PHASE.PLAY),
+    });
+    const d = spyDispatchers();
+
+    await sweep();
+
+    expect(d.play).not.toHaveBeenCalled();
+    expect((await Games.findOneAsync(game._id)).step).toBe(0);
+    expect(await chatLines(game._id)).toEqual([]);
+  });
+
+  it('leaves a program phase with someone still programming alone, however long they take', async () => {
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PROGRAM,
+      lastStepAt: new Date(Date.now() - 100 * STALL_MS),
+    });
+    await insertPlayer(game._id, { submitted: true });
+    await insertPlayer(game._id, { submitted: false });
+    const d = spyDispatchers();
+
+    await sweep();
+
+    expect(d.game).not.toHaveBeenCalled();
+    expect((await Games.findOneAsync(game._id)).step).toBe(0);
+  });
+
+  it('kicks a program phase where every living player has submitted', async () => {
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PROGRAM,
+      timer: 0,
+      lastStepAt: stale(),
+    });
+    await insertPlayer(game._id, { submitted: true });
+    await insertPlayer(game._id, { submitted: false, lives: 0 });
+    const d = spyDispatchers();
+
+    await sweep();
+
+    expect(d.game).toHaveBeenCalledWith(game._id);
+    expect(await Games.findOneAsync(game._id)).toMatchObject({ timer: -1, timerStartedAt: null });
+  });
+
+  it('leaves a respawn waiting on a human alone', async () => {
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.RESPAWN,
+      respawnPlayerId: 'p1',
+      selectOptions: [{ x: 1, y: 1 }],
+      lastStepAt: new Date(Date.now() - 100 * STALL_MS),
+    });
+    const d = spyDispatchers();
+
+    await sweep();
+
+    expect(d.game).not.toHaveBeenCalled();
+    expect(d.respawn).not.toHaveBeenCalled();
+    expect((await Games.findOneAsync(game._id)).step).toBe(0);
+  });
+
+  it('re-prepares the options for a respawn whose options were never written', async () => {
+    stubBoard();
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.RESPAWN,
+      respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_DIRECTION,
+      lastStepAt: stale(),
+    });
+    const player = await insertPlayer(game._id, {
+      userId: 'u1',
+      start: { x: 0, y: 0 },
+      position: { x: 0, y: 0 },
+    });
+    await Games.updateAsync(game._id, {
+      $set: { respawnPlayerId: player._id, selectOptions: null },
+    });
+
+    await sweep();
+
+    const after = await Games.findOneAsync(game._id);
+    expect(after.selectOptions).toHaveLength(4); // on its start square: every direction
+    expect(after.respawnUserId).toBe('u1');
+  });
+
+  it('two sweeps in the same tick touch the game once', async () => {
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.RESPAWN,
+      respawnPlayerId: null,
+      lastStepAt: stale(),
+    });
+    const d = spyDispatchers();
+
+    const [a, b] = await Promise.all([runCronJob(RESUME), runCronJob(RESUME)]);
+    await vi.runAllTimersAsync();
+    await Promise.all([...a, ...b]);
+
+    expect(d.game).toHaveBeenCalledTimes(1);
+    expect((await Games.findOneAsync(game._id)).step).toBe(1); // the one touch
+  });
+
+  it('logs a failed replay, tells the players, and the job itself survives', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(GameState, 'resumeAsync').mockRejectedValue(new Error('simulated replay failure'));
+    const game = await insertGame({ gamePhase: GameState.PHASE.PLAY, lastStepAt: stale() });
+
+    await expect(sweep()).resolves.toHaveLength(1);
+
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(errors.mock.calls[0][0]).toContain(game._id);
+    expect(await chatLines(game._id)).toEqual([
+      'The turn could not be resumed — the server will try again shortly.',
+    ]);
+  });
+
+  it('is a no-op when nothing has stalled', async () => {
+    await expect(sweep()).resolves.toEqual([]);
+  });
 });
 
 describe(UNSTARTED, () => {
@@ -221,7 +506,34 @@ describe(UNSTARTED, () => {
 });
 
 describe(ABANDONED, () => {
-  beforeEach(() => vi.useFakeTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // The job sits out the five minutes after boot (last test below). Startup ran earlier
+    // in this file, at about the real time the fake clock starts from, so begin past it.
+    vi.setSystemTime(Date.now() + BOOT_GRACE_MS);
+  });
+
+  // mizzao:user-status marks every user offline in its own Meteor.startup, and clients
+  // need seconds — after a long outage, minutes of DDP back-off — to reconnect. Without
+  // the grace a restart could end every live game as "Nobody" or hand it to the first
+  // player back.
+  it('does nothing for five minutes after boot, then works again', async () => {
+    const boot = new Date('2026-08-27T12:00:00Z');
+    vi.setSystemTime(boot);
+    await runStartup();
+    await user('a', { online: false });
+    const gameId = await Games.insertAsync({ started: true, min_player: 2 });
+    await Players.insertAsync({ gameId, userId: 'a', name: 'ann' });
+
+    vi.setSystemTime(boot.getTime() + BOOT_GRACE_MS - 1000);
+    await runWithRecheck(ABANDONED);
+    expect((await Games.findOneAsync(gameId)).gamePhase).toBeUndefined();
+    expect(await Chat.find({ gameId }).countAsync()).toBe(0);
+
+    vi.setSystemTime(boot.getTime() + BOOT_GRACE_MS);
+    await runWithRecheck(ABANDONED);
+    expect((await Games.findOneAsync(gameId)).gamePhase).toBe(GameState.PHASE.ENDED);
+  });
 
   it("ends a game with winner 'Nobody' when every player has gone", async () => {
     await user('a', { online: false });

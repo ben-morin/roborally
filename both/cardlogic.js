@@ -33,15 +33,20 @@ export async function autoSubmitIfTimedOut(gameId, expectedStart) {
     { $set: { timer: 0, timerStartedAt: null } }
   );
   await new Promise((resolve) => Meteor.setTimeout(resolve, 2500));
-  const cnt = await Players.find({ gameId, submitted: true }).countAsync();
-  const playerCnt = await Players.find({ gameId, lives: { $gt: 0 } }).countAsync();
-  if (cnt < playerCnt) {
-    const unsubmittedPlayer = await Players.findOneAsync({ gameId, submitted: false });
-    if (unsubmittedPlayer) {
-      await CardLogic.submitCardsAsync(unsubmittedPlayer);
-      console.log(`Player ${unsubmittedPlayer.name} did not respond, submitting random cards`);
-    }
-  }
+  await forceSubmitStragglerAsync(gameId);
+}
+
+// The tail of the timeout: submit whatever the one player who has not answered has on
+// the table. On its own so the cron sweep can run it for a game whose process died inside
+// the 2.5 s grace above — `timer: 0`, `timerStartedAt` cleared, and with the straggler's
+// tab gone nothing left to re-send the submit. The straggler has to be alive: a robot out
+// of lives keeps `submitted: false` through the program phase, but it is not the one
+// everybody is waiting for, and submitCardsAsync would only re-arm the timer for it.
+export async function forceSubmitStragglerAsync(gameId) {
+  const straggler = await Players.findOneAsync({ gameId, submitted: false, lives: { $gt: 0 } });
+  if (!straggler) return;
+  console.log(`Player ${straggler.name} did not respond, submitting random cards`);
+  await CardLogic.submitCardsAsync(straggler);
 }
 
 async function verifySubmittedCardsAsync(player) {
