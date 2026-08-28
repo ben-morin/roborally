@@ -1,12 +1,14 @@
 // `advanceAsync` is the compare-and-set every write in the turn chain claims through, so
 // it is pinned here on its own: what a winning claim writes, what a losing one does not,
 // and how a caller's own modifier merges with the step bump.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
+import { GameState } from '../../both/gamestate.js';
 import { Games } from '../../collections/games.js';
 import { insertGame } from '../helpers/fixtures.js';
 
 beforeEach(() => resetFakeCollections());
+afterEach(() => vi.restoreAllMocks());
 
 describe('advanceAsync', () => {
   it('increments step, stamps lastStepAt and applies the caller $set', async () => {
@@ -49,6 +51,8 @@ describe('advanceAsync', () => {
     const stored = await Games.findOneAsync(game._id);
     expect(stored.programRound).toBe(2);
     expect(stored.step).toBe(1);
+    // The instance follows the $inc too, not only the $set.
+    expect(game.programRound).toBe(2);
   });
 
   it('returns false and writes nothing when the instance is stale', async () => {
@@ -87,5 +91,65 @@ describe('advanceAsync', () => {
 
     expect(results.filter(Boolean)).toHaveLength(1);
     expect((await Games.findOneAsync(a._id)).step).toBe(1);
+  });
+});
+
+// The phase setters the state machine calls are claims too, and the `next*Async(phase)`
+// wrappers must not dispatch a phase whose claim they lost.
+describe('the phase wrappers', () => {
+  it('each setter resolves to its claim result and moves step', async () => {
+    const game = await insertGame();
+
+    expect(await game.setPlayPhaseAsync('reveal')).toBe(true);
+    expect(await game.setGamePhaseAsync('play')).toBe(true);
+    expect(await game.setRespawnPhaseAsync('choose direction')).toBe(true);
+    expect(await game.startAnnounceAsync()).toBe(true);
+    expect(await game.stopAnnounceAsync()).toBe(true);
+
+    expect(await Games.findOneAsync(game._id)).toMatchObject({
+      step: 5,
+      playPhase: 'reveal',
+      gamePhase: 'play',
+      respawnPhase: 'choose direction',
+      announce: false,
+    });
+  });
+
+  it('a setter on a stale instance returns false and writes nothing', async () => {
+    const winner = await insertGame({ playPhase: 'waiting' });
+    const loser = await Games.findOneAsync(winner._id);
+
+    await winner.setPlayPhaseAsync('reveal');
+
+    expect(await loser.setPlayPhaseAsync('move bots')).toBe(false);
+    expect(await loser.startAnnounceAsync()).toBe(false);
+    expect(await Games.findOneAsync(winner._id)).toMatchObject({
+      playPhase: 'reveal',
+      announce: false,
+      step: 1,
+    });
+  });
+
+  it('next*Async(phase) dispatches only when its claim wins', async () => {
+    const dispatch = vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    const winner = await insertGame();
+    const loser = await Games.findOneAsync(winner._id);
+
+    await winner.nextPlayPhaseAsync('reveal');
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    await loser.nextPlayPhaseAsync('move bots');
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect((await Games.findOneAsync(winner._id)).playPhase).toBe('reveal');
+  });
+
+  it('next*Async() with no phase claims nothing and just dispatches', async () => {
+    const dispatch = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+    const game = await insertGame();
+
+    await game.nextGamePhaseAsync();
+
+    expect(dispatch).toHaveBeenCalledWith(game._id);
+    expect((await Games.findOneAsync(game._id)).step).toBe(0);
   });
 });

@@ -48,33 +48,45 @@ const _ANNOUNCE_CARD_TIME = 1750; // match to .fadeInAndOut duration in game.scs
 const _EXECUTE_CARD_TIME = 1000;
 
 // game phases:
+//
+// Every write to the game document below is a claim — `game.advanceAsync(...)`, or one
+// of the game methods that wrap it — and a claim that resolves to `false` means another
+// driver has advanced this game since this one read it. That is the normal outcome for
+// the second of two concurrent drivers (a double-clicked start, a player's timer-0
+// submit racing the server's auto-submit, an overlapping recovery sweep), not an error:
+// the loser has done nothing since its last successful write except idempotent work, so
+// it simply returns and lets the winner carry on. Hence the `if (!(await ...)) return;`
+// shape at every write. See `advanceAsync` in collections/games.js.
 
 async function nextGamePhaseAsync(gameId) {
   const game = await Games.findOneAsync(gameId);
   await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
   switch (game.gamePhase) {
     case GameState.PHASE.IDLE:
-      await Games.updateAsync(game._id, {
-        $set: { started: true, gamePhase: GameState.PHASE.DEAL },
-      });
+      if (!(await game.advanceAsync({ $set: { started: true, gamePhase: GameState.PHASE.DEAL } })))
+        return;
       await playDealPhase(game);
       break;
     case GameState.PHASE.DEAL:
-      await game.stopAnnounceAsync();
+      if (!(await game.stopAnnounceAsync())) return;
       await playDealPhase(game);
       break;
     case GameState.PHASE.PROGRAM:
-      await game.startAnnounceAsync();
+      if (!(await game.startAnnounceAsync())) return;
       await playProgramCardsSubmitted(game);
       break;
     case GameState.PHASE.PLAY:
       if (game.waitingForRespawn.length > 0) {
-        await Games.updateAsync(game._id, {
+        // `respawnPlayerId: null` marks "no robot picked yet", which is how a recovery
+        // sweep tells this state apart from a respawn waiting on a human.
+        const claimed = await game.advanceAsync({
           $set: {
             waitingForRespawn: game.waitingForRespawn.reverse(),
             gamePhase: GameState.PHASE.RESPAWN,
+            respawnPlayerId: null,
           },
         });
+        if (!claimed) return;
         await game.nextGamePhaseAsync();
       } else {
         await game.nextGamePhaseAsync(GameState.PHASE.DEAL);
@@ -143,10 +155,11 @@ async function playDealPhase(game) {
   // submission a turn identity: playCards rejects a round number that no longer
   // matches, which is what stops a stale or replayed submit from a previous turn
   // from being accepted as this turn's program.
-  await Games.updateAsync(game._id, {
+  const claimed = await game.advanceAsync({
     $set: { gamePhase: GameState.PHASE.PROGRAM },
     $inc: { programRound: 1 },
   });
+  if (!claimed) return;
   const notPoweredDownCnt = await Players.find({
     gameId: game._id,
     submitted: false,
@@ -157,13 +170,14 @@ async function playDealPhase(game) {
 }
 
 async function playProgramCardsSubmitted(game) {
-  await Games.updateAsync(game._id, {
+  const claimed = await game.advanceAsync({
     $set: {
       gamePhase: GameState.PHASE.PLAY,
       playPhase: GameState.PLAY_PHASE.IDLE,
       playPhaseCount: 1,
     },
   });
+  if (!claimed) return;
   await game.nextPlayPhaseAsync();
 }
 
@@ -173,22 +187,32 @@ async function playNextRespawn(game) {
     let nextPhase;
     const x = player.start.x;
     const y = player.start.y;
-    if (await game.isPlayerOnTileAsync(x, y)) {
+    // The robot itself never counts as the occupant of its start tile. This step has to
+    // reach the same decision when it is run again — a restart replays it — and after
+    // the first run the robot is already standing on that tile; without the `_id` check
+    // a re-run would find it there and turn a CHOOSE_DIRECTION into a CHOOSE_POSITION.
+    const occupant = await game.isPlayerOnTileAsync(x, y);
+    if (occupant && occupant._id !== player._id) {
       nextPhase = GameState.RESPAWN_PHASE.CHOOSE_POSITION;
     } else {
       await GameLogic.respawnPlayerAtPosAsync(player, x, y);
       nextPhase = GameState.RESPAWN_PHASE.CHOOSE_DIRECTION;
     }
-    await Games.updateAsync(game._id, {
+    // `selectOptions: null` until prepareChooseRespawn* writes this robot's options;
+    // the client guards for it, and it is how a sweep knows no human is being waited on.
+    const claimed = await game.advanceAsync({
       $set: {
         respawnPhase: nextPhase,
         respawnPlayerId: player._id,
         waitingForRespawn: game.waitingForRespawn,
+        selectOptions: null,
+        respawnUserId: null,
       },
     });
+    if (!claimed) return;
     await game.nextRespawnPhaseAsync();
   } else {
-    await Games.updateAsync(game._id, {
+    const claimed = await game.advanceAsync({
       $set: {
         gamePhase: GameState.PHASE.DEAL,
         respawnUserId: null,
@@ -196,6 +220,7 @@ async function playNextRespawn(game) {
         selectOptions: null,
       },
     });
+    if (!claimed) return;
     await game.nextGamePhaseAsync();
   }
 }
@@ -236,7 +261,7 @@ async function announceAsync(game, fn) {
 }
 
 async function playRevealCards(game) {
-  await Games.updateAsync(game._id, { $set: { playPhase: GameState.PLAY_PHASE.MOVE_BOTS } });
+  if (!(await game.advanceAsync({ $set: { playPhase: GameState.PLAY_PHASE.MOVE_BOTS } }))) return;
 
   const players = await game.livingPlayersAsync();
   for (const player of players) {
@@ -270,11 +295,7 @@ async function playMoveBots(game) {
   }
   // cardId has same order as card priority
   game.cardsToPlay.sort((a, b) => b.cardId - a.cardId);
-  await Games.updateAsync(game._id, {
-    $set: {
-      cardsToPlay: game.cardsToPlay,
-    },
-  });
+  if (!(await game.advanceAsync({ $set: { cardsToPlay: game.cardsToPlay } }))) return;
   if (game.cardsToPlay.length > 0) {
     await playMoveBot(game);
   } else {
@@ -290,22 +311,17 @@ async function playMoveBot(game) {
   // teleport position would just be visual noise.
   const skip = !player || player.needsRespawn;
   if (skip) {
-    await Games.updateAsync(game._id, {
-      $set: { cardsToPlay: game.cardsToPlay },
-    });
+    if (!(await game.advanceAsync({ $set: { cardsToPlay: game.cardsToPlay } }))) return;
   } else {
-    await Games.updateAsync(game._id, {
+    const announced = await game.advanceAsync({
       $set: {
         announceCard: card,
         cardsToPlay: game.cardsToPlay,
       },
     });
+    if (!announced) return;
     await new Promise((resolve) => Meteor.setTimeout(resolve, _ANNOUNCE_CARD_TIME));
-    await Games.updateAsync(game._id, {
-      $set: {
-        announceCard: null,
-      },
-    });
+    if (!(await game.advanceAsync({ $set: { announceCard: null } }))) return;
     await GameLogic.playCard(player, card.cardId);
   }
   if (game.cardsToPlay.length > 0) {
@@ -315,11 +331,7 @@ async function playMoveBot(game) {
     await playMoveBot(game);
   } else {
     await new Promise((resolve) => Meteor.setTimeout(resolve, _EXECUTE_CARD_TIME));
-    await Games.updateAsync(game._id, {
-      $set: {
-        announceCard: null,
-      },
-    });
+    if (!(await game.advanceAsync({ $set: { announceCard: null } }))) return;
     await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.MOVE_BOARD);
   }
 }
@@ -336,7 +348,7 @@ async function playMoveBoard(game) {
 
 async function playLasers(game) {
   const players = await game.playersOnBoardAsync();
-  await game.setPlayPhaseAsync(GameState.PLAY_PHASE.CHECKPOINTS);
+  if (!(await game.setPlayPhaseAsync(GameState.PLAY_PHASE.CHECKPOINTS))) return;
   await GameLogic.executeLasers(players);
   await game.nextPlayPhaseAsync();
 }
@@ -344,10 +356,11 @@ async function playLasers(game) {
 async function playCheckpoints(game) {
   if (!(await checkIfWeHaveAWinner(game))) {
     if (game.playPhaseCount < 5) {
-      await Games.updateAsync(game._id, {
+      const claimed = await game.advanceAsync({
         $set: { playPhase: GameState.PLAY_PHASE.REVEAL_CARDS },
         $inc: { playPhaseCount: 1 },
       });
+      if (!claimed) return;
       await game.nextPlayPhaseAsync();
     } else {
       await game.nextPlayPhaseAsync(GameState.PLAY_PHASE.REPAIRS);
@@ -373,6 +386,8 @@ async function checkCheckpoints(player) {
   }
 }
 
+// Resolves to true when the caller must not go on: the game ended here, or a lost claim
+// showed another driver owns it. A lost claim announces nothing — the winner does.
 async function checkIfWeHaveAWinner(game) {
   const players = await Players.find({ gameId: game._id }).fetchAsync();
   const board = game.board();
@@ -393,7 +408,7 @@ async function checkIfWeHaveAWinner(game) {
     }
 
     if (player.visited_checkpoints === board.checkpoints.length) {
-      await Games.updateAsync(game._id, {
+      const claimed = await game.advanceAsync({
         $set: {
           gamePhase: GameState.PHASE.ENDED,
           winner: player.name,
@@ -403,6 +418,7 @@ async function checkIfWeHaveAWinner(game) {
           stopped: new Date().getTime(),
         },
       });
+      if (!claimed) return true;
       messages.push(`Player ${player.name} won the game!!`);
       console.log(`Player won: ${player.name}`);
       await buildHighscores();
@@ -414,18 +430,19 @@ async function checkIfWeHaveAWinner(game) {
 
   if (livingPlayers === 0) {
     messages.push('All robots are dead');
-    await Games.updateAsync(game._id, {
+    const claimed = await game.advanceAsync({
       $set: {
         gamePhase: GameState.PHASE.ENDED,
         winner: 'Nobody',
         stopped: new Date().getTime(),
       },
     });
+    if (!claimed) return true;
     ended = true;
   } else if (livingPlayers === 1 && players.length > 1) {
     messages.push(`Player ${lastManStanding.name} won the game!!`);
     console.log(`Last player standing: ${lastManStanding.name}`);
-    await Games.updateAsync(game._id, {
+    const claimed = await game.advanceAsync({
       $set: {
         gamePhase: GameState.PHASE.ENDED,
         winner: lastManStanding.name,
@@ -433,6 +450,7 @@ async function checkIfWeHaveAWinner(game) {
         stopped: new Date().getTime(),
       },
     });
+    if (!claimed) return true;
     await buildHighscores();
     ended = true;
   }
@@ -483,12 +501,8 @@ async function prepareChooseRespawnPosition(game) {
       }
     }
   }
-  await Games.updateAsync(game._id, {
-    $set: {
-      selectOptions: selectOptions,
-      respawnUserId: player.userId,
-    },
-  });
+  // End of the server's part: the claim's result has nobody left to stop.
+  await game.advanceAsync({ $set: { selectOptions, respawnUserId: player.userId } });
 }
 
 async function prepareChooseRespawnDirection(game) {
@@ -514,12 +528,7 @@ async function prepareChooseRespawnDirection(game) {
       });
     }
   }
-  await Games.updateAsync(game._id, {
-    $set: {
-      selectOptions: selectOptions,
-      respawnUserId: player.userId,
-    },
-  });
+  await game.advanceAsync({ $set: { selectOptions, respawnUserId: player.userId } });
 }
 
 async function noPlayerOnNextThreeAsync(x, y, dx, dy, game) {

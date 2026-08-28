@@ -79,6 +79,14 @@ function matchesSelector(doc, selector) {
     // Positive operators match when SOME candidate satisfies them; the negative ones are
     // the negation of that, which is how Mongo defines them over arrays.
     const some = (predicate) => values.some(predicate);
+    // Dates compare by value, as in Mongo, and must be caught before the operator branch:
+    // a Date is an object with no own keys, so down there it would read as an empty set
+    // of operators and match every document. Every stored document is a structuredClone
+    // of what was inserted, so a caller can never hold the stored Date object itself —
+    // the guarded `timer: 0` write in both/cardlogic.js pins `timerStartedAt` this way.
+    if (cond instanceof Date) {
+      return some((v) => v instanceof Date && v.getTime() === cond.getTime());
+    }
     if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
       return Object.entries(cond).every(([op, opVal]) => {
         switch (op) {

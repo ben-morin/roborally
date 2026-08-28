@@ -227,7 +227,9 @@ Template.board.helpers({
     if (!game) return s;
     console.log(`game.respawnUserId: ${game.respawnUserId}; Meteor.userId(): ${Meteor.userId()}`);
     if (game.respawnUserId === Meteor.userId()) {
-      game.selectOptions.forEach((opts) => {
+      // The server clears `selectOptions` to null while it picks the next robot to
+      // respawn; the options for that robot land in a later write.
+      (game.selectOptions ?? []).forEach((opts) => {
         opts.position = cssPosition(opts.x, opts.y);
         opts.gameId = game._id;
         if (game.respawnPhase === GameState.RESPAWN_PHASE.CHOOSE_POSITION) {

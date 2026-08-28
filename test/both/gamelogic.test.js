@@ -180,6 +180,37 @@ describe('playCard: pushing', () => {
 });
 
 describe('playCard: falling off the board / into a void', () => {
+  // The death path used to read the game, push onto its queue and write the whole
+  // document back — silently undoing every field another writer had set since the read,
+  // `step` included. The queue append is now a $push and nothing else on the game moves.
+  it('queues the dead robot with a $push and leaves the rest of the game document alone', async () => {
+    vi.useFakeTimers();
+    const board = stubBoard();
+    board.getTile(3, 1).type = Tile.VOID;
+    const game = await insertGame({ step: 5, announceCard: { cardId: CARD.STEP_FORWARD } });
+    const player = await insertPlayer(game._id, {
+      direction: GameLogic.RIGHT,
+      position: { x: 2, y: 1 },
+    });
+    await insertCards(player._id, game._id, { handCards: [11, 12] });
+    await insertDeck(game._id, { cards: [1, 2, 3] });
+    const gameWrites = vi.spyOn(Games, 'updateAsync');
+
+    const cardPromise = GameLogic.playCard(player, CARD.STEP_FORWARD);
+    await vi.advanceTimersByTimeAsync(2000);
+    await cardPromise;
+
+    expect(gameWrites.mock.calls).toEqual([
+      [game._id, { $push: { waitingForRespawn: player._id } }],
+    ]);
+    expect(await Games.findOneAsync(game._id)).toMatchObject({
+      step: 5,
+      announceCard: { cardId: CARD.STEP_FORWARD },
+      waitingForRespawn: [player._id],
+    });
+    vi.useRealTimers();
+  });
+
   it('walking into a void kills the robot: loses a life, parks off-board, returns hand cards to the deck', async () => {
     vi.useFakeTimers();
     const board = stubBoard();

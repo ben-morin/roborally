@@ -45,6 +45,19 @@ describe('$push', () => {
   });
 });
 
+describe('selector equality', () => {
+  // Every stored document is a structuredClone, so a caller can never hold the stored
+  // Date object; identity equality would make a Date in a selector match nothing, ever.
+  it('compares Dates by value', async () => {
+    const at = new Date(1_700_000_000_000);
+    await docs.insertAsync({ at });
+
+    expect(docs.find({ at: new Date(at.getTime()) }).count()).toBe(1);
+    expect(docs.find({ at: new Date(at.getTime() + 1) }).count()).toBe(0);
+    expect(docs.find({ at: at.getTime() }).count()).toBe(0); // a number is not a Date
+  });
+});
+
 describe('field projection', () => {
   it('excludes the named field and keeps the rest', async () => {
     await docs.insertAsync({ name: 'a', snapshot: { big: true }, step: 3 });

@@ -436,9 +436,10 @@ async function checkRespawnsAndUpdateDb(player, cleanups) {
     player.optionalInstantPowerDown = true;
     await Players.updateAsync(player._id, player);
     if (player.lives > 0) {
-      const game = await player.gameAsync();
-      game.waitingForRespawn.push(player._id);
-      await Games.updateAsync(game._id, game);
+      // A side effect inside the turn, not a phase transition, so it is not a claim —
+      // but it must be a $push. Writing the whole game document back here silently
+      // overwrote every field another writer had set since it was read, `step` included.
+      await Games.updateAsync(player.gameId, { $push: { waitingForRespawn: player._id } });
     }
     await player.chatAsync(`died! (lives: ${player.lives}, damage: ${player.damage})`);
     // A destroyed robot loses its option cards to the discard pile (announced per

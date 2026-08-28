@@ -353,6 +353,20 @@ describe('respawn choices', () => {
 
     expect(callHelper('board', 'selectOptions')).toEqual([]);
   });
+
+  // While the server picks the next robot it clears `selectOptions` to null; the options
+  // for that robot arrive in a later write. The helper must not throw in between.
+  it('offers nothing while the options for this robot have not been written yet', async () => {
+    await openBoard({
+      game: {
+        respawnUserId: 'me',
+        respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
+        selectOptions: null,
+      },
+    });
+
+    expect(callHelper('board', 'selectOptions')).toEqual([]);
+  });
 });
 
 describe('membership and end state', () => {

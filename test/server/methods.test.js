@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import { loginAs, logout, registeredMethods, resetFakeCollections } from '../setup.js';
+import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { BoardBox } from '../../both/board_box.js';
 import { CardLogic } from '../../both/cardlogic.js';
 import { GameLogic } from '../../both/gamelogic.js';
@@ -392,6 +393,49 @@ describe('startGame', () => {
     expect(await messages(gameId)).toEqual(['Game started']);
     expect(nextPhase).toHaveBeenCalledWith(gameId);
   });
+
+  // A double-clicked start. Both calls place the robots (the same positions, twice) and
+  // both drive the phase machine; only one of them can claim IDLE -> DEAL, so the hands
+  // are dealt once.
+  it('two concurrent starts deal one hand each', async () => {
+    vi.useFakeTimers();
+    try {
+      await loginAs();
+      const game = await insertGame({
+        gamePhase: GameState.PHASE.IDLE,
+        started: false,
+        max_player: 8,
+      });
+      const a = await insertPlayer(game._id, { userId: 'a', name: 'a' });
+      const b = await insertPlayer(game._id, { userId: 'b', name: 'b' });
+      await insertCards(a._id, game._id, { userId: 'a' });
+      await insertCards(b._id, game._id, { userId: 'b' });
+      const updates = vi.spyOn(Games, 'updateAsync');
+
+      const both = Promise.all([call('startGame', game._id), call('startGame', game._id)]);
+      await vi.runAllTimersAsync();
+      await both;
+
+      // IDLE -> DEAL is the very first claim, so both drivers attempt it; the selector
+      // lets exactly one of them modify the document.
+      const dealAttempts = updates.mock.calls
+        .map((args, i) => [args, updates.mock.results[i].value])
+        .filter(([[, modifier]]) => modifier.$set?.gamePhase === GameState.PHASE.DEAL);
+      expect(dealAttempts).toHaveLength(2);
+      const modified = await Promise.all(dealAttempts.map(([, result]) => result));
+      expect(modified.filter((n) => n === 1)).toHaveLength(1);
+      const gameDoc = await Games.findOneAsync(game._id);
+      expect(gameDoc.gamePhase).toBe(GameState.PHASE.PROGRAM);
+      expect(gameDoc.programRound).toBe(2); // fixture seeds 1; one deal
+      for (const player of [a, b]) {
+        expect((await Cards.findOneAsync({ playerId: player._id })).handCards).toHaveLength(9);
+      }
+      // The 8-player deck is 84 cards; two hands of nine came off it, once.
+      expect((await Deck.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 18);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('playCards', () => {
@@ -515,6 +559,7 @@ describe('respawn selection', () => {
     const gameId = await Games.insertAsync({
       boardId: 0,
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
+      step: 0,
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
@@ -523,9 +568,11 @@ describe('respawn selection', () => {
 
     expect(respawn).toHaveBeenCalledTimes(1);
     expect(respawn.mock.calls[0].slice(1)).toEqual([3, 4]);
-    expect((await Games.findOneAsync(gameId)).respawnPhase).toBe(
-      GameState.RESPAWN_PHASE.CHOOSE_DIRECTION
-    );
+    // The phase change is a claim, so it moves `step` along.
+    expect(await Games.findOneAsync(gameId)).toMatchObject({
+      respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_DIRECTION,
+      step: 1,
+    });
     expect(await messages(gameId)).toEqual(['ben chose position']);
   });
 

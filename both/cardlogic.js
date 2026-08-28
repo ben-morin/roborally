@@ -23,7 +23,15 @@ export async function autoSubmitIfTimedOut(gameId, expectedStart) {
     return;
   }
   console.log('time up! setting timer to 0');
-  await Games.updateAsync(gameId, { $set: { timer: 0, timerStartedAt: null } });
+  // The check above, made atomic: the selector pins the timer instance, so a second
+  // caller for the same timer (the cron sweep beside the live setTimeout) matches
+  // nothing. Not a claim — it does not bump `step` — and the result is deliberately
+  // ignored: the force-submit below is safe to reach twice, because the claim inside
+  // submitCardsAsync lets only one of them drive the turn.
+  await Games.updateAsync(
+    { _id: gameId, timer: 1, timerStartedAt: expectedStart },
+    { $set: { timer: 0, timerStartedAt: null } }
+  );
   await new Promise((resolve) => Meteor.setTimeout(resolve, 2500));
   const cnt = await Players.find({ gameId, submitted: true }).countAsync();
   const playerCnt = await Players.find({ gameId, lives: { $gt: 0 } }).countAsync();
@@ -291,14 +299,20 @@ export class CardLogic {
       submitted: true,
       lives: { $gt: 0 },
     }).countAsync();
+    // Read as late as possible: both timer writes below are claims, and the `step` this
+    // read carries is what they are conditional on. Two submits for the same straggler
+    // — the client's timer-0 playCards and the server's own auto-submit — both count
+    // everyone ready, but only one of them wins the claim and drives the turn. A claim
+    // lost to another player's concurrent submit leaves the game to that submit.
+    const game = await Games.findOneAsync(player.gameId);
     if (readyPlayerCnt === playerCnt) {
-      await Games.updateAsync(player.gameId, { $set: { timer: -1, timerStartedAt: null } });
+      if (!(await game.advanceAsync({ $set: { timer: -1, timerStartedAt: null } }))) return;
       return await GameState.nextGamePhaseAsync(player.gameId);
     } else if (readyPlayerCnt === playerCnt - 1) {
       // start timer — capture timerStart so the scheduled callback can verify
       // it is still acting on the same timer instance when it fires
       const timerStart = new Date();
-      await Games.updateAsync(player.gameId, { $set: { timer: 1, timerStartedAt: timerStart } });
+      if (!(await game.advanceAsync({ $set: { timer: 1, timerStartedAt: timerStart } }))) return;
       return Meteor.setTimeout(
         Meteor.bindEnvironment(() =>
           // Fire-and-forget, so the catch is load-bearing: without it a rejection here

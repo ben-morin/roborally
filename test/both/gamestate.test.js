@@ -67,6 +67,9 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     // Each deal opens a new programming round; playCards uses this to reject a
     // submit that arrives after the turn it was meant for.
     expect(gameDoc.programRound).toBe(2); // fixture seeds 1
+    // Two claims: IDLE -> DEAL, then DEAL -> PROGRAM.
+    expect(gameDoc.step).toBe(2);
+    expect(gameDoc.lastStepAt).toBeInstanceOf(Date);
 
     const playerDoc = await Players.findOneAsync(player._id);
     expect(playerDoc.playedCardsCnt).toBe(0);
@@ -320,6 +323,183 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
 
     const gameDoc = await Games.findOneAsync(game._id);
     expect(gameDoc.playPhaseCount).toBe(4);
+  });
+});
+
+// Every write in the chain is a claim on the game's `step`; these pin what that buys.
+describe('claims: one driver per game', () => {
+  async function drive(fn) {
+    const p = fn();
+    await vi.runAllTimersAsync();
+    await p;
+  }
+
+  it('two drivers entering PLAY together start it once', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    const updates = vi.spyOn(Games, 'updateAsync');
+
+    await drive(() =>
+      Promise.all([GameState.nextGamePhaseAsync(game._id), GameState.nextGamePhaseAsync(game._id)])
+    );
+
+    const playWrites = updates.mock.calls.filter(
+      ([, modifier]) => modifier.$set?.gamePhase === GameState.PHASE.PLAY
+    );
+    expect(playWrites).toHaveLength(1);
+    expect(GameState.nextPlayPhaseAsync).toHaveBeenCalledTimes(1);
+    // announce + PLAY, once each; the loser wrote nothing.
+    expect((await Games.findOneAsync(game._id)).step).toBe(2);
+  });
+
+  it('a driver whose first claim loses stops there and changes nothing', async () => {
+    stubBoard();
+    const game = await insertGame({ playPhase: GameState.PLAY_PHASE.REVEAL_CARDS });
+    const player = await insertPlayer(game._id, { playedCardsCnt: 0, cards: [-2, -2, -2, -2, -2] });
+    await insertCards(player._id, game._id, { chosenCards: [10, 11, 12, 13, 14] });
+    // Another driver claims between this one's read and its first write.
+    const read = Games.findOneAsync.bind(Games);
+    vi.spyOn(Games, 'findOneAsync').mockImplementationOnce(async (...args) => {
+      const stale = await read(...args);
+      await Games.updateAsync(stale._id, { $inc: { step: 1 } });
+      return stale;
+    });
+    const dispatch = guardRecursion('nextPlayPhaseAsync');
+
+    await drive(() => GameState.nextPlayPhaseAsync(game._id));
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.playPhase).toBe(GameState.PLAY_PHASE.REVEAL_CARDS); // MOVE_BOTS never landed
+    expect(gameDoc.step).toBe(1); // only the other driver's claim
+    expect((await Players.findOneAsync(player._id)).cards[0]).toBe(-2); // no reveal
+    expect(dispatch).toHaveBeenCalledTimes(1); // and no recursion into the next phase
+  });
+
+  it('the PLAY -> RESPAWN handoff records that no robot has been picked yet', async () => {
+    stubBoard();
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PLAY,
+      waitingForRespawn: ['p_a', 'p_b'],
+      respawnPlayerId: 'left over from the previous respawn',
+    });
+    guardRecursion('nextGamePhaseAsync');
+
+    await drive(() => GameState.nextGamePhaseAsync(game._id));
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.gamePhase).toBe(GameState.PHASE.RESPAWN);
+    expect(gameDoc.waitingForRespawn).toEqual(['p_b', 'p_a']);
+    expect(gameDoc.respawnPlayerId).toBeNull();
+  });
+
+  it('picking the next robot clears the previous options before its own are computed', async () => {
+    stubBoard();
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.RESPAWN,
+      selectOptions: [{ x: 0, y: 0 }],
+      respawnUserId: 'previous robot owner',
+    });
+    const dead = await insertPlayer(game._id, {
+      needsRespawn: true,
+      start: { x: 2, y: 2 },
+      position: { x: 5, y: 6 },
+    });
+    await Games.updateAsync(game._id, { $set: { waitingForRespawn: [dead._id] } });
+    vi.spyOn(GameState, 'nextRespawnPhaseAsync').mockResolvedValue();
+
+    await drive(() => GameState.nextGamePhaseAsync(game._id));
+
+    expect(await Games.findOneAsync(game._id)).toMatchObject({
+      respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_DIRECTION,
+      respawnPlayerId: dead._id,
+      waitingForRespawn: [],
+      selectOptions: null,
+      respawnUserId: null,
+    });
+  });
+});
+
+describe('respawn phase: picking the next robot', () => {
+  // Off-board parking spot for a dead robot on the 6x6 stub board.
+  const PARKED = { x: 5, y: 6 };
+
+  async function pickNext(gameId) {
+    const p = GameState.nextGamePhaseAsync(gameId);
+    await vi.runAllTimersAsync();
+    await p;
+    return Games.findOneAsync(gameId);
+  }
+
+  it('moves the robot to a free start tile and asks for a direction', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.RESPAWN });
+    const dead = await insertPlayer(game._id, {
+      needsRespawn: true,
+      lives: 2,
+      start: { x: 2, y: 2 },
+      position: PARKED,
+    });
+    await Games.updateAsync(game._id, { $set: { waitingForRespawn: [dead._id] } });
+
+    const gameDoc = await pickNext(game._id);
+
+    expect(gameDoc.respawnPhase).toBe(GameState.RESPAWN_PHASE.CHOOSE_DIRECTION);
+    expect(gameDoc.respawnPlayerId).toBe(dead._id);
+    expect(gameDoc.selectOptions).toHaveLength(4);
+    expect((await Players.findOneAsync(dead._id)).position).toEqual({ x: 2, y: 2 });
+  });
+
+  it('asks for a position instead when another robot holds the start tile', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.RESPAWN });
+    const dead = await insertPlayer(game._id, {
+      needsRespawn: true,
+      lives: 2,
+      start: { x: 2, y: 2 },
+      position: PARKED,
+    });
+    await insertPlayer(game._id, { position: { x: 2, y: 2 } }); // the squatter
+    await Games.updateAsync(game._id, { $set: { waitingForRespawn: [dead._id] } });
+
+    const gameDoc = await pickNext(game._id);
+
+    expect(gameDoc.respawnPhase).toBe(GameState.RESPAWN_PHASE.CHOOSE_POSITION);
+    expect(gameDoc.selectOptions.length).toBeGreaterThan(0);
+    expect((await Players.findOneAsync(dead._id)).position).toEqual(PARKED); // not moved
+  });
+
+  // A restart replays this step. The game document goes back to how it was before the
+  // pick; the robot does not — the first run already put it on its own start tile.
+  it('reaches the same decision when run again', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.RESPAWN });
+    const dead = await insertPlayer(game._id, {
+      needsRespawn: true,
+      lives: 2,
+      start: { x: 2, y: 2 },
+      position: PARKED,
+    });
+    await Games.updateAsync(game._id, { $set: { waitingForRespawn: [dead._id] } });
+
+    const first = await pickNext(game._id);
+    expect(first.respawnPhase).toBe(GameState.RESPAWN_PHASE.CHOOSE_DIRECTION);
+
+    await Games.updateAsync(game._id, {
+      $set: {
+        waitingForRespawn: [dead._id],
+        respawnPlayerId: null,
+        selectOptions: null,
+        respawnUserId: null,
+      },
+    });
+    const second = await pickNext(game._id);
+
+    // Without the `_id` check the robot, now standing on its own start tile, would be
+    // taken for a squatter and the second run would ask for a position instead.
+    expect(second.respawnPhase).toBe(GameState.RESPAWN_PHASE.CHOOSE_DIRECTION);
+    expect(second.selectOptions).toHaveLength(4);
+    expect((await Players.findOneAsync(dead._id)).position).toEqual({ x: 2, y: 2 });
   });
 });
 

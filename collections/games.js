@@ -63,53 +63,39 @@ const game = {
   // bare Object.assign: nothing in the chain sets a dotted path.
   async advanceAsync(modifier = {}) {
     const $set = { ...(modifier.$set ?? {}), lastStepAt: new Date() };
+    const $inc = { ...(modifier.$inc ?? {}), step: 1 };
     const modified = await Games.updateAsync(
       { _id: this._id, step: this.step },
-      { ...modifier, $set, $inc: { ...(modifier.$inc ?? {}), step: 1 } }
+      { ...modifier, $set, $inc }
     );
     if (modified === 0) return false;
-    this.step += 1;
     Object.assign(this, $set);
+    for (const [field, by] of Object.entries($inc)) this[field] = (this[field] ?? 0) + by;
     return true;
   },
+  // The `phase` argument is itself a claim: when it loses, another driver owns the game
+  // and this one stops here instead of dispatching a phase it no longer holds.
   async nextPlayPhaseAsync(phase) {
-    if (phase != null) {
-      await this.setPlayPhaseAsync(phase);
-    }
+    if (phase != null && !(await this.setPlayPhaseAsync(phase))) return;
     return await GameState.nextPlayPhaseAsync(this._id);
   },
   async nextGamePhaseAsync(phase) {
-    if (phase != null) {
-      await this.setGamePhaseAsync(phase);
-    }
+    if (phase != null && !(await this.setGamePhaseAsync(phase))) return;
     return await GameState.nextGamePhaseAsync(this._id);
   },
   async nextRespawnPhaseAsync(phase) {
-    if (phase != null) {
-      await this.setRespawnPhaseAsync(phase);
-    }
+    if (phase != null && !(await this.setRespawnPhaseAsync(phase))) return;
     return await GameState.nextRespawnPhaseAsync(this._id);
   },
+  // Each of these resolves to the claim's boolean — `false` means stop.
   async setPlayPhaseAsync(phase) {
-    return await Games.updateAsync(this._id, {
-      $set: {
-        playPhase: phase,
-      },
-    });
+    return await this.advanceAsync({ $set: { playPhase: phase } });
   },
   async setGamePhaseAsync(phase) {
-    return await Games.updateAsync(this._id, {
-      $set: {
-        gamePhase: phase,
-      },
-    });
+    return await this.advanceAsync({ $set: { gamePhase: phase } });
   },
   async setRespawnPhaseAsync(phase) {
-    return await Games.updateAsync(this._id, {
-      $set: {
-        respawnPhase: phase,
-      },
-    });
+    return await this.advanceAsync({ $set: { respawnPhase: phase } });
   },
   async getDeckAsync() {
     const existingDeck = await Deck.findOneAsync({ gameId: this._id });
@@ -130,18 +116,10 @@ const game = {
     };
   },
   async startAnnounceAsync() {
-    return await Games.updateAsync(this._id, {
-      $set: {
-        announce: true,
-      },
-    });
+    return await this.advanceAsync({ $set: { announce: true } });
   },
   async stopAnnounceAsync() {
-    return await Games.updateAsync(this._id, {
-      $set: {
-        announce: false,
-      },
-    });
+    return await this.advanceAsync({ $set: { announce: false } });
   },
   async activePlayersAsync() {
     return await Players.find({

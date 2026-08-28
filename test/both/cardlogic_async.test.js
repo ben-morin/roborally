@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
-import { CardLogic } from '../../both/cardlogic.js';
+import { autoSubmitIfTimedOut, CardLogic } from '../../both/cardlogic.js';
 import { GameLogic } from '../../both/gamelogic.js';
 import { GameState } from '../../both/gamestate.js';
 import { Games } from '../../collections/games.js';
@@ -357,5 +357,129 @@ describe('submitCardsAsync', () => {
     // only `player` is alive, and they just submitted -> readyPlayerCnt === playerCnt
     expect(nextPhase).toHaveBeenCalledWith(game._id);
     void dead;
+  });
+});
+
+// Hand a caller a stale game instance: the real read happens, then another driver's
+// claim lands before the caller gets to write. This is the race every claim closes.
+function claimBehindTheNextRead() {
+  const read = Games.findOneAsync.bind(Games);
+  vi.spyOn(Games, 'findOneAsync').mockImplementationOnce(async (...args) => {
+    const game = await read(...args);
+    await Games.updateAsync(game._id, { $inc: { step: 1 } });
+    return game;
+  });
+}
+
+describe('submitCardsAsync: the turn is claimed, not just written', () => {
+  afterEach(() => vi.useRealTimers());
+
+  // The A/B race: the client's timer-0 playCards and the server's own auto-submit both
+  // land for the same straggler after the 2.5 s grace. Both count everyone ready.
+  it('two concurrent submits for the same last player start the turn once', async () => {
+    vi.useFakeTimers();
+    const game = await insertGame({ timer: 0 });
+    const first = await insertPlayer(game._id, { submitted: true });
+    const last = await insertPlayer(game._id);
+    await insertCards(first._id, game._id, { handCards: [], chosenCards: [1, 2, 3, 4, 5] });
+    await insertCards(last._id, game._id, {
+      handCards: [6, 7, 8, 9, 10],
+      chosenCards: [6, 7, 8, 9, 10],
+    });
+    // Let PROGRAM -> announce -> PLAY run for real and stop at the first play phase: the
+    // PLAY write is the one that must land exactly once.
+    vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    const updates = vi.spyOn(Games, 'updateAsync');
+
+    const both = Promise.all([CardLogic.submitCardsAsync(last), CardLogic.submitCardsAsync(last)]);
+    await vi.runAllTimersAsync();
+    await both;
+
+    const playWrites = updates.mock.calls.filter(
+      ([, modifier]) => modifier.$set?.gamePhase === GameState.PHASE.PLAY
+    );
+    expect(playWrites).toHaveLength(1);
+    expect(GameState.nextPlayPhaseAsync).toHaveBeenCalledTimes(1);
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.gamePhase).toBe(GameState.PHASE.PLAY);
+    expect(gameDoc.timer).toBe(-1);
+  });
+
+  it('a lost timer claim arms no timer', async () => {
+    vi.useFakeTimers();
+    const game = await insertGame();
+    const first = await insertPlayer(game._id);
+    await insertPlayer(game._id); // still programming, so `first` would arm the timer
+    await insertCards(first._id, game._id, { handCards: [], chosenCards: [1, 2, 3, 4, 5] });
+    claimBehindTheNextRead();
+
+    await CardLogic.submitCardsAsync(first);
+
+    expect(vi.getTimerCount()).toBe(0);
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timer).toBe(-1); // untouched fixture value
+    expect(gameDoc.timerStartedAt).toBeNull();
+    // The submission itself stands: the claim only guards the turn, not the player.
+    expect((await Players.findOneAsync(first._id)).submitted).toBe(true);
+  });
+
+  it('a lost end-of-programming claim leaves the turn to whoever won it', async () => {
+    const game = await insertGame({ timer: 1, timerStartedAt: new Date() });
+    const player = await insertPlayer(game._id);
+    await insertCards(player._id, game._id, { handCards: [], chosenCards: [1, 2, 3, 4, 5] });
+    const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+    claimBehindTheNextRead();
+
+    await CardLogic.submitCardsAsync(player);
+
+    expect(nextPhase).not.toHaveBeenCalled();
+    expect((await Games.findOneAsync(game._id)).timer).toBe(1);
+  });
+});
+
+describe('autoSubmitIfTimedOut: the timer-0 write is pinned to its timer instance', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('flips the timer to 0 when handed the same instant as a different Date object', async () => {
+    vi.useFakeTimers();
+    const startedAt = new Date(Date.now() - 40_000);
+    const game = await insertGame({ timer: 1, timerStartedAt: startedAt });
+    // Everyone is in, so nothing is force-submitted and the 0 stays observable.
+    const player = await insertPlayer(game._id, { submitted: true });
+    await insertCards(player._id, game._id, { handCards: [], chosenCards: [1, 2, 3, 4, 5] });
+
+    // The cron sweep passes the Date it read back from the document, never the object
+    // that was stored — the two must still count as the same timer.
+    const running = autoSubmitIfTimedOut(game._id, new Date(startedAt.getTime()));
+    await vi.advanceTimersByTimeAsync(2500);
+    await running;
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timer).toBe(0);
+    expect(gameDoc.timerStartedAt).toBeNull();
+  });
+
+  it('writes nothing when a new timer instance was armed after its own check', async () => {
+    vi.useFakeTimers();
+    const startedAt = new Date(Date.now() - 40_000);
+    const game = await insertGame({ timer: 1, timerStartedAt: startedAt });
+    const player = await insertPlayer(game._id, { submitted: true });
+    await insertCards(player._id, game._id, { handCards: [], chosenCards: [1, 2, 3, 4, 5] });
+    // Between the read that passes the JS guard and the write: a later turn re-arms.
+    const rearmedAt = new Date();
+    const read = Games.findOneAsync.bind(Games);
+    vi.spyOn(Games, 'findOneAsync').mockImplementationOnce(async (...args) => {
+      const stale = await read(...args);
+      await Games.updateAsync(game._id, { $set: { timerStartedAt: rearmedAt } });
+      return stale;
+    });
+
+    const running = autoSubmitIfTimedOut(game._id, startedAt);
+    await vi.advanceTimersByTimeAsync(2500);
+    await running;
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timer).toBe(1);
+    expect(gameDoc.timerStartedAt).toEqual(rearmedAt);
   });
 });
