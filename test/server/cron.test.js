@@ -7,7 +7,7 @@
 // mid-wait and prove the recheck is load-bearing.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
-import { resetFakeCollections, runStartup } from '../setup.js';
+import { resetFakeCollections, runStartup, setSettings } from '../setup.js';
 import { cronSchedule, cronStarted, registeredCronJobs, runCronJob } from '../stubs/synced-cron.js';
 import { insertCards, insertDeck, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { stubBoard } from '../helpers/board.js';
@@ -26,7 +26,8 @@ const STALLED = 'Recover stalled programming timers';
 const RESUME = 'Recover stalled turns';
 
 const RESUME_CHAT = 'Server restarted — replaying this turn from the start';
-// `Clean up abandoned games` sits out this long after boot — see server/cron.js.
+// What `Clean up abandoned games` sits out after boot when nothing overrides it — see
+// server/cron.js, where `Meteor.settings.BOOT_GRACE_SEC` can shorten it.
 const BOOT_GRACE_MS = 5 * 60 * 1000;
 
 // `name` is the display name the account resolves to, which in production always matches
@@ -513,6 +514,9 @@ describe(ABANDONED, () => {
     vi.setSystemTime(Date.now() + BOOT_GRACE_MS);
   });
 
+  // One test below overrides the grace through Meteor.settings; put it back either way.
+  afterEach(() => setSettings());
+
   // mizzao:user-status marks every user offline in its own Meteor.startup, and clients
   // need seconds — after a long outage, minutes of DDP back-off — to reconnect. Without
   // the grace a restart could end every live game as "Nobody" or hand it to the first
@@ -531,6 +535,28 @@ describe(ABANDONED, () => {
     expect(await Chat.find({ gameId }).countAsync()).toBe(0);
 
     vi.setSystemTime(boot.getTime() + BOOT_GRACE_MS);
+    await runWithRecheck(ABANDONED);
+    expect((await Games.findOneAsync(gameId)).gamePhase).toBe(GameState.PHASE.ENDED);
+  });
+
+  // The default is measured against production's DDP back-off. A test run has no back-off
+  // and no patience, so the grace is settable — test/e2e/settings.json drops it to ten
+  // seconds, which is what lets an e2e run see this job clear games from an earlier run.
+  it('takes a shorter grace from Meteor.settings.BOOT_GRACE_SEC', async () => {
+    const boot = new Date('2026-08-27T12:00:00Z');
+    vi.setSystemTime(boot);
+    await runStartup();
+    await user('a', { online: false });
+    const gameId = await Games.insertAsync({ started: true, min_player: 2 });
+    await Players.insertAsync({ gameId, userId: 'a', name: 'ann' });
+
+    // Ten seconds in, the default grace would still be sitting this one out.
+    vi.setSystemTime(boot.getTime() + 10_000);
+    await runWithRecheck(ABANDONED);
+    expect((await Games.findOneAsync(gameId)).gamePhase).toBeUndefined();
+
+    setSettings({ BOOT_GRACE_SEC: 10 });
+    vi.setSystemTime(boot.getTime() + 10_000);
     await runWithRecheck(ABANDONED);
     expect((await Games.findOneAsync(gameId)).gamePhase).toBe(GameState.PHASE.ENDED);
   });

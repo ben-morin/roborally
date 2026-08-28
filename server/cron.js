@@ -30,8 +30,23 @@ Meteor.settings.public.appVersion =
 // a few seconds to reconnect — after a long outage, up to five minutes of DDP back-off.
 // Until they do, every live game looks abandoned; `Clean up abandoned games` sits out
 // the grace so a restart cannot end a game as "Nobody" or hand it to the first player back.
-const BOOT_GRACE_MS = 5 * 60 * 1000;
+//
+// `Meteor.settings.BOOT_GRACE_SEC` overrides the five minutes — in seconds, because the
+// value is written by hand and nobody should have to count zeroes to set ten seconds. It is
+// there for test runs, which have neither the reconnect back-off the default is measured
+// against nor the patience to sit out five minutes to watch this job do anything;
+// test/e2e/settings.json sets it. Leave it unset in production.
+const DEFAULT_BOOT_GRACE_SEC = 5 * 60;
 let bootedAt = 0;
+
+// Read per tick rather than once at load, so a nonsense value cannot be baked in for the
+// life of the process and a test can change it between cases.
+function bootGraceMs() {
+  const configured = Meteor.settings?.BOOT_GRACE_SEC;
+  const seconds =
+    typeof configured === 'number' && configured >= 0 ? configured : DEFAULT_BOOT_GRACE_SEC;
+  return seconds * 1000;
+}
 
 SyncedCron.config({ log: false });
 
@@ -122,8 +137,11 @@ SyncedCron.add({
   name: 'Clean up abandoned games',
   schedule: (parser) => parser.text('every 1 minute'),
   job: async () => {
-    if (Date.now() - bootedAt < BOOT_GRACE_MS) {
-      console.log('Skipping abandoned-game check: the server booted less than five minutes ago');
+    const graceMs = bootGraceMs();
+    if (Date.now() - bootedAt < graceMs) {
+      console.log(
+        `Skipping abandoned-game check: the server booted less than ${Math.round(graceMs / 1000)}s ago`
+      );
       return;
     }
     const liveGames = await Games.find({ started: true, winner: { $exists: false } }).fetchAsync();
