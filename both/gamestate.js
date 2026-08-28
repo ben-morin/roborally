@@ -539,8 +539,97 @@ async function noPlayerOnNextThreeAsync(x, y, dx, dy, game) {
   );
 }
 
+// re-entry
+
+const RESUME_CHAT = 'Server restarted — replaying this turn from the start';
+
+// Pick a game up again after the process that was driving it died — or, from the sweep,
+// after it has not moved for long enough to be presumed dead. One rule: the game document
+// says where the turn is, its snapshot says where the current segment started, and nothing
+// that happened in between is trusted.
+async function resumeAsync(gameId) {
+  const game = await Games.findOneAsync(gameId);
+  if (!game) return;
+  const replay = await resumeStepFor(game);
+  if (!replay) return;
+  // The touch: a claim with nothing to set. It moves `step` and `lastStepAt`, so a second
+  // sweeper looking at the same game loses right here and never restores anything, and a
+  // driver that turns out to be alive after all loses its next claim instead of fighting
+  // the replay. It comes after the decision so that a game nobody needs to touch is not.
+  if (!(await game.advanceAsync())) return;
+  await replay();
+}
+
+// What re-entry means for the phase the game is in, as a function to run once the touch
+// has been won — or null when a human is expected to act (PROGRAM with players still
+// programming, RESPAWN with options on the table) or there is nothing to drive.
+async function resumeStepFor(game) {
+  switch (game.gamePhase) {
+    case GameState.PHASE.PLAY:
+      if (!hasSnapshotFor(game)) return null;
+      return async () => {
+        // The game document's own play-start state — constants, because the respawn
+        // queue is always empty when play begins and the rest is exactly what
+        // playProgramCardsSubmitted writes. Claimed before the collections are restored,
+        // so a loss here has changed nothing yet.
+        const claimed = await game.advanceAsync({
+          $set: {
+            playPhase: GameState.PLAY_PHASE.IDLE,
+            playPhaseCount: 1,
+            cardsToPlay: [],
+            announceCard: null,
+            waitingForRespawn: [],
+          },
+        });
+        if (!claimed) return;
+        await game.restoreSnapshotAsync();
+        await game.chatAsync(RESUME_CHAT);
+        await GameState.nextPlayPhaseAsync(game._id);
+      };
+    case GameState.PHASE.DEAL:
+      if (!hasSnapshotFor(game)) return null;
+      return async () => {
+        // The deal handler's own writes cover the game document; only the collections
+        // go back. Re-entering through the dispatcher runs the DEAL case as usual.
+        await game.restoreSnapshotAsync();
+        await GameState.nextGamePhaseAsync(game._id);
+      };
+    case GameState.PHASE.RESPAWN:
+      // Two server-driven pieces, both safe to run again: pick the next robot, then compute
+      // its options. Options already written means a human is choosing — leave it alone.
+      if (game.respawnPlayerId == null) return () => GameState.nextGamePhaseAsync(game._id);
+      if (game.selectOptions == null) return () => GameState.nextRespawnPhaseAsync(game._id);
+      return null;
+    case GameState.PHASE.PROGRAM: {
+      // Everyone submitted and nobody drove on: the process died in the ~250 ms between
+      // the last submit and the PLAY write. No human is expected to act, so kick it.
+      const programming = await Players.find({
+        gameId: game._id,
+        lives: { $gt: 0 },
+        submitted: false,
+      }).countAsync();
+      return programming === 0 ? () => GameState.nextGamePhaseAsync(game._id) : null;
+    }
+    default:
+      // IDLE and ENDED: nothing to resume.
+      return null;
+  }
+}
+
+// The claim that enters a segment writes `gamePhase` and the snapshot together, so a
+// mismatch cannot come from this code — treat one as a bug and leave the game alone.
+function hasSnapshotFor(game) {
+  const segment = game.segmentSnapshot?.segment;
+  if (segment === game.gamePhase) return true;
+  console.error(
+    `resumeAsync: game ${game._id} is in ${game.gamePhase} but its snapshot is for ${segment ?? 'nothing'}`
+  );
+  return false;
+}
+
 Object.assign(GameState, {
   nextGamePhaseAsync,
   nextPlayPhaseAsync,
   nextRespawnPhaseAsync,
+  resumeAsync,
 });

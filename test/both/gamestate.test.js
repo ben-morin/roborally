@@ -420,6 +420,451 @@ describe('claims: one driver per game', () => {
   });
 });
 
+// The claim that enters a segment stores the players, cards and deck of that moment on the
+// game document, and resumeAsync puts them back before it runs the segment again.
+describe('segment snapshots', () => {
+  async function drive(fn) {
+    const p = fn();
+    await vi.runAllTimersAsync();
+    await p;
+  }
+
+  it('entering PLAY stores a play snapshot of the players, cards and deck', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    const player = await insertPlayer(game._id, { damage: 3, powerState: GameLogic.DOWN });
+    await insertCards(player._id, game._id, { handCards: [1, 2], chosenCards: [3, 4, 5, 6, 7] });
+    await insertDeck(game._id, { cards: [8, 9] });
+    vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+
+    await drive(() => GameState.nextGamePhaseAsync(game._id));
+
+    const { segmentSnapshot } = await Games.findOneAsync(game._id);
+    expect(segmentSnapshot.segment).toBe(GameState.PHASE.PLAY);
+    expect(segmentSnapshot.takenAt).toBeInstanceOf(Date);
+    expect(segmentSnapshot.players).toHaveLength(1);
+    expect(segmentSnapshot.players[0]).toMatchObject({
+      _id: player._id,
+      damage: 3,
+      powerState: GameLogic.DOWN,
+    });
+    expect(segmentSnapshot.cards).toEqual([
+      expect.objectContaining({ playerId: player._id, handCards: [1, 2] }),
+    ]);
+    expect(segmentSnapshot.deck).toMatchObject({ gameId: game._id, cards: [8, 9] });
+  });
+
+  it.each([
+    [
+      'IDLE (startGame)',
+      { gamePhase: GameState.PHASE.IDLE },
+      (game) => GameState.nextGamePhaseAsync(game._id),
+    ],
+    [
+      'PLAY after repairs, nobody to respawn',
+      { gamePhase: GameState.PHASE.PLAY, waitingForRespawn: [] },
+      (game) => GameState.nextGamePhaseAsync(game._id),
+    ],
+    [
+      'RESPAWN once the queue is empty',
+      { gamePhase: GameState.PHASE.RESPAWN, waitingForRespawn: [] },
+      (game) => GameState.nextGamePhaseAsync(game._id),
+    ],
+  ])('entering DEAL from %s stores a deal snapshot', async (_from, seed, enter) => {
+    stubBoard();
+    const game = await insertGame(seed);
+    const player = await insertPlayer(game._id, { powerState: GameLogic.DOWN });
+    await insertCards(player._id, game._id);
+    await insertDeck(game._id, { cards: [1, 2, 3] });
+    guardRecursion('nextGamePhaseAsync');
+
+    await drive(() => enter(game));
+
+    const { segmentSnapshot } = await Games.findOneAsync(game._id);
+    expect(segmentSnapshot.segment).toBe(GameState.PHASE.DEAL);
+    expect(segmentSnapshot.players[0]).toMatchObject({
+      _id: player._id,
+      powerState: GameLogic.DOWN,
+    });
+  });
+
+  it('a claim that does not enter a segment leaves the snapshot as it is', async () => {
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PLAY,
+      segmentSnapshot: { segment: GameState.PHASE.PLAY, players: [], cards: [], deck: null },
+    });
+
+    await game.setPlayPhaseAsync(GameState.PLAY_PHASE.MOVE_BOTS);
+    await game.advanceAsync({ $set: { gamePhase: GameState.PHASE.ENDED } });
+
+    expect((await Games.findOneAsync(game._id)).segmentSnapshot.segment).toBe(GameState.PHASE.PLAY);
+  });
+});
+
+describe('resumeAsync', () => {
+  const RESUME_CHAT = 'Server restarted — replaying this turn from the start';
+
+  async function drive(fn) {
+    const p = fn();
+    await vi.runAllTimersAsync();
+    await p;
+  }
+
+  // Everything the turn can change, minus the claim bookkeeping. Chat is left out: a
+  // replayed turn repeats its lines, and the resume announces itself.
+  async function finalState() {
+    const games = (await Games.find().fetchAsync()).map(
+      // eslint-disable-next-line no-unused-vars
+      ({ step, lastStepAt, segmentSnapshot, ...rest }) => ({ ...rest })
+    );
+    const plain = (docs) => docs.map((doc) => ({ ...doc }));
+    return {
+      games,
+      players: plain(await Players.find().fetchAsync()),
+      cards: plain(await Cards.find().fetchAsync()),
+      deck: plain(await Deck.find().fetchAsync()),
+    };
+  }
+
+  // Two robots in one row, facing each other, every card in. Steps and turns move them
+  // around, they push and shoot each other, nobody dies, no checkpoint is reached: the
+  // turn ends in REPAIRS with positions, directions and damage all changed.
+  async function seedFacingRobots() {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    const a = await insertPlayer(game._id, {
+      name: 'a',
+      userId: 'a',
+      position: { x: 1, y: 2 },
+      direction: GameLogic.RIGHT,
+      submitted: true,
+      cards: [-2, -2, -2, -2, -2],
+    });
+    const b = await insertPlayer(game._id, {
+      name: 'b',
+      userId: 'b',
+      position: { x: 4, y: 2 },
+      direction: GameLogic.LEFT,
+      submitted: true,
+      cards: [-2, -2, -2, -2, -2],
+    });
+    // step, step, turn-left, u-turn, step / step, turn-right, step, turn-left, step
+    await insertCards(a._id, game._id, {
+      handCards: [60, 61, 62, 63],
+      chosenCards: [48, 50, 24, 0, 52],
+    });
+    await insertCards(b._id, game._id, { handCards: [70, 71], chosenCards: [49, 7, 51, 25, 53] });
+    await insertDeck(game._id, { cards: Array.from({ length: 20 }, (_, i) => i) });
+    // The turn ends in playRepairs -> nextGamePhaseAsync, which would deal the next turn.
+    guardRecursion('nextGamePhaseAsync');
+    return game;
+  }
+
+  it('replays a turn cut off mid-register to the same end state as an uninterrupted run', async () => {
+    // Reference: the whole turn, undisturbed.
+    let game = await seedFacingRobots();
+    await drive(() => GameState.nextGamePhaseAsync(game._id));
+    const reference = await finalState();
+    expect(reference.games[0]).toMatchObject({
+      gamePhase: GameState.PHASE.PLAY,
+      playPhase: GameState.PLAY_PHASE.REPAIRS,
+      playPhaseCount: 5,
+    });
+    // Sanity: the turn did something to compare.
+    expect(reference.players.map((p) => p.position)).not.toEqual([
+      { x: 1, y: 2 },
+      { x: 4, y: 2 },
+    ]);
+    expect(reference.players.map((p) => p.damage)).toEqual([1, 2]);
+
+    // Same seed, but the process dies as register 3's lasers fire: registers 1-2 have run
+    // in full, register 3's moves have landed, and the game document already says
+    // CHECKPOINTS (it is written before the lasers).
+    resetFakeCollections();
+    vi.restoreAllMocks();
+    game = await seedFacingRobots();
+    const realLasers = GameLogic.executeLasers;
+    let laserPhases = 0;
+    const lasers = vi.spyOn(GameLogic, 'executeLasers').mockImplementation(async (players) => {
+      if (++laserPhases === 3) throw new Error('simulated crash: register 3 lasers');
+      return realLasers(players);
+    });
+    const crashed = GameState.nextGamePhaseAsync(game._id).catch((err) => err);
+    await vi.runAllTimersAsync();
+    expect(await crashed).toEqual(new Error('simulated crash: register 3 lasers'));
+    lasers.mockRestore();
+    const frozen = await Games.findOneAsync(game._id);
+    expect(frozen.playPhaseCount).toBe(3);
+    expect(frozen.playPhase).toBe(GameState.PLAY_PHASE.CHECKPOINTS);
+
+    await drive(() => GameState.resumeAsync(game._id));
+
+    expect(await finalState()).toEqual(reference);
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages.filter((m) => m === RESUME_CHAT)).toHaveLength(1);
+  });
+
+  it('re-deals a deal cut off half-way, losing no card', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PLAY, waitingForRespawn: [] });
+    const a = await insertPlayer(game._id, { userId: 'a', submitted: true });
+    const b = await insertPlayer(game._id, { userId: 'b', submitted: true });
+    await insertCards(a._id, game._id, { handCards: [60, 61], chosenCards: [1, 2, 3, 4, 5] });
+    await insertCards(b._id, game._id, { handCards: [70], chosenCards: [6, 7, 8, 9, 10] });
+    const deckCards = Array.from({ length: 20 }, (_, i) => 100 + i);
+    await insertDeck(game._id, { cards: deckCards });
+    const everyCard = [...deckCards, 60, 61, 1, 2, 3, 4, 5, 70, 6, 7, 8, 9, 10].sort(
+      (x, y) => x - y
+    );
+    // The process dies dealing the second hand: one hand is out, the deck is short. Which
+    // robot got it is random — the deal shuffles the player order too.
+    const realDeal = CardLogic.dealCardsAsync.bind(CardLogic);
+    let deals = 0;
+    const deal = vi.spyOn(CardLogic, 'dealCardsAsync').mockImplementation(async (g, p) => {
+      if (++deals === 2) throw new Error('simulated crash: second hand');
+      return realDeal(g, p);
+    });
+    const crashed = GameState.nextGamePhaseAsync(game._id).catch((err) => err);
+    await vi.runAllTimersAsync();
+    expect(await crashed).toEqual(new Error('simulated crash: second hand'));
+    deal.mockRestore();
+    expect((await Games.findOneAsync(game._id)).gamePhase).toBe(GameState.PHASE.DEAL);
+    const handsAtCrash = (await Cards.find({ gameId: game._id }).fetchAsync()).map(
+      (h) => h.handCards.length
+    );
+    // Every old hand went back into the deck first; then exactly one new hand came out.
+    expect([...handsAtCrash].sort()).toEqual([0, 9]);
+
+    await drive(() => GameState.resumeAsync(game._id));
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.gamePhase).toBe(GameState.PHASE.PROGRAM);
+    expect(gameDoc.programRound).toBe(2); // fixture seeds 1; dealt once
+    const hands = await Cards.find({ gameId: game._id }).fetchAsync();
+    expect(hands.map((h) => h.handCards.length)).toEqual([9, 9]);
+    expect(hands.map((h) => h.chosenCards)).toEqual([
+      [-1, -1, -1, -1, -1],
+      [-1, -1, -1, -1, -1],
+    ]);
+    const deck = await Deck.findOneAsync({ gameId: game._id });
+    expect(deck.cards).toHaveLength(everyCard.length - 18);
+    // Every card is somewhere, exactly once.
+    expect([...deck.cards, ...hands.flatMap((h) => h.handCards)].sort((x, y) => x - y)).toEqual(
+      everyCard
+    );
+    // No resume line for a deal: nobody saw the first one.
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages).not.toContain(RESUME_CHAT);
+  });
+
+  it('rebuilds the deck from nothing when the very first deal is cut off', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const a = await insertPlayer(game._id, { userId: 'a' });
+    const b = await insertPlayer(game._id, { userId: 'b' });
+    await insertCards(a._id, game._id);
+    await insertCards(b._id, game._id);
+    // No deck yet: the deal creates it, shuffles, hands `a` nine cards, then dies.
+    const realDeal = CardLogic.dealCardsAsync.bind(CardLogic);
+    let deals = 0;
+    const deal = vi.spyOn(CardLogic, 'dealCardsAsync').mockImplementation(async (g, p) => {
+      if (++deals === 2) throw new Error('simulated crash: second hand');
+      return realDeal(g, p);
+    });
+    const crashed = GameState.nextGamePhaseAsync(game._id).catch((err) => err);
+    await vi.runAllTimersAsync();
+    expect(await crashed).toBeInstanceOf(Error);
+    deal.mockRestore();
+    expect((await Deck.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 9);
+
+    await drive(() => GameState.resumeAsync(game._id));
+
+    // Restoring to "no deck" removed the half-dealt one; the replayed deal built a full
+    // 8-player deck and dealt both hands from it. Nothing went missing.
+    expect((await Deck.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 18);
+    expect((await Games.findOneAsync(game._id)).gamePhase).toBe(GameState.PHASE.PROGRAM);
+  });
+
+  it('skips a player who left after the snapshot instead of re-inserting them', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    const stays = await insertPlayer(game._id, { userId: 'stays', damage: 0 });
+    const leaves = await insertPlayer(game._id, { userId: 'leaves' });
+    await insertCards(stays._id, game._id, { userId: 'stays' });
+    await insertCards(leaves._id, game._id, { userId: 'leaves' });
+    vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    await drive(() => GameState.nextGamePhaseAsync(game._id)); // PLAY, snapshot taken
+    await Players.removeAsync(leaves._id);
+    await Cards.removeAsync({ playerId: leaves._id });
+    await Players.updateAsync(stays._id, { $set: { damage: 4 } }); // the crashed run's work
+
+    await drive(() => GameState.resumeAsync(game._id));
+
+    expect(await Players.find({ gameId: game._id }).countAsync()).toBe(1);
+    expect(await Cards.find({ gameId: game._id }).countAsync()).toBe(1);
+    expect((await Players.findOneAsync(stays._id)).damage).toBe(0); // restored
+  });
+
+  it('resets the play-start fields and announces the replay once', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    const player = await insertPlayer(game._id);
+    await insertCards(player._id, game._id);
+    vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    await drive(() => GameState.nextGamePhaseAsync(game._id));
+    await Games.updateAsync(game._id, {
+      $set: {
+        playPhase: GameState.PLAY_PHASE.MOVE_BOTS,
+        playPhaseCount: 4,
+        cardsToPlay: [{ cardId: 1, playerId: player._id }],
+        announceCard: { cardId: 1 },
+        waitingForRespawn: [player._id],
+      },
+    });
+    const { step } = await Games.findOneAsync(game._id);
+
+    await drive(() => GameState.resumeAsync(game._id));
+
+    expect(await Games.findOneAsync(game._id)).toMatchObject({
+      gamePhase: GameState.PHASE.PLAY,
+      playPhase: GameState.PLAY_PHASE.IDLE,
+      playPhaseCount: 1,
+      cardsToPlay: [],
+      announceCard: null,
+      waitingForRespawn: [],
+      step: step + 2, // the touch, then the play-start claim
+    });
+    expect(GameState.nextPlayPhaseAsync).toHaveBeenLastCalledWith(game._id);
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages.filter((m) => m === RESUME_CHAT)).toHaveLength(1);
+  });
+
+  it('two sweepers on the same game: one touch wins, one replay runs', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    const player = await insertPlayer(game._id);
+    await insertCards(player._id, game._id);
+    vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+    await drive(() => GameState.nextGamePhaseAsync(game._id));
+    const { step } = await Games.findOneAsync(game._id);
+
+    await drive(() =>
+      Promise.all([GameState.resumeAsync(game._id), GameState.resumeAsync(game._id)])
+    );
+
+    expect((await Games.findOneAsync(game._id)).step).toBe(step + 2);
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages.filter((m) => m === RESUME_CHAT)).toHaveLength(1);
+  });
+
+  it('refuses to restore from a snapshot for a different segment, and says so', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PLAY,
+      segmentSnapshot: { segment: GameState.PHASE.DEAL, players: [], cards: [], deck: null },
+    });
+    const dispatch = vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue();
+
+    await drive(() => GameState.resumeAsync(game._id));
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect((await Games.findOneAsync(game._id)).step).toBe(0); // not even touched
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(errors.mock.calls[0][0]).toContain(game._id);
+  });
+
+  describe('outside the segments', () => {
+    function spyDispatchers() {
+      return {
+        game: vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue(),
+        play: vi.spyOn(GameState, 'nextPlayPhaseAsync').mockResolvedValue(),
+        respawn: vi.spyOn(GameState, 'nextRespawnPhaseAsync').mockResolvedValue(),
+      };
+    }
+
+    it('RESPAWN with no robot picked yet picks one', async () => {
+      const game = await insertGame({ gamePhase: GameState.PHASE.RESPAWN, respawnPlayerId: null });
+      const d = spyDispatchers();
+
+      await drive(() => GameState.resumeAsync(game._id));
+
+      expect(d.game).toHaveBeenCalledWith(game._id);
+      expect(d.respawn).not.toHaveBeenCalled();
+      expect((await Games.findOneAsync(game._id)).step).toBe(1);
+    });
+
+    it('RESPAWN with a robot picked but no options yet computes them', async () => {
+      const game = await insertGame({
+        gamePhase: GameState.PHASE.RESPAWN,
+        respawnPlayerId: 'p1',
+        selectOptions: null,
+      });
+      const d = spyDispatchers();
+
+      await drive(() => GameState.resumeAsync(game._id));
+
+      expect(d.respawn).toHaveBeenCalledWith(game._id);
+      expect(d.game).not.toHaveBeenCalled();
+    });
+
+    it('RESPAWN with options on the table is a human’s move: untouched', async () => {
+      const game = await insertGame({
+        gamePhase: GameState.PHASE.RESPAWN,
+        respawnPlayerId: 'p1',
+        selectOptions: [{ x: 1, y: 1 }],
+      });
+      const d = spyDispatchers();
+
+      await drive(() => GameState.resumeAsync(game._id));
+
+      expect(d.game).not.toHaveBeenCalled();
+      expect(d.respawn).not.toHaveBeenCalled();
+      expect((await Games.findOneAsync(game._id)).step).toBe(0);
+    });
+
+    it('PROGRAM with every living player submitted is kicked into the turn', async () => {
+      const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+      await insertPlayer(game._id, { submitted: true });
+      await insertPlayer(game._id, { submitted: false, lives: 0 }); // dead: does not count
+      const d = spyDispatchers();
+
+      await drive(() => GameState.resumeAsync(game._id));
+
+      expect(d.game).toHaveBeenCalledWith(game._id);
+    });
+
+    it('PROGRAM with someone still programming is untouched, however long it takes', async () => {
+      const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+      await insertPlayer(game._id, { submitted: true });
+      await insertPlayer(game._id, { submitted: false });
+      const d = spyDispatchers();
+
+      await drive(() => GameState.resumeAsync(game._id));
+
+      expect(d.game).not.toHaveBeenCalled();
+      expect((await Games.findOneAsync(game._id)).step).toBe(0);
+    });
+
+    it.each([GameState.PHASE.IDLE, GameState.PHASE.ENDED])(
+      '%s: nothing to resume',
+      async (gamePhase) => {
+        const game = await insertGame({ gamePhase });
+        const d = spyDispatchers();
+
+        await drive(() => GameState.resumeAsync(game._id));
+
+        expect(d.game).not.toHaveBeenCalled();
+        expect(d.play).not.toHaveBeenCalled();
+        expect((await Games.findOneAsync(game._id)).step).toBe(0);
+      }
+    );
+
+    it('a game that no longer exists is not an error', async () => {
+      await expect(GameState.resumeAsync('gone')).resolves.toBeUndefined();
+    });
+  });
+});
+
 describe('respawn phase: picking the next robot', () => {
   // Off-board parking spot for a dead robot on the 6x6 stub board.
   const PARKED = { x: 5, y: 6 };
