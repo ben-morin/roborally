@@ -56,9 +56,12 @@ export async function resumeStalledTurnsAsync({ now = new Date() } = {}) {
 // Fire-and-forget, so the catch is load-bearing: without it a failed replay is an
 // unhandled rejection. It cannot recover — but the game's `lastStepAt` was touched at the
 // start of the attempt, so once that is STALL_MS old again the next sweep tries once more.
-// The gameId is in the log line because it is the only trace such a game leaves.
+// Nothing is logged on the way in: `needsDriver` passes every PROGRAM game, and resumeAsync
+// leaves the ones a human still owes cards for alone — without ever stamping `lastStepAt`, so
+// the sweep sees them again every minute for the rest of the game. resumeAsync logs once it
+// has actually claimed a game. The gameId is in the failure line because it is the only
+// trace such a game leaves.
 function resumeOne(gameId) {
-  console.log(`Resuming stalled turn for game ${gameId}`);
   return GameState.resumeAsync(gameId).catch(async (err) => {
     console.error(`resumeAsync failed for game ${gameId}`, err);
     // Say so in the game chat: without this the turn simply stops and the players have

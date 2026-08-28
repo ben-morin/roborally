@@ -557,6 +557,11 @@ async function resumeAsync(gameId) {
   // driver that turns out to be alive after all loses its next claim instead of fighting
   // the replay. It comes after the decision so that a game nobody needs to touch is not.
   if (!(await game.advanceAsync())) return;
+  // Logged here rather than at the sweep's call site so that the line means work has
+  // started, not work was considered. The sweep's filter is deliberately coarse — a PROGRAM
+  // game passes it whether or not a human still owes cards — so a line at the call site
+  // repeats every minute for the rest of such a game's life and says nothing.
+  console.log(`Resuming stalled turn for game ${gameId}`);
   await replay();
 }
 
