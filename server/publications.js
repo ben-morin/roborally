@@ -3,6 +3,7 @@ import { Chat } from '../collections/chat.js';
 import { Games } from '../collections/games.js';
 import { Highscores } from '../collections/highscores.js';
 import { Players } from '../collections/players.js';
+import { nudgeGameAsync } from './resume.js';
 
 // Whole game documents go out to every client here, so the per-turn snapshot — a copy of
 // the players, cards and deck as they were when the current segment started — is projected
@@ -37,7 +38,15 @@ Meteor.publish('onlineUsers', function () {
   );
 });
 
+// Subscribing here is a browser opening /board/:id — including one reconnecting after a
+// restart, since DDP re-sends its subscriptions. That makes this the earliest the server
+// hears that somebody is waiting on a turn which died with the last process, so it is where
+// the wait for the stalled-turn sweep gets cut short. Deliberately not awaited: the nudge
+// replays a whole segment and the subscription must not sit behind it.
 Meteor.publish('players', function (gameId) {
+  nudgeGameAsync(gameId, this.userId).catch((err) =>
+    console.error(`nudge failed for game ${gameId}`, err)
+  );
   return Players.find({ gameId });
 });
 

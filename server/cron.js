@@ -13,6 +13,7 @@ import { GameLogic } from '../both/gamelogic.js';
 import { GameState } from '../both/gamestate.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';
+import { markBooted, bootedAtMs } from './boot.js';
 import { buildHighscores } from './highscores.js';
 import { resumeStalledTurnsAsync } from './resume.js';
 import './accounts.js';
@@ -25,11 +26,11 @@ Meteor.settings.public = Meteor.settings.public || {};
 Meteor.settings.public.appVersion =
   process.env.APP_VERSION || process.env.npm_package_version || 'development';
 
-// When this process came up — stamped in Meteor.startup, before the scheduler starts.
 // mizzao:user-status marks every user offline in its own startup hook, and clients take
 // a few seconds to reconnect — after a long outage, up to five minutes of DDP back-off.
-// Until they do, every live game looks abandoned; `Clean up abandoned games` sits out
-// the grace so a restart cannot end a game as "Nobody" or hand it to the first player back.
+// Until they do, every live game looks abandoned; `Clean up abandoned games` sits out this
+// grace from `bootedAtMs()` so a restart cannot end a game as "Nobody" or hand it to the
+// first player back.
 //
 // `Meteor.settings.BOOT_GRACE_SEC` overrides the five minutes — in seconds, because the
 // value is written by hand and nobody should have to count zeroes to set ten seconds. It is
@@ -37,7 +38,6 @@ Meteor.settings.public.appVersion =
 // against nor the patience to sit out five minutes to watch this job do anything;
 // test/e2e/settings.json sets it. Leave it unset in production.
 const DEFAULT_BOOT_GRACE_SEC = 5 * 60;
-let bootedAt = 0;
 
 // Read per tick rather than once at load, so a nonsense value cannot be baked in for the
 // life of the process and a test can change it between cases.
@@ -138,7 +138,7 @@ SyncedCron.add({
   schedule: (parser) => parser.text('every 1 minute'),
   job: async () => {
     const graceMs = bootGraceMs();
-    if (Date.now() - bootedAt < graceMs) {
+    if (Date.now() - bootedAtMs() < graceMs) {
       console.log(
         `Skipping abandoned-game check: the server booted less than ${Math.round(graceMs / 1000)}s ago`
       );
@@ -195,7 +195,7 @@ SyncedCron.add({
 // setup — the display name every user document carries and the write rules on
 // Meteor.users — is in ./accounts.js.
 Meteor.startup(async () => {
-  bootedAt = Date.now();
+  markBooted();
 
   // Games created before resumable turns have no `step`, and `advanceAsync`'s selector can
   // never match a missing field — such a game would refuse every write in its turn chain.

@@ -18,8 +18,15 @@ import { Chat } from '../../collections/chat.js';
 import { Games } from '../../collections/games.js';
 import { Highscores } from '../../collections/highscores.js';
 import { Players } from '../../collections/players.js';
+import { GameState } from '../../both/gamestate.js';
+import { markBooted } from '../../server/boot.js';
+import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 
 beforeEach(() => resetFakeCollections());
+
+// The `players` publication starts the nudge without awaiting it, so a test that wants to
+// see the result has to let the microtask queue drain first.
+const flushNudge = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('publication registration', () => {
   it('registers every publication the client subscribes to', () => {
@@ -201,6 +208,47 @@ describe('players', () => {
     const players = (await runPublication('players', {}, 'g1')).fetch();
 
     expect(players.map((p) => p.name).sort()).toEqual(['a', 'b']);
+  });
+
+  // Subscribing is what a browser does on /board/:id, and again when it reconnects after a
+  // restart — so this is the wiring that saves a watching player the two-minute wait for
+  // the stalled-turn sweep. What it does and does not resume is test/server/resume.test.js.
+  it('nudges a turn that died with the previous process', async () => {
+    const resume = vi.spyOn(GameState, 'resumeAsync').mockResolvedValue();
+    markBooted(new Date('2026-08-27T12:00:00Z').getTime());
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PLAY,
+      lastStepAt: new Date('2026-08-27T11:59:00Z'),
+    });
+    await insertPlayer(game._id, { userId: 'me' });
+    await loginAs('me');
+
+    (await runPublication('players', {}, game._id)).fetch();
+    await flushNudge();
+
+    expect(resume).toHaveBeenCalledWith(game._id);
+    markBooted(0);
+  });
+
+  it('does not hold the subscription behind the nudge', async () => {
+    let replayed = false;
+    vi.spyOn(GameState, 'resumeAsync').mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => ((replayed = true), resolve()), 50))
+    );
+    markBooted(new Date('2026-08-27T12:00:00Z').getTime());
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PLAY,
+      lastStepAt: new Date('2026-08-27T11:59:00Z'),
+    });
+    await insertPlayer(game._id, { userId: 'me' });
+    await loginAs('me');
+
+    const players = (await runPublication('players', {}, game._id)).fetch();
+
+    // The cursor is here and the replay is still running.
+    expect(players).toHaveLength(1);
+    expect(replayed).toBe(false);
+    markBooted(0);
   });
 });
 

@@ -10,6 +10,8 @@
 // never written, or a program phase where everyone has submitted and nobody drove on.
 import { GameState } from '../both/gamestate.js';
 import { Games } from '../collections/games.js';
+import { Players } from '../collections/players.js';
+import { bootedAtMs } from './boot.js';
 
 // How long a game may go without a claim before its driver is presumed dead. The longest
 // gap between two claims in a live turn is one card with a push chain and two deaths,
@@ -51,6 +53,38 @@ export async function resumeStalledTurnsAsync({ now = new Date() } = {}) {
     { fields: { gamePhase: 1, selectOptions: 1 } }
   ).fetchAsync();
   return stalled.filter(needsDriver).map((game) => resumeOne(game._id));
+}
+
+// The board's own re-entry, called when a player subscribes to a game's players — which is
+// a browser opening /board/:id, including one reconnecting after a restart. It exists
+// because the sweep is slowest at exactly the case a watching player notices: the process
+// died mid-turn, so `lastStepAt` has to age STALL_MS and then the cron has to tick, up to
+// two minutes of a player staring at a board that does nothing.
+//
+// Skipping STALL_MS here is safe because of what STALL_MS guards — a driver still alive in
+// some other process. A claim older than this process's boot cannot have come from a driver
+// running in *this* one, and this app runs a single instance. A game that went stale after
+// boot is the other situation entirely and is left to the sweep, threshold and all.
+//
+// Returns whether it started a replay, which is what the tests assert on; the caller is a
+// publication and does not wait for the answer.
+export async function nudgeGameAsync(gameId, userId) {
+  if (!userId) return false;
+  const game = await Games.findOneAsync(gameId);
+  if (!game || !needsDriver(game)) return false;
+
+  // No claim at all means a game from before resumable turns, with no snapshot to restore.
+  // The sweep skips these too — `$lt` never matches null — and resumeAsync would do nothing
+  // but log the missing snapshot. `lastStepAt` is read through `getTime` so that a null
+  // does not coerce to 0 and read as "older than boot".
+  const lastStepAt = game.lastStepAt?.getTime?.();
+  if (lastStepAt == null || lastStepAt >= bootedAtMs()) return false;
+
+  // A player of this game, not a logged-in onlooker: /board/:id renders for anyone.
+  if (!(await Players.findOneAsync({ gameId, userId }))) return false;
+
+  await resumeOne(gameId);
+  return true;
 }
 
 // Fire-and-forget, so the catch is load-bearing: without it a failed replay is an
