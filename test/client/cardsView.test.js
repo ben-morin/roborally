@@ -4,7 +4,12 @@
 // FakeCollection — the same objects the template would receive.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../client/views/cards/cards.js';
-import { callHelper, resetClientState, templateEvent } from '../clientSetup.js';
+import {
+  callHelper,
+  resetClientState,
+  templateEvent,
+  templateLifecycle,
+} from '../clientSetup.js';
 import { loginAs, resetFakeCollections } from '../setup.js';
 import { resetRouter, setRoute } from '../stubs/flow-router.js';
 import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
@@ -378,6 +383,50 @@ describe('countdown timer', () => {
     callHelper('cards', 'timer');
 
     expect(call).not.toHaveBeenCalled();
+  });
+});
+
+// Regression: the tick interval is started from the `timer` helper and was only ever
+// stopped by a later run of that same helper seeing the server clear `game.timer`.
+// Leaving the page mid-countdown skipped that branch, so the interval outlived the
+// template — one leaked 1 Hz interval per visit.
+describe('countdown tick interval', () => {
+  const destroyCards = () => {
+    for (const fn of templateLifecycle('cards').onDestroyed) fn.call({});
+  };
+
+  // `timerHandle` is module state, so a test that leaves the interval running would stop
+  // the next one from ever starting.
+  beforeEach(destroyCards);
+  afterEach(destroyCards);
+
+  it('stops the tick interval when the template is destroyed', async () => {
+    const start = vi.spyOn(Meteor, 'setInterval');
+    const stop = vi.spyOn(Meteor, 'clearInterval');
+    await seat({ game: { timer: 1, timerStartedAt: new Date() } });
+
+    callHelper('cards', 'timer');
+    expect(start).toHaveBeenCalledTimes(1);
+    const handle = start.mock.results[0].value;
+
+    destroyCards();
+
+    expect(stop).toHaveBeenCalledWith(handle);
+
+    // `timerHandle` is back to null, so the next helper run arms a fresh interval
+    // instead of assuming the stale one is still ticking.
+    callHelper('cards', 'timer');
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing when no interval is running', async () => {
+    const stop = vi.spyOn(Meteor, 'clearInterval');
+    await seat({ game: { timer: -1 } });
+
+    callHelper('cards', 'timer');
+    destroyCards();
+
+    expect(stop).not.toHaveBeenCalled();
   });
 });
 

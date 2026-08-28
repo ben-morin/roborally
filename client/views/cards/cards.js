@@ -13,6 +13,18 @@ import './cards.html';
 let timerHandle = null;
 const cardsState = new ReactiveDict();
 
+// The `timer` helper below starts the 1 Hz tick interval and stops it when the server
+// clears `game.timer`. Leaving the page while the timer is still live never hit that
+// second branch, so the interval outlived the template and kept invalidating a
+// ReactiveDict nobody read — one leaked interval per visit to a game with a running
+// countdown. `timerHandle` is module-scoped, so there is exactly one to clear.
+Template.cards.onDestroyed(function () {
+  if (timerHandle !== null) {
+    Meteor.clearInterval(timerHandle);
+    timerHandle = null;
+  }
+});
+
 // Compute seconds remaining from the server-stored timer start time. Returns 0
 // when the timer is not active. Establishes a reactive dependency on the tick
 // counter so callers re-run once per second while the timer is live.
