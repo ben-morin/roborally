@@ -175,8 +175,8 @@ SyncedCron.add({
       if (playersOnline === 0) {
         await endGame(game._id, null);
       } else if (playersOnline === 1 && game.min_player > 1) {
-        await endGame(game._id, lastManStanding);
-        await buildHighscores();
+        // Only rebuild when the game really ended: a lost claim wrote no winner.
+        if (await endGame(game._id, lastManStanding)) await buildHighscores();
       }
     }
 
@@ -272,9 +272,23 @@ async function delay(ms) {
 
 // `player` is the last one standing, or null when nobody was left. Only a real winner
 // gets a `winnerUserId` — its absence is what server/highscores.js reads as "no win here".
+//
+// Ending a game is a transition, so it takes the claim like every other write in the turn
+// chain. That matters because the stalled-turn sweep will happily replay a segment for a
+// game nobody is online for, and a PLAY replay runs ~30 s while this job ticks every
+// minute — so a driver is often still inside the turn when this runs. As a plain update
+// this left `step` alone, the driver's next claim still matched, and it wrote the game back
+// to a live phase: ENDED and live at once, and never looked at again, because the query
+// above filters on a missing `winner`.
+//
+// The game is re-read rather than passed in, because the caller's copy predates the
+// five-second offline recheck and a stale `step` would lose a claim that should win.
+// Returns whether the game was actually ended.
 async function endGame(gameId, player) {
-  console.log(`Ending abandoned game: ${gameId}`);
-  await Games.updateAsync(gameId, {
+  const game = await Games.findOneAsync(gameId);
+  if (!game) return false;
+
+  const ended = await game.advanceAsync({
     $set: {
       gamePhase: GameState.PHASE.ENDED,
       winner: player ? player.name : 'Nobody',
@@ -282,4 +296,13 @@ async function endGame(gameId, player) {
       stopped: Date.now(),
     },
   });
+
+  if (ended) {
+    console.log(`Ending abandoned game: ${gameId}`);
+  } else {
+    // Something moved the game between the read and the write. Leave it — this job runs
+    // every minute and an abandoned game is still abandoned on the next tick.
+    console.log(`Game ${gameId} moved while being ended; leaving it for the next tick`);
+  }
+  return ended;
 }

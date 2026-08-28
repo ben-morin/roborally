@@ -561,6 +561,37 @@ describe(ABANDONED, () => {
     expect((await Games.findOneAsync(gameId)).gamePhase).toBe(GameState.PHASE.ENDED);
   });
 
+  // Ending a game is a transition, so it has to take the claim like every other write in
+  // the turn chain. It used to be a plain update, which left `step` alone — and the
+  // stalled-turn sweep replaying a PLAY segment takes ~30 s while this job ticks every
+  // minute, so a driver was very often still inside the turn. Its next claim still matched
+  // and wrote the game back to a live phase, leaving it ENDED and live at once. This job
+  // filters on a missing `winner`, so it never looked at that game again.
+  it('cannot be written over by a driver still inside the turn', async () => {
+    await user('a', { online: false });
+    const gameId = await Games.insertAsync({
+      started: true,
+      min_player: 2,
+      step: 7,
+      gamePhase: GameState.PHASE.PLAY,
+      playPhase: GameState.PLAY_PHASE.MOVE_BOTS,
+    });
+    await Players.insertAsync({ gameId, userId: 'a', name: 'ann' });
+    // What a replay holds while it runs: the document as it was when it took its claim.
+    const driver = await Games.findOneAsync(gameId);
+
+    await runWithRecheck(ABANDONED);
+
+    const claimed = await driver.advanceAsync({
+      $set: { playPhase: GameState.PLAY_PHASE.LASERS },
+    });
+
+    expect(claimed).toBe(false);
+    const game = await Games.findOneAsync(gameId);
+    expect(game.gamePhase).toBe(GameState.PHASE.ENDED);
+    expect(game.winner).toBe('Nobody');
+  });
+
   it("ends a game with winner 'Nobody' when every player has gone", async () => {
     await user('a', { online: false });
     const gameId = await Games.insertAsync({ started: true, min_player: 2 });
