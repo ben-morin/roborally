@@ -10,9 +10,9 @@
 // stub: CardLogic/GameLogic/GameState tests drive genuine read-mutate-updateAsync
 // round trips through Games/Players/Cards/Deck, the same way the app does. Only the
 // operators actually used by both/, collections/ and server/ are implemented (equality,
-// dotted paths, $gt/$gte/$lt/$lte/$ne/$exists, $set/$inc on write, sort/skip/limit and
-// inclusion-only `fields` on find, and a four-stage aggregate) — anything wider throws
-// loudly rather than silently mismatching.
+// dotted paths, $gt/$gte/$lt/$lte/$ne/$exists, $set/$inc/$push on write, sort/skip/limit
+// and an all-inclusion or all-exclusion `fields` on find, and a four-stage aggregate) —
+// anything wider throws loudly rather than silently mismatching.
 //
 // The second half of this file is the server harness: Meteor.methods/publish/startup
 // capture what server/ registers instead of discarding it, Meteor.callAsync dispatches
@@ -32,6 +32,18 @@ function setPath(obj, path, value) {
     cur = cur[keys[i]];
   }
   cur[keys[keys.length - 1]] = value;
+}
+
+// Deletes what a dotted path names, doing nothing when the path does not reach a
+// document. Used by the exclusion projections in project().
+function unsetPath(obj, path) {
+  const keys = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (cur == null || typeof cur !== 'object') return;
+    cur = cur[keys[i]];
+  }
+  if (cur != null && typeof cur === 'object') delete cur[keys[keys.length - 1]];
 }
 
 // Mongo resolves a dotted path through arrays of subdocuments: `{'emails.address': x}`
@@ -136,6 +148,26 @@ function applyModifier(doc, modifier) {
           setPath(doc, path, (getPath(doc, path) || 0) + value);
         }
         break;
+      // Single-value form only. `$each` brings `$slice`/`$sort`/`$position` with it, and
+      // a half-implemented one of those is exactly the silent mismatch this fake exists
+      // to avoid — so an options object throws. A plain subdocument still pushes fine;
+      // only a `$`-prefixed key marks the value as options.
+      case '$push':
+        for (const [path, value] of Object.entries(fields)) {
+          if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            const options = Object.keys(value).filter((k) => k.startsWith('$'));
+            if (options.length) {
+              throw new Error(
+                `FakeCollection: unsupported $push option(s) "${options.join(', ')}"`
+              );
+            }
+          }
+          const current = getPath(doc, path);
+          if (current === undefined) setPath(doc, path, [value]);
+          else if (Array.isArray(current)) current.push(value);
+          else throw new Error(`FakeCollection: $push on non-array field "${path}"`);
+        }
+        break;
       default:
         throw new Error(`FakeCollection: unsupported update operator "${op}"`);
     }
@@ -202,16 +234,24 @@ function aggregate(docs, pipeline) {
   return result;
 }
 
-// Mongo field projection. Inclusion only, which is all the app asks for: the
+// Mongo field projection, in both directions. Inclusion names what goes out — the
 // `onlineUsers` publication names the three fields it is willing to send, and the
-// profile-name backfill in server/accounts.js asks for `emails` alone. An exclusion
-// projection (`{field: 0}`) throws rather than being approximated — the point of the
-// option here is that a test can prove a field did NOT go out, so a silently wrong
-// projection would be worse than none.
+// profile-name backfill in server/accounts.js asks for `emails` alone. Exclusion names
+// what stays home: the `games` publication drops the per-turn snapshot from the document
+// every client receives. Mixing the two throws, as Mongo does, because the point of the
+// option here is that a test can prove a field did or did not go out — a silently wrong
+// projection would be worse than none. `_id` is exempt from the rule in both spellings.
 function project(doc, fields) {
   const entries = Object.entries(fields).filter(([path]) => path !== '_id');
-  if (entries.some(([, include]) => !include)) {
-    throw new Error('FakeCollection: only inclusion projections are supported');
+  const excluded = entries.filter(([, include]) => !include);
+  if (excluded.length && excluded.length !== entries.length) {
+    throw new Error('FakeCollection: a projection cannot mix inclusion and exclusion');
+  }
+  if (excluded.length) {
+    const kept = structuredClone(doc);
+    for (const [path] of excluded) unsetPath(kept, path);
+    if (fields._id === 0 || fields._id === false) delete kept._id;
+    return kept;
   }
   // Mongo includes _id unless it is explicitly excluded.
   const result = fields._id === 0 || fields._id === false ? {} : { _id: doc._id };
@@ -265,6 +305,58 @@ class FakeCursor {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Crash simulation
+// ---------------------------------------------------------------------------
+//
+// Proving that a turn survives a server killed at *any* moment means being able to kill
+// it at any moment. `crashAtWrite(n, when)` arms a throw at the n-th write — 1-based and
+// counted across every collection — either 'before' it is applied (the write never
+// happened) or 'after' (it landed and then the process died). Those are the two halves
+// of "did that write make it?", and a test can now reach both.
+//
+// Only the four async mutators count. Reads cannot change state, and the synchronous
+// minimongo mutators are a client-side path no server chain takes. An upsert counts once
+// even though it inserts. `resetFakeCollections()` clears the counter and any armed crash.
+
+let writes = 0;
+let armedCrash = null;
+
+export class SimulatedCrash extends Error {
+  constructor(index, when) {
+    super(`FakeCollection: simulated crash ${when} write #${index}`);
+    this.name = 'SimulatedCrash';
+    this.writeIndex = index;
+    this.when = when;
+  }
+}
+
+/** Arm the hook; `crashAtWrite(null)` disarms it. */
+export function crashAtWrite(index, when = 'after') {
+  if (index != null && when !== 'before' && when !== 'after') {
+    throw new Error(`crashAtWrite: "when" must be "before" or "after", got "${when}"`);
+  }
+  armedCrash = index == null ? null : { index, when };
+}
+
+/** Writes since the last reset — how a test learns how many crash points there are. */
+export function writeCount() {
+  return writes;
+}
+
+const writeApplied = () => {};
+
+// Called at the top of every async mutator. Throws here for a 'before' crash; otherwise
+// hands back the callback to run once the write has been applied.
+function beginWrite() {
+  const index = ++writes;
+  if (!armedCrash || armedCrash.index !== index) return writeApplied;
+  if (armedCrash.when === 'before') throw new SimulatedCrash(index, 'before');
+  return () => {
+    throw new SimulatedCrash(index, 'after');
+  };
+}
+
 const allFakeCollections = [];
 
 class FakeCollection {
@@ -316,23 +408,39 @@ class FakeCollection {
     return Promise.resolve(this.findOne(selector, options));
   }
 
-  insertAsync(doc) {
+  // The insert itself, uncounted by the crash hook, so that an upsert is one write and
+  // not two.
+  _insert(doc) {
     const _id = doc._id || `${this.name}_${++this._seq}`;
     this._docs.set(_id, structuredClone({ ...doc, _id }));
-    return Promise.resolve(_id);
+    return _id;
   }
 
-  updateAsync(selector, modifier, options = {}) {
+  // The four mutators below are `async` rather than promise-returning so that a crash
+  // armed on them rejects, the way a real driver failure would, instead of throwing
+  // synchronously at the call site.
+  async insertAsync(doc) {
+    const applied = beginWrite();
+    const _id = this._insert(doc);
+    applied();
+    return _id;
+  }
+
+  async updateAsync(selector, modifier, options = {}) {
+    const applied = beginWrite();
     const matches = this._rawMatches(selector);
     const targets = options.multi ? matches : matches.slice(0, 1);
     for (const doc of targets) applyModifier(doc, modifier);
-    return Promise.resolve(targets.length);
+    applied();
+    return targets.length;
   }
 
   async upsertAsync(selector, modifier) {
+    const applied = beginWrite();
     const [existing] = this._rawMatches(selector);
     if (existing) {
       applyModifier(existing, modifier);
+      applied();
       return { numberAffected: 1 };
     }
     const literalFields = {};
@@ -348,12 +456,16 @@ class FakeCollection {
     } else {
       Object.assign(base, modifier);
     }
-    const insertedId = await this.insertAsync(base);
+    const insertedId = this._insert(base);
+    applied();
     return { numberAffected: 1, insertedId };
   }
 
-  removeAsync(selector) {
-    return Promise.resolve(this.remove(selector));
+  async removeAsync(selector) {
+    const applied = beginWrite();
+    const removed = this.remove(selector);
+    applied();
+    return removed;
   }
 
   // Minimongo keeps the synchronous mutators on the client, and
@@ -413,6 +525,8 @@ export function resetFakeCollections() {
   for (const c of allFakeCollections) c._reset();
   currentUserId = null;
   userSeq = 0;
+  writes = 0;
+  armedCrash = null;
 }
 
 /**
