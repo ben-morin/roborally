@@ -60,10 +60,16 @@ async function seedRobot(gameId, name, fields) {
 async function seedFullTurn() {
   stubBoard();
   const game = await seedGame();
-  const a = await seedRobot(game._id, 'a', { position: { x: 1, y: 2 }, direction: GameLogic.RIGHT });
+  const a = await seedRobot(game._id, 'a', {
+    position: { x: 1, y: 2 },
+    direction: GameLogic.RIGHT,
+  });
   const b = await seedRobot(game._id, 'b', { position: { x: 4, y: 2 }, direction: GameLogic.LEFT });
   // a: step, step, turn-left, u-turn, step · b: step, turn-right, step, turn-left, step
-  await insertCards(a._id, game._id, { handCards: [60, 61, 62, 63], chosenCards: [48, 50, 24, 0, 52] });
+  await insertCards(a._id, game._id, {
+    handCards: [60, 61, 62, 63],
+    chosenCards: [48, 50, 24, 0, 52],
+  });
   await insertCards(b._id, game._id, { handCards: [70, 71], chosenCards: [49, 7, 51, 25, 53] });
   await insertDeck(game._id, { cards: Array.from({ length: 20 }, (_, i) => i) });
   return game._id;
@@ -82,11 +88,20 @@ async function seedDeathTurn() {
   const board = stubBoard();
   board.getTile(2, 1).type = Tile.VOID;
   const game = await seedGame();
-  const a = await seedRobot(game._id, 'a', { position: { x: 1, y: 1 }, direction: GameLogic.RIGHT });
-  const b = await seedRobot(game._id, 'b', { position: { x: 0, y: 4 }, direction: GameLogic.RIGHT });
+  const a = await seedRobot(game._id, 'a', {
+    position: { x: 1, y: 1 },
+    direction: GameLogic.RIGHT,
+  });
+  const b = await seedRobot(game._id, 'b', {
+    position: { x: 0, y: 4 },
+    direction: GameLogic.RIGHT,
+  });
   // a: step (into the pit), then cards it never gets to play · b: step, step, turn-right,
   // step, u-turn
-  await insertCards(a._id, game._id, { handCards: [60, 61, 62, 63], chosenCards: [48, 6, 24, 1, 25] });
+  await insertCards(a._id, game._id, {
+    handCards: [60, 61, 62, 63],
+    chosenCards: [48, 6, 24, 1, 25],
+  });
   await insertCards(b._id, game._id, { handCards: [70, 71], chosenCards: [49, 50, 7, 51, 0] });
   await insertDeck(game._id, { cards: Array.from({ length: 20 }, (_, i) => i) });
   return game._id;
@@ -100,8 +115,16 @@ function expectDeathTurnEnd(state) {
     waitingForRespawn: [],
   });
   expect(state.games[0].selectOptions).toHaveLength(4);
-  expect(state.players[0]).toMatchObject({ lives: 2, needsRespawn: true, position: { x: 1, y: 1 } });
-  expect(state.players[1]).toMatchObject({ lives: 3, position: { x: 2, y: 5 }, direction: GameLogic.UP });
+  expect(state.players[0]).toMatchObject({
+    lives: 2,
+    needsRespawn: true,
+    position: { x: 1, y: 1 },
+  });
+  expect(state.players[1]).toMatchObject({
+    lives: 3,
+    position: { x: 2, y: 5 },
+    direction: GameLogic.UP,
+  });
 }
 
 const SCENARIOS = [

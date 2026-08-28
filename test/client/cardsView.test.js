@@ -4,12 +4,7 @@
 // FakeCollection — the same objects the template would receive.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../client/views/cards/cards.js';
-import {
-  callHelper,
-  resetClientState,
-  templateEvent,
-  templateLifecycle,
-} from '../clientSetup.js';
+import { callHelper, resetClientState, templateEvent, templateLifecycle } from '../clientSetup.js';
 import { loginAs, resetFakeCollections } from '../setup.js';
 import { resetRouter, setRoute } from '../stubs/flow-router.js';
 import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
