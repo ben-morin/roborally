@@ -46,7 +46,7 @@
     "@rsdoctor/rspack-plugin": "^1.6.3",
     "@rspack/cli": "^1.7.1",
     "@rspack/core": "^1.7.1",
-    "eslint": "^10.9.0",
+    "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-meteor": "^7.3.0",
     "globals": "^17.11.0",
