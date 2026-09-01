@@ -5,7 +5,7 @@
 //
 // Doing it through the real entry point rather than importing server/methods.js directly
 // means the suite also covers load order — the thing the entry point's comment block is
-// about (logging first, mongoReactivity ahead of collections/users.js).
+// about (logging first, easySchemaConfig ahead of any collection).
 //
 // Meteor.startup callbacks are captured, not run; call runStartup() from test/setup.js
 // when a test needs the Accounts configuration.

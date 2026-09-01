@@ -385,6 +385,11 @@ class FakeCollection {
     this._docs = new Map();
     this._seq = 0;
     this._transform = options.transform;
+    // Mirrors jam:easy-schema exposing the attached schema as `Collection.schema`. The
+    // stub validates nothing (test/stubs/jam-easy-schema.js), so this is what makes the
+    // declared shape readable back — by test/collections/schemas.test.js today, and by
+    // the jam:method stub later.
+    this.schema = options.schema;
     this._allowRules = [];
     this._denyRules = [];
     allFakeCollections.push(this);

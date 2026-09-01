@@ -3,6 +3,7 @@ import { CardLogic } from '../both/cardlogic.js';
 import { GameLogic } from '../both/gamelogic.js';
 import { GameState } from '../both/gamestate.js';
 import { getUsername } from '../both/permissions.js';
+import { checkArgs, schemas } from '../both/schemas/methods.js';
 import { Cards } from '../collections/cards.js';
 import { Chat } from '../collections/chat.js';
 import { Deck } from '../collections/deck.js';
@@ -12,12 +13,15 @@ import { buildHighscores } from './highscores.js';
 
 Meteor.methods({
   async createGame(postAttributes) {
+    checkArgs(postAttributes, schemas.createGame);
     const user = await Meteor.userAsync();
 
     // ensure the user is logged in
     if (!user) throw new Meteor.Error(401, 'You need to login to create a game');
+    // The schema says `String`, which accepts the empty one; v1 of the schemas uses plain
+    // types only, so the name's own rule stays here.
     if (!postAttributes.name || postAttributes.name === '') {
-      throw new Meteor.Error(303, 'Name cannot be empty.');
+      throw new Meteor.Error(400, 'Name cannot be empty.');
     }
     const author = getUsername(user);
 
@@ -59,11 +63,12 @@ Meteor.methods({
   },
 
   async joinGame(gameId) {
+    checkArgs({ gameId }, schemas.joinGame);
     const user = await Meteor.userAsync();
 
     if (!user) throw new Meteor.Error(401, 'You need to login to join a game');
     const game = await Games.findOneAsync(gameId);
-    if (!game) throw new Meteor.Error(401, 'Game id not found!');
+    if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
     const author = getUsername(user);
     let playerId;
@@ -99,10 +104,11 @@ Meteor.methods({
   },
 
   async leaveGame(gameId) {
+    checkArgs({ gameId }, schemas.leaveGame);
     const user = await Meteor.userAsync();
     if (!user) throw new Meteor.Error(401, 'You need to login to leave a game');
     const game = await Games.findOneAsync(gameId);
-    if (!game) throw new Meteor.Error(401, 'Game id not found!');
+    if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
     if (
       game.started &&
@@ -130,7 +136,7 @@ Meteor.methods({
           for (const c of playerCards.chosenCards) {
             if (c >= 0) deck.cards.push(c);
           }
-          await Deck.updateAsync(deck._id, deck);
+          await deck.saveAsync();
         }
       }
       // Held option cards go to the discard pile the same way, announced per card.
@@ -172,13 +178,14 @@ Meteor.methods({
   },
 
   async selectBoard(boardName, gameId) {
+    checkArgs({ boardName, gameId }, schemas.selectBoard);
     const user = await Meteor.userAsync();
     if (!user) throw new Meteor.Error(401, 'You need to login to select a board');
     const game = await Games.findOneAsync(gameId);
-    if (!game) throw new Meteor.Error(401, 'Game id not found!');
+    if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
     const board_id = BoardBox.getBoardId(boardName);
-    if (board_id < 0) throw new Meteor.Error(401, `Board ${boardName} not found!`);
+    if (board_id < 0) throw new Meteor.Error(404, `Board ${boardName} not found!`);
 
     const min = BoardBox.getBoard(board_id).min_player;
     const max = BoardBox.getBoard(board_id).max_player;
@@ -191,10 +198,14 @@ Meteor.methods({
   },
 
   async startGame(gameId) {
-    const players = await Players.find({ gameId }).fetchAsync();
+    checkArgs({ gameId }, schemas.startGame);
+    if (!Meteor.userId()) throw new Meteor.Error(401, 'You need to login to start a game');
     const game = await Games.findOneAsync(gameId);
+    if (!game) throw new Meteor.Error(404, 'Game id not found!');
+
+    const players = await Players.find({ gameId }).fetchAsync();
     if (players.length > game.max_player) {
-      throw new Meteor.Error(401, 'Too many players.');
+      throw new Meteor.Error(403, 'Too many players.');
     }
 
     // NOTE: `for...in` on purpose — `i` is a string index, and robotId is persisted as
@@ -207,16 +218,17 @@ Meteor.methods({
       player.direction = start.direction;
       player.robotId = i;
       player.start = start;
-      await Players.updateAsync(player._id, player);
+      await player.saveAsync();
     }
     await game.chatAsync('Game started');
     await GameState.nextGamePhaseAsync(gameId);
   },
 
   async playCards(gameId, programRound) {
+    checkArgs({ gameId, programRound }, schemas.playCards);
     const game = await Games.findOneAsync(gameId);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
-    if (!game || !player) throw new Meteor.Error(401, `Game/Player not found! ${gameId}`);
+    if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
 
     // A submit can arrive a whole turn late: the final submitter's call spans the
     // entire turn (submitCardsAsync awaits the phase machine), so a duplicate queued
@@ -249,27 +261,39 @@ Meteor.methods({
   },
 
   async selectRespawnPosition(gameId, x, y) {
+    checkArgs({ gameId, x, y }, schemas.selectRespawnPosition);
+    if (!Meteor.userId()) throw new Meteor.Error(401, 'You need to login to respawn');
     const game = await Games.findOneAsync(gameId);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
-    await GameLogic.respawnPlayerAtPosAsync(player, Number(x), Number(y));
+    if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
+
+    await GameLogic.respawnPlayerAtPosAsync(player, x, y);
     await player.chatAsync('chose position', `(${x},${y})`);
     await game.nextRespawnPhaseAsync(GameState.RESPAWN_PHASE.CHOOSE_DIRECTION);
   },
 
   async selectRespawnDirection(gameId, direction) {
+    checkArgs({ gameId, direction }, schemas.selectRespawnDirection);
+    if (!Meteor.userId()) throw new Meteor.Error(401, 'You need to login to respawn');
     const game = await Games.findOneAsync(gameId);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
-    await GameLogic.respawnPlayerWithDirAsync(player, Number(direction));
+    if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
+
+    await GameLogic.respawnPlayerWithDirAsync(player, direction);
     await player.chatAsync('reentered the race', direction);
     await GameState.nextGamePhaseAsync(game._id);
   },
 
   async togglePowerDown(gameId) {
+    checkArgs({ gameId }, schemas.togglePowerDown);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
+    if (!player) throw new Meteor.Error(404, `Player not found! ${gameId}`);
+
     return await player.togglePowerDownAsync();
   },
 
   async addMessage(postAttributes) {
+    checkArgs(postAttributes, schemas.addMessage);
     const user = await Meteor.userAsync();
 
     // ensure the user is logged in
@@ -291,6 +315,7 @@ Meteor.methods({
   },
 
   async resendVerificationEmail(email) {
+    checkArgs({ email }, schemas.resendVerificationEmail);
     const user = await Meteor.users.findOneAsync({ 'emails.address': email });
     if (!user) {
       throw new Meteor.Error('user-not-found', 'No account found with that email address.');

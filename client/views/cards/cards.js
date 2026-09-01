@@ -385,11 +385,25 @@ Template.playerStatus.helpers({
   },
 });
 
+// The `card` template is not only the player's own hand: `playerStatus` renders it for
+// every player's `.smallhand`, and `playerStatus` renders for onlookers too. Two
+// consequences, and each handler below has to survive both.
+//
+// One: these handlers fire for a logged-in user who has no `Players` row in this game at
+// all, so `getPlayer()` is undefined — reading `.submitted` off it threw a TypeError on
+// any click in a game the viewer is only watching.
+//
+// Two: they fire on *another* player's cards. Only the own register asks `addUIData` for
+// slot indices (its `selectable` argument), so a small-hand card has no `slot` at all —
+// which is the test for "this card is not one of mine". Without it, clicking someone
+// else's empty slot reset your own selection to the first free slot, and clicking a card
+// they had revealed sent `deselectCard(gameId, undefined)` to the server. That call is
+// ignored today only because `undefined < notLockedCnt()` is false.
 Template.card.events({
   'click .available'() {
     if (this.chosen) return;
     const player = getPlayer();
-    if (player.submitted) return;
+    if (!player || player.submitted) return;
     const currentSlot = getSlotIndex();
     if (!isEmptySlot(currentSlot)) return;
 
@@ -406,14 +420,17 @@ Template.card.events({
   },
   'click .played'() {
     if (this.locked) return;
+    if (this.slot == null) return;
     if (isEmptySlot(this.slot)) return;
     const player = getPlayer();
-    if (player.submitted) return;
+    if (!player || player.submitted) return;
     unchooseCard(player.gameId, this.slot);
     cardsState.set('selectedSlot', this.slot);
   },
   'click .empty'() {
-    if (!getPlayer().submitted) {
+    if (this.slot == null) return;
+    const player = getPlayer();
+    if (player && !player.submitted) {
       cardsState.set('selectedSlot', this.slot);
     }
   },

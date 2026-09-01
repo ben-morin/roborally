@@ -1,3 +1,4 @@
+import { checkArgs, gameIdOnly } from '../both/schemas/methods.js';
 import { Cards } from '../collections/cards.js';
 import { Chat } from '../collections/chat.js';
 import { Games } from '../collections/games.js';
@@ -13,6 +14,7 @@ Meteor.publish('games', function () {
 });
 
 Meteor.publish('chat', async function (gameId) {
+  checkArgs({ gameId }, gameIdOnly);
   const size = Math.max(0, (await Chat.find({ gameId }).countAsync()) - 100);
   return Chat.find({ gameId }, { skip: size });
 });
@@ -44,6 +46,7 @@ Meteor.publish('onlineUsers', function () {
 // the wait for the stalled-turn sweep gets cut short. Deliberately not awaited: the nudge
 // replays a whole segment and the subscription must not sit behind it.
 Meteor.publish('players', function (gameId) {
+  checkArgs({ gameId }, gameIdOnly);
   nudgeGameAsync(gameId, this.userId).catch((err) =>
     console.error(`nudge failed for game ${gameId}`, err)
   );
@@ -51,6 +54,7 @@ Meteor.publish('players', function (gameId) {
 });
 
 Meteor.publish('cards', function (gameId) {
+  checkArgs({ gameId }, gameIdOnly);
   return Cards.find({ gameId, userId: this.userId });
 });
 

@@ -6,6 +6,10 @@
 // First, so the production `console.log` no-op is installed before anything else runs.
 import '../both/logging.js';
 
+// Before anything that reaches a collection: a schema is attached in the collection's
+// module body, and it reads this configuration as it goes. See both/easySchemaConfig.js.
+import '../both/easySchemaConfig.js';
+
 // Bootstrap's JS. Imported for its side effects: each component registers a delegated
 // `data-bs-*` handler on `document` at module load, which is what drives the markup-only
 // widgets (the navbar `collapse`, the board-select `pill` tabs, `data-bs-dismiss` in the

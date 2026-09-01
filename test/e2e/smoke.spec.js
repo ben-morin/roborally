@@ -128,6 +128,25 @@ test('a new player signs up, creates a game and plays a register', async ({ page
     await expect(page.locator('.gamecard').first()).toHaveCSS('cursor', 'pointer');
   });
 
+  await test.step('a malformed method call is refused with a 400', async () => {
+    // The only place in the repo where the real jam:easy-schema validator runs: the vitest
+    // suite swaps it for a pass-through stub, so nothing there can prove a rejection. The
+    // page is signed in and on the board, so this exercises `checkArgs` on a live server
+    // without disturbing the journey — a 400 means createGame never got as far as writing.
+    // `Meteor` is a package global in the browser bundle, so it is on `window` even though
+    // no app code uses globals.
+    const result = await page.evaluate(() =>
+      window.Meteor.callAsync('createGame', { name: 42 }).then(
+        () => null,
+        (error) => ({ error: error.error, reason: error.reason })
+      )
+    );
+    expect(result?.error).toBe(400);
+    // The reason names the offending field, rather than the generic 'Validation failed'
+    // that the raw ValidationError would have carried to the browser.
+    expect(result?.reason).toMatch(/Name/);
+  });
+
   await test.step('program five cards', async () => {
     // A full hand: nine cards, none damaged yet. Waiting for it here keeps the loop below
     // from clicking before the `cards` subscription has delivered the deal.

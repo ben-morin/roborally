@@ -34,8 +34,9 @@ export default defineConfig({
   // stub meant for something else.
   resolve: {
     alias: [
-      { find: /^meteor\/meteor$/, replacement: stub('meteor-meteor.js') },
       { find: /^meteor\/mongo$/, replacement: stub('meteor-mongo.js') },
+      { find: /^meteor\/check$/, replacement: stub('meteor-check.js') },
+      { find: /^meteor\/jam:easy-schema$/, replacement: stub('jam-easy-schema.js') },
       { find: /^meteor\/ddp-rate-limiter$/, replacement: stub('ddp-rate-limiter.js') },
       { find: /^meteor\/quave:synced-cron$/, replacement: stub('synced-cron.js') },
       { find: /^meteor\/ostrio:flow-router-extra$/, replacement: stub('flow-router.js') },

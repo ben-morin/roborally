@@ -58,8 +58,8 @@ describe('createGame', () => {
 
   it('refuses an empty name', async () => {
     await loginAs();
-    await expect(call('createGame', { name: '' })).rejects.toMatchObject({ error: 303 });
-    await expect(call('createGame', {})).rejects.toMatchObject({ error: 303 });
+    await expect(call('createGame', { name: '' })).rejects.toMatchObject({ error: 400 });
+    await expect(call('createGame', {})).rejects.toMatchObject({ error: 400 });
   });
 
   it('creates an idle game owned by the caller and seats them', async () => {
@@ -119,7 +119,7 @@ describe('joinGame', () => {
 
   it('refuses an unknown game id', async () => {
     await loginAs();
-    await expect(call('joinGame', 'nope')).rejects.toMatchObject({ error: 401 });
+    await expect(call('joinGame', 'nope')).rejects.toMatchObject({ error: 404 });
   });
 
   it('creates a player with three lives, off-board, and a matching Cards doc', async () => {
@@ -179,7 +179,7 @@ describe('leaveGame', () => {
     logout();
     await expect(call('leaveGame', 'nope')).rejects.toMatchObject({ error: 401 });
     await loginAs();
-    await expect(call('leaveGame', 'nope')).rejects.toMatchObject({ error: 401 });
+    await expect(call('leaveGame', 'nope')).rejects.toMatchObject({ error: 404 });
   });
 
   it('refuses to let a seated player quit outside the program phase', async () => {
@@ -318,14 +318,14 @@ describe('selectBoard', () => {
     const gameId = await Games.insertAsync({ boardId: 0 });
 
     await expect(call('selectBoard', 'no such board', gameId)).rejects.toMatchObject({
-      error: 401,
+      error: 404,
     });
     expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
   });
 
   it('refuses an unknown game id', async () => {
     await loginAs();
-    await expect(call('selectBoard', 'checkmate', 'nope')).rejects.toMatchObject({ error: 401 });
+    await expect(call('selectBoard', 'checkmate', 'nope')).rejects.toMatchObject({ error: 404 });
   });
 
   it('switches the board and copies its player limits onto the game', async () => {
@@ -363,7 +363,17 @@ describe('startGame', () => {
     await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
     await Players.insertAsync({ gameId, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
 
+    await expect(call('startGame', gameId)).rejects.toMatchObject({ error: 403 });
+  });
+
+  it('refuses an anonymous caller and an unknown game', async () => {
+    const gameId = await Games.insertAsync({ boardId: 0, max_player: 8 });
+
+    logout();
     await expect(call('startGame', gameId)).rejects.toMatchObject({ error: 401 });
+
+    await loginAs();
+    await expect(call('startGame', 'nope')).rejects.toMatchObject({ error: 404 });
   });
 
   it('places every robot on a start point and advances the phase', async () => {
@@ -443,7 +453,7 @@ describe('playCards', () => {
     await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('playCards', gameId)).rejects.toMatchObject({ error: 401 });
+    await expect(call('playCards', gameId, 0)).rejects.toMatchObject({ error: 404 });
   });
 
   it('submits the caller’s full program and announces it', async () => {
@@ -552,7 +562,7 @@ describe('playCards', () => {
 });
 
 describe('respawn selection', () => {
-  it('coerces the position to numbers and moves on to the direction step', async () => {
+  it('moves on to the direction step', async () => {
     const respawn = vi.spyOn(GameLogic, 'respawnPlayerAtPosAsync').mockResolvedValue();
     vi.spyOn(GameState, 'nextRespawnPhaseAsync').mockResolvedValue();
     const user = await loginAs();
@@ -563,8 +573,8 @@ describe('respawn selection', () => {
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
-    // The client passes these straight through from DOM data attributes, i.e. as strings.
-    await call('selectRespawnPosition', gameId, '3', '4');
+    // The client converts the DOM data attributes; the method's schema says Number.
+    await call('selectRespawnPosition', gameId, 3, 4);
 
     expect(respawn).toHaveBeenCalledTimes(1);
     expect(respawn.mock.calls[0].slice(1)).toEqual([3, 4]);
@@ -576,17 +586,44 @@ describe('respawn selection', () => {
     expect(await messages(gameId)).toEqual(['ben chose position']);
   });
 
-  it('coerces the direction to a number and returns to the game phase machine', async () => {
+  it('returns to the game phase machine', async () => {
     const respawn = vi.spyOn(GameLogic, 'respawnPlayerWithDirAsync').mockResolvedValue();
     const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
     const user = await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0 });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
-    await call('selectRespawnDirection', gameId, String(GameLogic.LEFT));
+    await call('selectRespawnDirection', gameId, GameLogic.LEFT);
 
     expect(respawn.mock.calls[0][1]).toBe(GameLogic.LEFT);
     expect(nextPhase).toHaveBeenCalledWith(gameId);
+  });
+
+  // Both methods used to dereference whatever the lookups returned: an anonymous caller
+  // got a bare TypeError out of the direction step, and the position step wrote nothing
+  // and said nothing at all.
+  it('refuses an anonymous caller', async () => {
+    logout();
+    const gameId = await Games.insertAsync({ boardId: 0 });
+
+    await expect(call('selectRespawnPosition', gameId, 3, 4)).rejects.toMatchObject({
+      error: 401,
+    });
+    await expect(call('selectRespawnDirection', gameId, GameLogic.LEFT)).rejects.toMatchObject({
+      error: 401,
+    });
+  });
+
+  it('refuses a caller who holds no robot in that game', async () => {
+    await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0 });
+
+    await expect(call('selectRespawnPosition', gameId, 3, 4)).rejects.toMatchObject({
+      error: 404,
+    });
+    await expect(call('selectRespawnDirection', gameId, GameLogic.LEFT)).rejects.toMatchObject({
+      error: 404,
+    });
   });
 });
 
@@ -607,6 +644,13 @@ describe('togglePowerDown', () => {
 
     await expect(call('togglePowerDown', gameId)).resolves.toBe(to);
     expect((await Players.findOneAsync(playerId)).powerState).toBe(to);
+  });
+
+  it('refuses a caller who holds no robot in that game', async () => {
+    await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0 });
+
+    await expect(call('togglePowerDown', gameId)).rejects.toMatchObject({ error: 404 });
   });
 });
 

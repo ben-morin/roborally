@@ -1,4 +1,3 @@
-import { Deck } from '../collections/deck.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';
 import { Board } from './board.js';
@@ -132,7 +131,7 @@ async function playDealPhase(game) {
       }
     }
 
-    await Players.updateAsync(player._id, player);
+    await player.saveAsync();
     await CardLogic.discardCardsAsync(game, player);
     if (dealCards) {
       playersToDeal.push(player);
@@ -143,7 +142,7 @@ async function playDealPhase(game) {
   const deck = await game.getDeckAsync();
   console.log(`Shuffling deck with ${deck.cards.length} cards`);
   deck.cards = shuffle(deck.cards);
-  await Deck.upsertAsync({ gameId: game._id }, deck);
+  await deck.saveAsync();
 
   // Phase 3: Deal cards to all eligible players (randomized order)
   playersToDeal = shuffle(playersToDeal);
@@ -382,7 +381,7 @@ async function checkCheckpoints(player) {
     if (tile.checkpoint && tile.checkpoint === player.visited_checkpoints + 1) {
       player.visited_checkpoints++;
     }
-    await Players.updateAsync(player._id, player);
+    await player.saveAsync();
   }
 }
 

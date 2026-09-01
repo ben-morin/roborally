@@ -90,16 +90,6 @@ docker compose -f docker-compose-dev.yml up --build
 Wipe the build artifacts with `rm -rf _build .meteor/local`, or add `node_modules package-lock.json`
 for a full clean.
 
-## mongo reactivity
-
-`server/mongoReactivity.js` pins the observe-driver order to `oplog > polling`, overriding the
-Change Streams default that Meteor 3.5 introduced. The Change Streams driver does not retire the DDP
-write fence when a write targets a collection carrying a filtered observe the written document does
-not match, which hangs account signup on the login spinner forever. Only absent values are filled
-in, so `--settings`, `METEOR_SETTINGS` and `METEOR_REACTIVITY_ORDER` still win. The startup log
-reports the configured order and the driver behind each live observe. Delete the file once the
-upstream bug is fixed.
-
 ## tests
 
 Two suites, both under `test/`.

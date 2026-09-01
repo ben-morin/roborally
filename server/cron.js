@@ -2,8 +2,10 @@
 // the server. The side-effect imports are the files nothing else imports; `logging.js`
 // comes first so it can silence `console.log` in production before anything runs. Every
 // other model and collection loads transitively through these.
-import { checkReactivity } from './mongoReactivity.js';
 import '../both/logging.js';
+// Before anything that reaches a collection: a schema is attached in the collection's
+// module body, and it reads this configuration as it goes. See both/easySchemaConfig.js.
+import '../both/easySchemaConfig.js';
 import '../both/cardMethods.js';
 import '../collections/users.js';
 
@@ -262,8 +264,6 @@ Meteor.startup(async () => {
 
   console.info('Meteor.startup: cron');
   SyncedCron.start();
-
-  checkReactivity();
 });
 
 async function delay(ms) {

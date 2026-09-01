@@ -73,7 +73,7 @@ The image is a production Meteor bundle, so it reads its settings from `METEOR_S
 
 ## development
 
-Setup, the dev Docker image, mongo reactivity, tests and lint/format are in
+Setup, the dev Docker image, tests and lint/format are in
 [CONTRIBUTING.md](https://github.com/ben-morin/roborally/blob/main/CONTRIBUTING.md).
 
 ## links

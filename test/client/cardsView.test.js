@@ -570,4 +570,56 @@ describe('card clicks', () => {
     expect(callHelper('card', 'selected', { slot: 3 })).toBe('selected');
     expect(callHelper('card', 'selected', { slot: 0 })).toBe('');
   });
+
+  // `playerStatus` renders a `card` for every player's small hand, onlookers included, so
+  // all three handlers fire for a logged-in viewer with no `Players` row of their own.
+  // Each of them used to read `.submitted` straight off an undefined player.
+  it('ignores every card click from an onlooker who is not in the game', async () => {
+    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
+    const game = await insertGame();
+    const other = await insertPlayer(game._id, { userId: 'someone-else', name: 'them' });
+    await insertCards(other._id, game._id, {
+      userId: 'someone-else',
+      chosenCards: [TURN_RIGHT, E, E, E, E],
+    });
+    await loginAs('onlooker');
+    setRoute({ params: { _id: game._id }, name: 'board.page' });
+
+    expect(() =>
+      templateEvent('card', 'click .available').call({ cardId: TURN_RIGHT, chosen: false })
+    ).not.toThrow();
+    expect(() =>
+      templateEvent('card', 'click .played').call({ slot: 0, locked: false })
+    ).not.toThrow();
+    expect(() => templateEvent('card', 'click .empty').call({ slot: 3 })).not.toThrow();
+
+    expect(call).not.toHaveBeenCalled();
+    expect(callHelper('card', 'isSelected', { slot: 3 })).toBe(false);
+  });
+
+  // The other half of the same shared-template problem: a seated player clicking a card in
+  // somebody else's small hand. `playerStatus` builds those cards with `selectable: false`,
+  // so they carry no `slot` — which is what the handlers now check. Built through the real
+  // `cardsHtml` helper rather than a hand-written data context, so the day a small hand
+  // starts carrying slots this test notices.
+  it("ignores clicks on another player's small-hand cards", async () => {
+    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
+    const { game } = await seat({ cards: { chosenCards: [TURN_RIGHT, E, E, E, E] } });
+    const them = await insertPlayer(game._id, {
+      userId: 'someone-else',
+      name: 'them',
+      cards: [STEP_FORWARD, E, E, E, E],
+    });
+    // Slot 0 is selected to begin with; the clicks below must not move it.
+    templateEvent('card', 'click .empty').call({ slot: 0 });
+
+    const theirCards = callHelper('playerStatus', 'cardsHtml', them);
+    templateEvent('card', 'click .played').call(theirCards[0]);
+    templateEvent('card', 'click .empty').call(theirCards[1]);
+
+    expect(theirCards[0].class).toBe('played');
+    expect(theirCards[0].slot).toBeUndefined();
+    expect(call).not.toHaveBeenCalled();
+    expect(callHelper('card', 'isSelected', { slot: 0 })).toBe(true);
+  });
 });

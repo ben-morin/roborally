@@ -1,12 +1,15 @@
+import { Mongo } from 'meteor/mongo';
+import { Any, AnyOf, ID, Optional } from 'meteor/jam:easy-schema';
 import { BoardBox } from '../both/board_box.js';
 import { CardLogic } from '../both/cardlogic.js';
+import { Null } from '../both/easySchemaConfig.js';
 import { GameLogic } from '../both/gamelogic.js';
 import { GameState } from '../both/gamestate.js';
 import { ownsDocument } from '../both/permissions.js';
 import { shuffle } from '../both/shuffle.js';
 import { Cards } from './cards.js';
 import { Chat } from './chat.js';
-import { Deck } from './deck.js';
+import { Deck, newDeck } from './deck.js';
 import { Players } from './players.js';
 
 // [0, 1, ... count - 1] — the card ids of a full deck.
@@ -174,12 +177,15 @@ const game = {
     const cnt = await this.playerCntAsync();
     const deckSpec = cnt <= 8 ? CardLogic._8_deck : CardLogic._12_deck;
     const deckSize = deckSpec.reduce((total, cardTypeCnt) => total + cardTypeCnt, 0);
-    return {
+    // `newDeck`, not a bare object literal: an unsaved deck has to carry the same
+    // prototype as a stored one so `getDeckAsync` hands every caller one shape, with
+    // `saveAsync` on it either way.
+    return newDeck({
       gameId: this._id,
       cards: indices(deckSize),
       optionCards: shuffle(indices(CardLogic._option_deck.length)),
       discardedOptionCards: [],
-    };
+    });
   },
   async startAnnounceAsync() {
     return await this.advanceAsync({ $set: { announce: true } });
@@ -210,7 +216,74 @@ const game = {
   },
 };
 
-export const Games = new Meteor.Collection('games', {
+// The whole game document, not just what `createGame` inserts: the block above the divider
+// is the insert literal, and everything below it arrives later through a `$set` — usually
+// through `advanceAsync`. Both halves have to be here, because a snapshot restore writes
+// player, card and deck documents whole and `advanceAsync` validates every modifier it
+// builds; a field the schema does not name is refused by the database validator, which
+// generates `additionalProperties: false`.
+//
+// `AnyOf(X, Null)` means the key is there and its value may be null. `Optional(X)` means
+// the key may be missing. Six fields say `Optional(AnyOf(X, Null))` — absent, null, or a
+// value — because the code writes null but never seeds the key at insert. Nothing reads
+// the difference (every reader uses `== null`, `?.` or `??`), so that third state is
+// slack, not meaning.
+//
+// `winnerUserId` is the one deliberate exception: it is absent when there is no winner and
+// never null, because server/highscores.js counts wins with an `$exists` filter.
+const schema = {
+  _id: ID,
+  name: String,
+  userId: String,
+  author: String,
+  // Epoch milliseconds, like Chat's. Not a Date.
+  submitted: Number,
+  started: Boolean,
+  // GameState.PHASE.* / PLAY_PHASE.* / RESPAWN_PHASE.* — plain strings for now; the value
+  // domains are a later tightening pass.
+  gamePhase: String,
+  playPhase: String,
+  respawnPhase: String,
+  // The register counter, 1..5.
+  playPhaseCount: Number,
+  programRound: Number,
+  boardId: Number,
+  min_player: Number,
+  max_player: Number,
+  // Player _ids, popped one at a time by the respawn phase.
+  waitingForRespawn: [String],
+  announce: Boolean,
+  // This register's cards, highest priority first; shifted empty as they play.
+  cardsToPlay: [{ cardId: Number, playerId: String }],
+  // The compare-and-set counter. Null at insert and in the startup backfill, so the very
+  // first claim has something to compare against. See `advanceAsync` below.
+  step: Number,
+  lastStepAt: AnyOf(Date, Null),
+  // --- everything below arrives later, through a $set ---
+  //
+  // Verbatim copies of Players, Cards and Deck documents, each already validated by its own
+  // collection, and projected out of the games publication. Describing the nested shape
+  // again here would mean keeping three other schemas in sync forever.
+  segmentSnapshot: Optional(Any),
+  // The programming timer: -1 off, 1 running, 0 expired.
+  timer: Optional(Number),
+  timerStartedAt: Optional(AnyOf(Date, Null)),
+  respawnPlayerId: Optional(AnyOf(String, Null)),
+  respawnUserId: Optional(AnyOf(String, Null)),
+  // Respawn tiles offered to the player. `dir` only in the choose-direction round.
+  selectOptions: Optional(AnyOf([{ x: Number, y: Number, dir: Optional(Number) }], Null)),
+  announceCard: Optional(AnyOf({ cardId: Number, playerId: String }, Null)),
+  // A display name, or the 'Nobody' sentinel when a game ends with no winner.
+  winner: Optional(String),
+  winnerUserId: Optional(String),
+  // Epoch milliseconds again.
+  stopped: Optional(Number),
+};
+
+// `Mongo.Collection` rather than the `Meteor.Collection` alias — see the note in
+// collections/chat.js for why the alias silently ignores the schema.
+export const Games = new Mongo.Collection('games', {
+  schema,
   transform(doc) {
     const newInstance = Object.create(game);
     return Object.assign(newInstance, doc);

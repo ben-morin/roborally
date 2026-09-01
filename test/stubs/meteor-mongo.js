@@ -1,10 +1,6 @@
-// Resolves `meteor/mongo` for server/mongoReactivity.js. checkReactivity() only reads
-// the driver class name of each live observe multiplexer; there are none outside a real
-// Meteor server, which is exactly the "(no live observes yet)" case it already handles.
-export const MongoInternals = {
-  defaultRemoteCollectionDriver: () => ({ mongo: { _observeMultiplexers: {} } }),
-};
-
+// Resolves `meteor/mongo` for the six collection modules. They construct through
+// `Mongo.Collection` rather than the `Meteor.Collection` alias, because jam:easy-schema
+// wraps only the former — see collections/games.js.
 export const Mongo = {
   get Collection() {
     return globalThis.Meteor.Collection;

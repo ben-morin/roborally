@@ -1,4 +1,7 @@
+import { Mongo } from 'meteor/mongo';
+import { AnyOf, ID, Optional } from 'meteor/jam:easy-schema';
 import { CardLogic } from '../both/cardlogic.js';
+import { Null } from '../both/easySchemaConfig.js';
 import { GameLogic } from '../both/gamelogic.js';
 import { shuffle } from '../both/shuffle.js';
 import { Tile } from '../both/tile.js';
@@ -46,9 +49,6 @@ const player = {
   },
   hasOptionCard(optionName) {
     return this.optionCards[optionName];
-  },
-  async updateHandCardsAsync(cards) {
-    await Cards.upsertAsync({ playerId: this._id }, { $set: { handCards: cards } });
   },
   async chooseCardAsync(card, index) {
     const cards = await this.getChosenCardsAsync();
@@ -100,6 +100,18 @@ const player = {
       console.log('Player fell into the void', this.name);
     }
     return a;
+  },
+  // Persist this instance back as a whole document. Every field is written, so a field the
+  // caller cleared is cleared in the database too — that is the point at the dozen sites
+  // that mutate an instance across several steps and save once at the end.
+  //
+  // The spread is load-bearing, not tidiness: the transform hands out
+  // `Object.create(player)`, and the schema check refuses anything whose prototype is not
+  // `Object.prototype` with a bare 'Expected plain object'. Own enumerable properties are
+  // exactly the document's fields — the methods live on the prototype — so the copy is the
+  // document and nothing else.
+  async saveAsync() {
+    return await Players.updateAsync(this._id, { ...this });
   },
   updateStartPosition() {
     this.start = { x: this.position.x, y: this.position.y };
@@ -187,8 +199,8 @@ const player = {
           this.cards[slot] = deck.cards.shift();
           chosenCards[slot] = this.cards[slot];
         }
-        await Deck.updateAsync(deck._id, deck);
-        await Players.updateAsync(this._id, this);
+        await deck.saveAsync();
+        await this.saveAsync();
         await Cards.updateAsync(
           { playerId: this._id },
           {
@@ -235,7 +247,56 @@ const player = {
   },
 };
 
-export const Players = new Meteor.Collection('players', {
+// The whole player document. The block above the divider is what `joinGame` inserts;
+// everything below it is added later, once a game starts, by a `$set` or by one of the
+// dozen sites that persist a transform instance back whole. Both halves have to be here:
+// a whole-document write is checked against the full schema, and the database validator
+// generates `additionalProperties: false`, so a field the schema does not name is refused.
+//
+// A whole-document write is safe to check this way because the transform puts its methods
+// on the prototype — an instance's own enumerable properties are exactly the document's
+// fields.
+const schema = {
+  _id: ID,
+  gameId: String,
+  userId: String,
+  name: String,
+  lives: Number,
+  damage: Number,
+  visited_checkpoints: Number,
+  needsRespawn: Boolean,
+  // GameLogic.DOWN 2 / OFF 4 / ON 5.
+  powerState: Number,
+  optionalInstantPowerDown: Boolean,
+  // {-1, -1} until the game starts, and y = board.height while parked off the board.
+  position: { x: Number, y: Number },
+  chosenCardsCnt: Number,
+  // A dynamic map, option name -> true. Bare `Object` on purpose: the keys are card
+  // names, so listing them here would be a second copy of CardLogic's option deck.
+  optionCards: Object,
+  // The five register slots: a card id, or one of the CardLogic sentinels -1..-4.
+  cards: [Number],
+  // --- everything below arrives later ---
+  //
+  // 0..3, set when the game starts and on respawn.
+  direction: Optional(Number),
+  // A stringified array index — see the `for...in` note in server/methods.js.
+  robotId: Optional(String),
+  // `startGame` writes the board's startpoint, {x, y, direction}; the first checkpoint or
+  // repair tile then REPLACES it with {x, y} only, so `direction` has to stay optional.
+  start: Optional({ x: Number, y: Number, direction: Optional(Number) }),
+  submitted: Optional(Boolean),
+  playedCardsCnt: Optional(Number),
+  // How far this player's laser reached, for drawing the beam.
+  shotDistance: Optional(Number),
+  // Hits soaked by an ablative coat, 0..2 — then null when the card is spent.
+  ablativeCoat: Optional(AnyOf(Number, Null)),
+};
+
+// `Mongo.Collection` rather than the `Meteor.Collection` alias — see the note in
+// collections/chat.js for why the alias silently ignores the schema.
+export const Players = new Mongo.Collection('players', {
+  schema,
   transform(doc) {
     const newInstance = Object.create(player);
     return Object.assign(newInstance, doc);

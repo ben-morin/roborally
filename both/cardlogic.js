@@ -1,5 +1,4 @@
 import { Cards } from '../collections/cards.js';
-import { Deck } from '../collections/deck.js';
 import { Games } from '../collections/games.js';
 import { Players } from '../collections/players.js';
 import { GameLogic } from './gamelogic.js';
@@ -246,7 +245,7 @@ export class CardLogic {
     }
 
     console.log(`${player.name}: returned cards, new total: ${deck.cards.length}`);
-    return await Deck.upsertAsync({ gameId: game._id }, deck);
+    return await deck.saveAsync();
   }
 
   static async dealCardsAsync(game, player) {
@@ -272,7 +271,7 @@ export class CardLogic {
         },
       }
     );
-    return await Deck.updateAsync(deck._id, deck);
+    return await deck.saveAsync();
   }
 
   static async submitCardsAsync(player) {

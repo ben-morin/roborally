@@ -104,7 +104,7 @@ async function executeGears(players) {
     const tile = await player.tileAsync();
     if (tile.type === Tile.GEAR) {
       player.rotate(tile.rotate);
-      await Players.updateAsync(player._id, player);
+      await player.saveAsync();
     }
   }
 }
@@ -172,7 +172,7 @@ async function executeRepairs(players) {
     } else if (tile.checkpoint || tile.repair) {
       player.damage = Math.max(player.damage - 1, 0);
     }
-    await Players.updateAsync(player._id, player);
+    await player.saveAsync();
   }
 }
 
@@ -434,7 +434,7 @@ async function checkRespawnsAndUpdateDb(player, cleanups) {
     player.lives--;
     player.needsRespawn = true;
     player.optionalInstantPowerDown = true;
-    await Players.updateAsync(player._id, player);
+    await player.saveAsync();
     if (player.lives > 0) {
       // A side effect inside the turn, not a phase transition, so it is not a claim —
       // but it must be a $push. Writing the whole game document back here silently
@@ -456,7 +456,7 @@ async function checkRespawnsAndUpdateDb(player, cleanups) {
     }
   } else {
     console.log('updating position', player.name);
-    await Players.updateAsync(player._id, player);
+    await player.saveAsync();
   }
 }
 
@@ -488,25 +488,25 @@ async function removePlayerWithDelay(player) {
       deck.cards.push(unusedCard);
     }
   }
-  await Deck.updateAsync(deck._id, deck);
+  await deck.saveAsync();
   // Clear handCards so discardCardsAsync doesn't return them again
   await Cards.updateAsync({ playerId: player._id }, { $set: { handCards: [] } });
 
   console.log('removing player', player.name);
-  await Players.updateAsync(player._id, player);
+  await player.saveAsync();
 }
 
 async function respawnPlayerAtPosAsync(player, x, y) {
   player.position.x = x;
   player.position.y = y;
   console.log('respawning player', player.name, 'at', x, ',', y);
-  await Players.updateAsync(player._id, player);
+  await player.saveAsync();
 }
 
 async function respawnPlayerWithDirAsync(player, dir) {
   player.direction = dir;
   player.needsRespawn = false;
-  await Players.updateAsync(player._id, player);
+  await player.saveAsync();
 }
 
 Object.assign(GameLogic, {

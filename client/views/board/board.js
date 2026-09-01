@@ -455,17 +455,19 @@ Template.board.events({
   },
   'click .position-select'(e) {
     const game = getGame();
+    // `dataset` values are strings; the method's schema says Number, and the server no
+    // longer coerces.
     Meteor.callAsync(
       'selectRespawnPosition',
       game._id,
-      e.target.dataset.x,
-      e.target.dataset.y
+      Number(e.target.dataset.x),
+      Number(e.target.dataset.y)
     ).catch((error) => modalAlert(error.reason));
   },
   'click .direction-select'(e) {
     const game = getGame();
-    Meteor.callAsync('selectRespawnDirection', game._id, e.target.dataset.dir).catch((error) =>
-      modalAlert(error.reason)
+    Meteor.callAsync('selectRespawnDirection', game._id, Number(e.target.dataset.dir)).catch(
+      (error) => modalAlert(error.reason)
     );
   },
 });

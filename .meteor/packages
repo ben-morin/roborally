@@ -37,3 +37,4 @@ ostrio:flow-router-extra
 
 quave:synced-cron@2.4.0
 rspack@1.2.0
+jam:easy-schema
