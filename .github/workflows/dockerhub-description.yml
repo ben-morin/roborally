@@ -30,6 +30,9 @@ permissions:
 jobs:
   describe:
     name: Push README to Docker Hub
+    # A fork has neither the secrets nor write access to the Docker Hub repository named
+    # below, so without this it would go red on every push to its own main.
+    if: github.repository == 'ben-morin/roborally'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

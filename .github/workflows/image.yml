@@ -34,7 +34,13 @@ jobs:
   # ---------------------------------------------------------------------------
   guard:
     name: Guard the tag
-    if: github.event_name == 'push'
+    # The repository check keeps a fork quiet. Secrets never leave this repo, so in a
+    # fork `build` would reach docker/login-action with an empty password and go red on
+    # every tag — and it could not publish anyway, since IMAGE names this namespace.
+    # Gating the head of the chain is enough: `build` and `merge` need this job, so both
+    # skip with it. `pr-build` is deliberately NOT gated — it pushes nothing and a fork
+    # deserves the same build check on its own pull requests.
+    if: github.event_name == 'push' && github.repository == 'ben-morin/roborally'
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.check.outputs.version }}
