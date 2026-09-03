@@ -433,7 +433,10 @@ async function checkIfWeHaveAWinner(game) {
     }
   }
 
-  if (livingPlayers === 0) {
+  // `!ended` is not redundant with the `break` above: the break leaves every player after
+  // the winner uncounted, so `livingPlayers` can read 1 on a legitimate checkpoint win and
+  // fire the elimination branch on top of it — announcing and rebuilding a second time.
+  if (!ended && livingPlayers === 0) {
     messages.push('All robots are dead');
     const claimed = await game.advanceAsync({
       $set: {
@@ -444,7 +447,7 @@ async function checkIfWeHaveAWinner(game) {
     });
     if (!claimed) return true;
     ended = true;
-  } else if (livingPlayers === 1 && players.length > 1) {
+  } else if (!ended && livingPlayers === 1 && players.length > 1) {
     messages.push(`Player ${lastManStanding.name} won the game!!`);
     console.log(`Last player standing: ${lastManStanding.name}`);
     const claimed = await game.advanceAsync({

@@ -254,6 +254,53 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     setBuildHighscores(async () => {});
   });
 
+  // The single-player test above cannot catch this: the elimination branch needs
+  // `players.length > 1` to be reachable at all.
+  it('announces a multi-player checkpoint win once, not again as the last robot standing', async () => {
+    const board = stubBoard();
+    board.checkpoints = [{ x: 0, y: 0, number: 1 }];
+    board.getTile(0, 0).checkpoint = 1;
+    const game = await insertGame({
+      playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
+      playPhaseCount: 1,
+    });
+    // The winner is inserted first, so the `break` happens before the second player is
+    // ever counted — which is the whole condition. Both are alive.
+    const winner = await insertPlayer(game._id, {
+      name: 'winner',
+      userId: 'winner_account',
+      position: { x: 0, y: 0 },
+      visited_checkpoints: 0,
+      lives: 3,
+    });
+    await insertPlayer(game._id, {
+      name: 'runner_up',
+      userId: 'runner_up_account',
+      position: { x: 5, y: 5 },
+      lives: 3,
+    });
+    const highscores = vi.fn().mockResolvedValue();
+    setBuildHighscores(highscores);
+
+    const p = GameState.nextPlayPhaseAsync(game._id);
+    await vi.runAllTimersAsync();
+    await p;
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.gamePhase).toBe(GameState.PHASE.ENDED);
+    expect(gameDoc.winner).toBe('winner');
+    expect(gameDoc.winnerUserId).toBe(winner.userId);
+
+    const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
+    expect(messages.filter((m) => m.includes('won the game'))).toEqual([
+      'Player winner won the game!!',
+    ]);
+    // A full rebuild is idempotent, so a second call was invisible in the database and
+    // only showed up as a doubled 'Building Highscores' in the server log.
+    expect(highscores).toHaveBeenCalledTimes(1);
+    setBuildHighscores(async () => {});
+  });
+
   it('declares "Nobody" the winner when every player has run out of lives', async () => {
     stubBoard();
     const game = await insertGame({
