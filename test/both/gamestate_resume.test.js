@@ -4,7 +4,7 @@
 // sides, for two turns: one that runs through play, repairs and the deal into the next
 // program phase, and one where a robot dies and the turn ends waiting on its owner.
 //
-// Recovery goes through the sweep (server/resume.js), not GameState.resumeAsync directly,
+// Recovery goes through the sweep (server/resume.ts), not GameState.resumeAsync directly,
 // so the sweep's own decisions are under the property too: a crash before the PLAY write
 // leaves a program phase where everyone has submitted, which only the sweep's PROGRAM
 // path picks up, and a crash inside the respawn phase needs its phase logic.
@@ -16,18 +16,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { crashAtWrite, resetFakeCollections, SimulatedCrash, writeCount } from '../setup.js';
 import { insertCards, insertDeck, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { stubBoard } from '../helpers/board.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { GameState, setBuildHighscores } from '../../both/gamestate.js';
-import { Tile } from '../../both/tile.js';
-import { Cards } from '../../collections/cards.js';
-import { Deck } from '../../collections/deck.js';
-import { Games } from '../../collections/games.js';
-import { Players } from '../../collections/players.js';
-import { resumeStalledTurnsAsync, STALL_MS } from '../../server/resume.js';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { GameState, setBuildHighscores } from '../../both/gamestate.ts';
+import { Tile } from '../../both/tile.ts';
+import { Cards } from '../../collections/cards.ts';
+import { Decks } from '../../collections/deck.ts';
+import { Games } from '../../collections/games.ts';
+import { Players } from '../../collections/players.ts';
+import { resumeStalledTurnsAsync, STALL_MS } from '../../server/resume.ts';
 
 // The one random call inside a segment. A replayed deal has to deal the same hands as the
 // reference run or nothing after a crash inside the deal segment could be compared.
-vi.mock('../../both/shuffle.js', () => ({ shuffle: (a) => a.slice() }));
+vi.mock('../../both/shuffle.ts', () => ({ shuffle: (a) => a.slice() }));
 
 const T0 = new Date('2026-08-27T12:00:00Z');
 const COVERED = [-2, -2, -2, -2, -2];
@@ -145,7 +145,7 @@ async function finalState() {
     games,
     players: plain(await Players.find().fetchAsync()),
     cards: plain(await Cards.find().fetchAsync()),
-    deck: plain(await Deck.find().fetchAsync()),
+    deck: plain(await Decks.find().fetchAsync()),
   };
 }
 

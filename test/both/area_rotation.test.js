@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
-import { Board } from '../../both/board.js';
-import { Tile } from '../../both/tile.js';
-import { GameLogic } from '../../both/gamelogic.js';
+import { Board } from '../../both/board.ts';
+import { Tile } from '../../both/tile.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
 
 beforeEach(() => resetFakeCollections());
 
@@ -21,7 +21,7 @@ beforeEach(() => resetFakeCollections());
 // addRallyArea always uses a 12x12 footprint (`addArea(..., 12, 12)`) regardless of
 // orientation, so rotating it never pushes a placement off the area's own bounds —
 // unlike addStartArea (12x4), rotation is only ever exercised on rally areas in the
-// real board catalog (see board_box.js: every addStartArea call omits `orientation`).
+// real board catalog (see board_box.ts: every addStartArea call omits `orientation`).
 //
 // For a WxH area (`area_width` x `area_height`, both 12 here) Board#col/Board#row
 // transform local (x, y) to board coordinates as:
@@ -119,7 +119,7 @@ describe.each([0, 90, 180, 270])('Area.course.test placed at orientation %i', (o
 
 describe('Area rotation applied to a full catalog board', () => {
   it('oddest_sea stacks a 180°-rotated vault on top of an unrotated maelstrom (regression for addArea offset reset between calls)', async () => {
-    const { BoardBox } = await import('../../both/board_box.js');
+    const { BoardBox } = await import('../../both/board_box.ts');
     const board = BoardBox.getBoard(BoardBox.getBoardId('oddest_sea'));
     expect(board.height).toBe(28);
     // vault's own void(2,3) rotated 180 in a 12x12 area -> (11-2, 11-3) = (9, 8),
@@ -130,7 +130,7 @@ describe('Area rotation applied to a full catalog board', () => {
   });
 
   it('around_the_world composes a 180°-rotated island with a 90°-rotated spin_zone (regression for orientation not leaking between addRallyArea calls)', async () => {
-    const { BoardBox } = await import('../../both/board_box.js');
+    const { BoardBox } = await import('../../both/board_box.ts');
     const board = BoardBox.getBoard(BoardBox.getBoardId('around_the_world'));
     // island's repair(0, 11) rotated 180 at y_offset 0 -> (11-0, 11-11) = (11, 0).
     expect(board.getTile(11, 0).repair).toBe(true);

@@ -2,7 +2,7 @@ name: CI
 
 # Fast checks. No Meteor toolchain, no Docker, no MongoDB — the vitest suite
 # shims Meteor (test/setup.js), so plain `npm ci` is enough. Verified locally:
-# lint, format:check and 489 tests all pass under plain npm in ~1.3s.
+# lint, format:check, typecheck and the vitest suite all pass under plain npm.
 on:
   push:
     branches: [main]
@@ -34,6 +34,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Format check
         run: npm run format:check

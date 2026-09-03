@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
-import { CardLogic } from '../../both/cardlogic.js';
+import { CardLogic } from '../../both/cardlogic.ts';
 
 beforeEach(() => resetFakeCollections());
 

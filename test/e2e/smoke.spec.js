@@ -13,7 +13,7 @@ import { expect, test } from '@playwright/test';
 test('a new player signs up, creates a game and plays a register', async ({ page }) => {
   const stamp = Date.now();
   const email = `e2e-${stamp}@example.com`;
-  // The display name is the local part of the address, lowercased (server/accounts.js).
+  // The display name is the local part of the address, lowercased (server/accounts.ts).
   const displayName = `e2e-${stamp}`;
   let gameId;
 

@@ -1,4 +1,4 @@
-// The scheduled jobs in server/cron.js hold real cleanup and recovery logic that is
+// The scheduled jobs in server/cron.ts hold real cleanup and recovery logic that is
 // otherwise unreachable without waiting out a schedule. The stub for
 // `meteor/quave:synced-cron` records each job by name so these can invoke the body directly.
 //
@@ -11,13 +11,13 @@ import { resetFakeCollections, runStartup, setSettings } from '../setup.js';
 import { cronSchedule, cronStarted, registeredCronJobs, runCronJob } from '../stubs/synced-cron.js';
 import { insertCards, insertDeck, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { stubBoard } from '../helpers/board.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { GameState } from '../../both/gamestate.js';
-import { Chat } from '../../collections/chat.js';
-import { Games } from '../../collections/games.js';
-import { Highscores } from '../../collections/highscores.js';
-import { Players } from '../../collections/players.js';
-import { STALL_MS } from '../../server/resume.js';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Games } from '../../collections/games.ts';
+import { Highscores } from '../../collections/highscores.ts';
+import { Players } from '../../collections/players.ts';
+import { STALL_MS } from '../../server/resume.ts';
 
 const UNSTARTED = 'Clean up unstarted games';
 const ABANDONED = 'Clean up abandoned games';
@@ -27,7 +27,7 @@ const RESUME = 'Recover stalled turns';
 
 const RESUME_CHAT = 'Server restarted — replaying this turn from the start';
 // What `Clean up abandoned games` sits out after boot when nothing overrides it — see
-// server/cron.js, where `Meteor.settings.BOOT_GRACE_SEC` can shorten it.
+// server/cron.ts, where `Meteor.settings.BOOT_GRACE_SEC` can shorten it.
 const BOOT_GRACE_MS = 5 * 60 * 1000;
 
 // `name` is the display name the account resolves to, which in production always matches
@@ -89,6 +89,57 @@ describe('startup backfill', () => {
     const untouched = await Games.findOneAsync({ name: 'mid-turn' });
     expect(untouched.step).toBe(7);
     expect(untouched.lastStepAt).toEqual(new Date(1));
+  });
+
+  // Five game fields and one player field are required keys that may be null. A document
+  // written before that has the key missing, and the first whole-document write on such a
+  // player — a `saveAsync()` mid-turn — is refused by the schema with a client-safe error
+  // the server never logs, which stops the turn with nothing to read afterwards.
+  it('seeds the nullable keys on documents that predate them', async () => {
+    const old = await Games.insertAsync({ name: 'old', started: true });
+    const midRespawn = await Games.insertAsync({
+      name: 'mid-respawn',
+      started: true,
+      respawnPlayerId: 'p1',
+      selectOptions: [{ x: 1, y: 1 }],
+    });
+    const bare = await Players.insertAsync({ gameId: old, name: 'ann' });
+    const coated = await Players.insertAsync({ gameId: old, name: 'bob', ablativeCoat: 2 });
+    // The frozen copies inside a snapshot need the same treatment: a restore writes them
+    // back whole, so seeding only the live Players leaves a mid-segment game unresumable.
+    const midSegment = await Games.insertAsync({
+      name: 'mid-segment',
+      started: true,
+      segmentSnapshot: {
+        segment: 'play',
+        players: [
+          { _id: bare, name: 'ann' },
+          { _id: coated, name: 'bob', ablativeCoat: 2 },
+        ],
+        cards: [],
+        deck: null,
+      },
+    });
+
+    await runStartup();
+
+    expect(await Games.findOneAsync(old)).toMatchObject({
+      timerStartedAt: null,
+      respawnPlayerId: null,
+      respawnUserId: null,
+      selectOptions: null,
+      announceCard: null,
+    });
+    expect(await Games.findOneAsync(midRespawn)).toMatchObject({
+      respawnPlayerId: 'p1',
+      selectOptions: [{ x: 1, y: 1 }],
+      announceCard: null,
+    });
+    expect((await Players.findOneAsync(bare)).ablativeCoat).toBeNull();
+    expect((await Players.findOneAsync(coated)).ablativeCoat).toBe(2);
+    const snapshot = (await Games.findOneAsync(midSegment)).segmentSnapshot;
+    expect(snapshot.players.map((doc) => doc.ablativeCoat)).toEqual([null, 2]);
+    expect(snapshot.segment).toBe('play'); // the rest of the snapshot survives the rewrite
   });
 
   // A turn that died with the previous process is picked up as the new one boots, not a

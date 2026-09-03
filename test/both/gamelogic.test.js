@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { CardLogic } from '../../both/cardlogic.js';
-import { Board } from '../../both/board.js';
-import { Tile } from '../../both/tile.js';
-import { BoardBox } from '../../both/board_box.js';
-import { Games } from '../../collections/games.js';
-import { Players } from '../../collections/players.js';
-import { Cards } from '../../collections/cards.js';
-import { Deck } from '../../collections/deck.js';
-import { Chat } from '../../collections/chat.js';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { CardLogic } from '../../both/cardlogic.ts';
+import { Board } from '../../both/board.ts';
+import { Tile } from '../../both/tile.ts';
+import { BoardBox } from '../../both/board_box.ts';
+import { Games } from '../../collections/games.ts';
+import { Players } from '../../collections/players.ts';
+import { Cards } from '../../collections/cards.ts';
+import { Decks } from '../../collections/deck.ts';
+import { Chat } from '../../collections/chat.ts';
 
 // GameLogic always reaches the board through `player.boardAsync() -> game.board() ->
 // BoardBox.getBoard(boardId)`. Stubbing BoardBox.getBoard lets every test build an
@@ -244,7 +244,7 @@ describe('playCard: falling off the board / into a void', () => {
 
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
     expect(cardsDoc.handCards).toEqual([]);
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect([...deckDoc.cards].sort((a, b) => a - b)).toEqual([1, 2, 3, 11, 12]);
 
     vi.useRealTimers();
@@ -269,7 +269,7 @@ describe('playCard: falling off the board / into a void', () => {
     await cardPromise;
 
     expect((await Players.findOneAsync(player._id)).optionCards).toEqual({});
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
     const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
     expect(messages).toContain('bot discarded option card Extra Memory');
@@ -610,7 +610,7 @@ describe('executeRepairs', () => {
 
     const doc = await Players.findOneAsync(player._id);
     expect(doc.optionCards['rear-firing_laser']).toBe(true);
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.optionCards).toEqual([]); // the recycled pile's only card was drawn
     expect(deckDoc.discardedOptionCards).toEqual([]); // moved out, not copied
   });
@@ -631,7 +631,7 @@ describe('executeRepairs', () => {
     expect(doc.damage).toBe(4);
     // no draw happened, so nothing to announce
     expect(await Chat.find({ gameId: game._id }).countAsync()).toBe(0);
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.optionCards).toEqual([]);
   });
 });

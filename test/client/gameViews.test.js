@@ -17,8 +17,8 @@ import { callHelper, resetClientState, templateEvent } from '../clientSetup.js';
 import { loginAs, resetFakeCollections } from '../setup.js';
 import { navigations_, resetRouter, setRoute } from '../stubs/flow-router.js';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
-import { BoardBox } from '../../both/board_box.js';
-import { Games } from '../../collections/games.js';
+import { BoardBox } from '../../both/board_box.ts';
+import { Games } from '../../collections/games.ts';
 
 const formEvent = (fields) => ({
   preventDefault() {},

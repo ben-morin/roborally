@@ -8,14 +8,14 @@
 // and a change made in only one place fails here.
 import { describe, expect, it } from 'vitest';
 import { AnyOf, Optional } from 'meteor/jam:easy-schema';
-import { Cards } from '../../collections/cards.js';
-import { Chat } from '../../collections/chat.js';
-import { Deck } from '../../collections/deck.js';
-import { Games } from '../../collections/games.js';
-import { Highscores } from '../../collections/highscores.js';
-import { Players } from '../../collections/players.js';
+import { Cards } from '../../collections/cards.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Decks } from '../../collections/deck.ts';
+import { Games } from '../../collections/games.ts';
+import { Highscores } from '../../collections/highscores.ts';
+import { Players } from '../../collections/players.ts';
 
-const COLLECTIONS = { Cards, Chat, Deck, Games, Highscores, Players };
+const COLLECTIONS = { Cards, Chat, Decks, Games, Highscores, Players };
 
 // name -> { required, optional }. Each collection lands here in the commit that attaches
 // its schema, so a collection missing from this table has no schema attached yet.
@@ -30,7 +30,7 @@ const EXPECTED = {
     // A system line has no author; only the `addMessage` method writes these two.
     optional: ['userId', 'author'],
   },
-  Deck: {
+  Decks: {
     // `newDeck` writes all four; every write after that is the whole document going back.
     required: ['_id', 'gameId', 'cards', 'optionCards', 'discardedOptionCards'],
     optional: [],
@@ -57,21 +57,15 @@ const EXPECTED = {
       'cardsToPlay',
       'step',
       'lastStepAt',
-    ],
-    // Everything a later `$set` adds. A game that never reaches these phases never grows
-    // the keys, so none of them can be required.
-    optional: [
-      'segmentSnapshot',
-      'timer',
       'timerStartedAt',
       'respawnPlayerId',
       'respawnUserId',
       'selectOptions',
       'announceCard',
-      'winner',
-      'winnerUserId',
-      'stopped',
     ],
+    // Everything a later `$set` adds. A game that never reaches these phases never grows
+    // the keys, so none of them can be required.
+    optional: ['segmentSnapshot', 'timer', 'winner', 'winnerUserId', 'stopped'],
   },
   Players: {
     // Exactly what `joinGame` inserts, plus `_id`.
@@ -90,18 +84,11 @@ const EXPECTED = {
       'chosenCardsCnt',
       'optionCards',
       'cards',
+      'ablativeCoat',
     ],
     // Added once the game starts, or later still. A player who joins a game that never
     // starts never grows any of them.
-    optional: [
-      'direction',
-      'robotId',
-      'start',
-      'submitted',
-      'playedCardsCnt',
-      'shotDistance',
-      'ablativeCoat',
-    ],
+    optional: ['direction', 'robotId', 'start', 'submitted', 'playedCardsCnt', 'shotDistance'],
   },
   Highscores: {
     // Rebuilt wholesale each time, so a row is always complete.

@@ -1,4 +1,4 @@
-import { Players } from '../../../collections/players.js';
+import { Players } from '../../../collections/players.ts';
 import './_tiles.html';
 
 Template._tiles.helpers({

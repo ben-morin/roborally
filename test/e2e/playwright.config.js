@@ -9,7 +9,7 @@ const CI = !!process.env.CI;
 export default defineConfig({
   testDir: '.',
   outputDir: './test-results',
-  // The play phase is paced by server-side sleeps (see both/gamestate.js): one register is
+  // The play phase is paced by server-side sleeps (see both/gamestate.ts): one register is
   // 6–7 s of wall clock, so the default 5 s expect timeout is too tight for the assertions
   // that wait on it.
   timeout: 120_000,

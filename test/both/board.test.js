@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
-import { Board } from '../../both/board.js';
-import { Tile } from '../../both/tile.js';
-import { GameLogic } from '../../both/gamelogic.js';
+import { Board } from '../../both/board.ts';
+import { Tile } from '../../both/tile.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
 
 beforeEach(() => resetFakeCollections());
 

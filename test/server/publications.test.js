@@ -13,13 +13,13 @@ import {
   resetFakeCollections,
   runPublication,
 } from '../setup.js';
-import { Cards } from '../../collections/cards.js';
-import { Chat } from '../../collections/chat.js';
-import { Games } from '../../collections/games.js';
-import { Highscores } from '../../collections/highscores.js';
-import { Players } from '../../collections/players.js';
-import { GameState } from '../../both/gamestate.js';
-import { markBooted } from '../../server/boot.js';
+import { Cards } from '../../collections/cards.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Games } from '../../collections/games.ts';
+import { Highscores } from '../../collections/highscores.ts';
+import { Players } from '../../collections/players.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { markBooted } from '../../server/boot.ts';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 
 beforeEach(() => resetFakeCollections());

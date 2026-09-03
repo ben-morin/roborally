@@ -10,11 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import { loginAs, resetFakeCollections, runStartup } from '../setup.js';
 import { runCronJob } from '../stubs/synced-cron.js';
-import { buildHighscores } from '../../server/highscores.js';
-import { GameState } from '../../both/gamestate.js';
-import { Games } from '../../collections/games.js';
-import { Highscores } from '../../collections/highscores.js';
-import { Players } from '../../collections/players.js';
+import { buildHighscores } from '../../server/highscores.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { Games } from '../../collections/games.ts';
+import { Highscores } from '../../collections/highscores.ts';
+import { Players } from '../../collections/players.ts';
 
 const listOf = async (type) =>
   (await Highscores.find({ type }).fetchAsync())
@@ -93,7 +93,7 @@ describe('mostWon', () => {
 // The three ways a game can end with nobody winning. These drive the real end-of-game
 // code paths rather than writing `winner` by hand, so the exclusion stays anchored to how
 // games actually finish: if a path ever stops using the 'Nobody' sentinel that
-// server/highscores.js filters on, these fail rather than silently crediting a win.
+// server/highscores.ts filters on, these fail rather than silently crediting a win.
 describe('games nobody won', () => {
   it('excludes a game where every robot died', async () => {
     const gameId = await Games.insertAsync({

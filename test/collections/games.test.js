@@ -3,8 +3,8 @@
 // and how a caller's own modifier merges with the step bump.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
-import { GameState } from '../../both/gamestate.js';
-import { Games } from '../../collections/games.js';
+import { GameState } from '../../both/gamestate.ts';
+import { Games } from '../../collections/games.ts';
 import { insertGame } from '../helpers/fixtures.js';
 
 beforeEach(() => resetFakeCollections());

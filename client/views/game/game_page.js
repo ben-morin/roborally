@@ -1,7 +1,7 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
-import { joinGame, leaveGame, startGame } from '../../../both/methods/games.js';
-import { Games } from '../../../collections/games.js';
-import { Players } from '../../../collections/players.js';
+import { joinGame, leaveGame, startGame } from '../../../both/methods/games.ts';
+import { Games } from '../../../collections/games.ts';
+import { Players } from '../../../collections/players.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.js';
 // game_page.html includes {{> thumbnail}}.
 import '../board/thumbnail.js';

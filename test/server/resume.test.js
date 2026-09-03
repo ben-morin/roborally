@@ -4,15 +4,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
-import { GameState } from '../../both/gamestate.js';
-import { Chat } from '../../collections/chat.js';
-import { markBooted } from '../../server/boot.js';
+import { GameState } from '../../both/gamestate.ts';
+import { Chat } from '../../collections/chat.ts';
+import { markBooted } from '../../server/boot.ts';
 import {
   needsDriver,
   nudgeGameAsync,
   resumeStalledTurnsAsync,
   STALL_MS,
-} from '../../server/resume.js';
+} from '../../server/resume.ts';
 
 const { DEAL, PLAY, PROGRAM, RESPAWN, IDLE, ENDED } = GameState.PHASE;
 const NOW = new Date('2026-08-27T12:00:00Z');

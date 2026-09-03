@@ -7,16 +7,16 @@ import '../helpers/server.js';
 import { loginAs, logout, registeredMethods, resetFakeCollections } from '../setup.js';
 import { methodsConfig, simulatedMethods } from '../stubs/jam-method.js';
 import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
-import { BoardBox } from '../../both/board_box.js';
-import { CardLogic } from '../../both/cardlogic.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { GameState } from '../../both/gamestate.js';
-import { Cards } from '../../collections/cards.js';
-import { Chat } from '../../collections/chat.js';
-import { Deck } from '../../collections/deck.js';
-import { Games } from '../../collections/games.js';
-import { Highscores } from '../../collections/highscores.js';
-import { Players } from '../../collections/players.js';
+import { BoardBox } from '../../both/board_box.ts';
+import { CardLogic } from '../../both/cardlogic.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { Cards } from '../../collections/cards.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Decks } from '../../collections/deck.ts';
+import { Games } from '../../collections/games.ts';
+import { Highscores } from '../../collections/highscores.ts';
+import { Players } from '../../collections/players.ts';
 
 const call = (name, ...args) => Meteor.callAsync(name, ...args);
 
@@ -52,7 +52,7 @@ describe('method registration', () => {
 
   it('configures jam:method before any method module defines a method', () => {
     // Both are read by `createMethod` in a method module's body, so a module that loaded
-    // ahead of both/methods/config.js would silently keep the package defaults — see the
+    // ahead of both/methods/config.ts would silently keep the package defaults — see the
     // header there. The 401 is what the deleted `if (!user) throw ...` preambles threw.
     expect(methodsConfig()).toMatchObject({ serverOnly: true });
     expect(methodsConfig().loggedOutError).toMatchObject({
@@ -105,6 +105,12 @@ describe('createGame', () => {
       announce: false,
       step: 0,
       lastStepAt: null,
+      // Seeded null rather than left absent, so the schema can require them.
+      timerStartedAt: null,
+      respawnPlayerId: null,
+      respawnUserId: null,
+      selectOptions: null,
+      announceCard: null,
     });
     // createGame delegates the seating to joinGame rather than duplicating it.
     expect(await Players.find({ gameId }).countAsync()).toBe(1);
@@ -161,6 +167,8 @@ describe('joinGame', () => {
       position: { x: -1, y: -1 },
       chosenCardsCnt: 0,
       optionCards: {},
+      // Seeded null rather than left absent, so the schema can require it.
+      ablativeCoat: null,
     });
     expect(player.cards).toEqual(Array(GameLogic.CARD_SLOTS).fill(CardLogic.EMPTY));
 
@@ -244,11 +252,11 @@ describe('leaveGame', () => {
       // EMPTY (-1) slots must not be returned as if they were cards.
       chosenCards: [20, CardLogic.EMPTY, 21, CardLogic.EMPTY, CardLogic.EMPTY],
     });
-    await Deck.insertAsync({ gameId, cards: [1], optionCards: [], discardedOptionCards: [] });
+    await Decks.insertAsync({ gameId, cards: [1], optionCards: [], discardedOptionCards: [] });
 
     await call('leaveGame', { gameId: gameId });
 
-    const deck = await Deck.findOneAsync({ gameId });
+    const deck = await Decks.findOneAsync({ gameId });
     expect([...deck.cards].sort((a, b) => a - b)).toEqual([1, 11, 12, 20, 21]);
     expect(await Cards.find({ gameId, userId: user._id }).countAsync()).toBe(0);
     expect(await Players.find({ gameId, userId: user._id }).countAsync()).toBe(0);
@@ -268,11 +276,11 @@ describe('leaveGame', () => {
       optionCards: { extra_memory: true },
     });
     await Players.insertAsync({ gameId, userId: 'other', name: 'other' });
-    await Deck.insertAsync({ gameId, cards: [], optionCards: [], discardedOptionCards: [] });
+    await Decks.insertAsync({ gameId, cards: [], optionCards: [], discardedOptionCards: [] });
 
     await call('leaveGame', { gameId: gameId });
 
-    const deck = await Deck.findOneAsync({ gameId });
+    const deck = await Decks.findOneAsync({ gameId });
     expect(deck.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
     expect(await messages(gameId)).toContain('ben discarded option card Extra Memory');
     expect(await Players.find({ gameId, userId: user._id }).countAsync()).toBe(0);
@@ -472,7 +480,7 @@ describe('startGame', () => {
         expect((await Cards.findOneAsync({ playerId: player._id })).handCards).toHaveLength(9);
       }
       // The 8-player deck is 84 cards; two hands of nine came off it, once.
-      expect((await Deck.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 18);
+      expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 18);
     } finally {
       vi.useRealTimers();
     }

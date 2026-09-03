@@ -20,10 +20,11 @@
     "test:e2e": "playwright test -c test/e2e/playwright.config.js",
     "test:e2e:ui": "playwright test -c test/e2e/playwright.config.js --ui",
     "e2e:install": "playwright install chromium",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"**/*.{js,json,html,scss,md}\"",
-    "format:check": "prettier --check \"**/*.{js,json,html,scss,md}\""
+    "format": "prettier --write \"**/*.{js,ts,json,html,scss,md}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,json,html,scss,md}\""
   },
   "dependencies": {
     "@babel/runtime": "^8.0.0",
@@ -36,7 +37,7 @@
   "meteor": {
     "mainModule": {
       "client": "client/main.js",
-      "server": "server/cron.js"
+      "server": "server/cron.ts"
     },
     "modern": true
   },
@@ -46,6 +47,7 @@
     "@rsdoctor/rspack-plugin": "^1.6.3",
     "@rspack/cli": "^1.7.1",
     "@rspack/core": "^1.7.1",
+    "@types/meteor": "^2.9.11",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-meteor": "^7.3.0",
@@ -54,6 +56,8 @@
     "prettier": "^3.8.3",
     "sass-embedded": "1.103",
     "sass-loader": "^17.0.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11"
   }
 }

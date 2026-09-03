@@ -8,10 +8,10 @@ import { callHelper, flushTracker, resetClientState, templateLifecycle } from '.
 import { loginAs, resetFakeCollections } from '../setup.js';
 import { resetRouter, setRoute } from '../stubs/flow-router.js';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { GameState } from '../../both/gamestate.js';
-import { Games } from '../../collections/games.js';
-import { Players } from '../../collections/players.js';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { Games } from '../../collections/games.ts';
+import { Players } from '../../collections/players.ts';
 
 const TURN_RIGHT = 6;
 

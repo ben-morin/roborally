@@ -1,0 +1,405 @@
+import { Cards } from '../collections/cards.ts';
+import { Games, type Game } from '../collections/games.ts';
+import { Players, type Player } from '../collections/players.ts';
+import { GameLogic } from './gamelogic.ts';
+import { GameState } from './gamestate.ts';
+
+// What a card id means once it is looked up: how far it turns the robot, how far it moves
+// it, and the name the board announces.
+export interface CardType {
+  direction: number;
+  position: number;
+  name: string;
+}
+
+// Exported so the cron watchdog can re-drive a timer the server lost — see
+// "Recover stalled programming timers" in server/cron.ts. Recovery deliberately reuses
+// this exact function rather than reimplementing it, so the two cannot drift; the guard
+// below is what makes calling it a second time safe.
+export async function autoSubmitIfTimedOut(gameId: string, expectedStart: Date) {
+  // A game removed while its timer is running makes this throw, exactly as it did before
+  // the types; the `!` records that rather than changing it.
+  const game = (await Games.findOneAsync(gameId))!;
+  // Bail out if the timer has been reset (manual submit completed the turn) or
+  // if a new timer instance was started for a later turn — without this check,
+  // a stale setTimeout from a previous turn can auto-submit a player who still
+  // has time on their current programming timer.
+  if (
+    game.timer !== 1 ||
+    game.timerStartedAt == null ||
+    game.timerStartedAt.getTime() !== expectedStart.getTime()
+  ) {
+    return;
+  }
+  console.log('time up! setting timer to 0');
+  // The check above, made atomic: the selector pins the timer instance, so a second
+  // caller for the same timer (the cron sweep beside the live setTimeout) matches
+  // nothing. Not a claim — it does not bump `step` — and the result is deliberately
+  // ignored: the force-submit below is safe to reach twice, because the claim inside
+  // submitCardsAsync lets only one of them drive the turn.
+  await Games.updateAsync(
+    { _id: gameId, timer: 1, timerStartedAt: expectedStart },
+    { $set: { timer: 0, timerStartedAt: null } }
+  );
+  await new Promise((resolve) => Meteor.setTimeout(resolve, 2500));
+  await forceSubmitStragglerAsync(gameId);
+}
+
+// The tail of the timeout: submit whatever the one player who has not answered has on
+// the table. On its own so the cron sweep can run it for a game whose process died inside
+// the 2.5 s grace above — `timer: 0`, `timerStartedAt` cleared, and with the straggler's
+// tab gone nothing left to re-send the submit. The straggler has to be alive: a robot out
+// of lives keeps `submitted: false` through the program phase, but it is not the one
+// everybody is waiting for, and submitCardsAsync would only re-arm the timer for it.
+export async function forceSubmitStragglerAsync(gameId: string) {
+  const straggler = await Players.findOneAsync({ gameId, submitted: false, lives: { $gt: 0 } });
+  if (!straggler) return;
+  console.log(`Player ${straggler.name} did not respond, submitting random cards`);
+  await CardLogic.submitCardsAsync(straggler);
+}
+
+async function verifySubmittedCardsAsync(player: Player) {
+  // check if all played cards are available from original hand...
+  // Except locked cards, those are not in the hand.
+  const availableCards = await player.getHandCardsAsync();
+  const submittedCards = await player.getChosenCardsAsync();
+  // compute notLockedCards inline to avoid sync DB call inside notLockedCards()
+  const notLockedCnt = player.notLockedCnt();
+  const notLockedCardsList =
+    player.lockedCnt() === GameLogic.CARD_SLOTS ? [] : submittedCards.slice(0, notLockedCnt);
+
+  // Phase 1: reserve every legally-programmed card. Placing a card in a register does
+  // not remove it from the hand, so the hand still contains the programmed cards — a
+  // single check-and-fill pass let the random draw for an earlier empty slot consume a
+  // card programmed in a later slot, which was then evicted as "illegal". Reserving
+  // first means the fills below only ever draw from the unprogrammed remainder.
+  const legal = new Array(notLockedCardsList.length).fill(false);
+  for (let i = 0; i < notLockedCardsList.length; i++) {
+    const card = notLockedCardsList[i];
+    if (card >= 0) {
+      const handIndex = availableCards.indexOf(card);
+      if (handIndex !== -1) {
+        availableCards.splice(handIndex, 1);
+        legal[i] = true;
+      } else {
+        console.warn(`illegal card detected: ${card}! (removing card)`);
+      }
+    } else {
+      console.warn('Not enough cards submitted');
+    }
+  }
+
+  // Phase 2: random-fill the empty and illegal slots from what remains.
+  for (let i = 0; i < notLockedCardsList.length; i++) {
+    if (legal[i]) continue;
+    if (availableCards.length > 0) {
+      // grab card from hand
+      const cardIdFromHand = availableCards.splice(
+        Math.floor(Math.random() * availableCards.length),
+        1
+      )[0];
+      console.warn('Handing out random card', cardIdFromHand);
+      submittedCards[i] = cardIdFromHand;
+      player.cards[i] = CardLogic.RANDOM;
+    } else {
+      console.error(`No available cards to fill slot ${i}!`);
+      submittedCards[i] = CardLogic.EMPTY;
+      player.cards[i] = CardLogic.EMPTY;
+    }
+  }
+
+  await Cards.updateAsync(
+    { playerId: player._id },
+    {
+      $set: {
+        handCards: availableCards,
+        chosenCards: submittedCards,
+      },
+    }
+  );
+  return player.cards;
+}
+
+export class CardLogic {
+  static _MAX_NUMBER_OF_CARDS = 9;
+  static EMPTY = -1;
+  static COVERED = -2;
+  static DAMAGE = -3;
+  static RANDOM = -4;
+
+  static _cardTypes: Record<number, CardType> = {
+    0: { direction: 2, position: 0, name: 'u-turn' },
+    1: { direction: 1, position: 0, name: 'turn-right' },
+    2: { direction: -1, position: 0, name: 'turn-left' },
+    3: { direction: 0, position: -1, name: 'step-backward' },
+    4: { direction: 0, position: 1, name: 'step-forward' },
+    5: { direction: 0, position: 2, name: 'step-forward-2' },
+    6: { direction: 0, position: 3, name: 'step-forward-3' },
+  };
+
+  static _8_deck: readonly number[] = [
+    6, // u turn
+    18, // right turn
+    18, // left turn
+    6, // step back
+    18, // step 1
+    12, // step 2
+    6, // step 3
+  ];
+
+  static _12_deck: readonly number[] = [
+    9, // u turn
+    27, // right turn
+    27, // left turn
+    9, // step back
+    27, // step 1
+    18, // step 2
+    9, // step 3
+  ];
+
+  static _option_deck: readonly [name: string, description: string][] = [
+    [
+      'superior_archive',
+      "When reentering play after beeing destroyed, your robot doesn't receive the normal 20% damage",
+    ],
+    [
+      'circuit_breaker',
+      'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down',
+    ],
+    [
+      'rear-firing_laser',
+      'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser',
+    ],
+    ['extra_memory', 'You receive one extra Program card each turn.'],
+    [
+      'high-power_laser',
+      "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser.",
+    ],
+    [
+      'double-barreled_laser',
+      'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.',
+    ],
+    [
+      'ramming_gear',
+      'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.',
+    ],
+    //    [ 'mechanical_arm', "Your robot can touch a flag or repair site from 1 space away (diagonally or orthogonally),
+    //    as long as there isn't a wall."]
+    ['ablative_coat', 'Absorbs the next 30% damage your robot receives.'],
+    //###### choose to use
+    // 'recompile'
+    //[ 'power-down_shield', ""
+    // 'abort_switch'
+    //##### additional move options
+    // 'fourth_gear'
+    // 'reverse_gear'
+    // 'crab_legs'
+    // 'brakes'
+    //####### register options
+    // 'dual_processor'
+    // 'conditional_program'
+    // 'flywheel'
+    //####### alternative laser
+    // 'mini_howitzer'
+    // 'fire_control'
+    // 'radio_control'
+    // [ 'scrambler',    "Whenever you could fire your main laser at a robot, you may instead fire the Scrambler. This replaces the target's robots's next programmed card with the top Program card from the deck. You can't use this Option on the fifth register phase."]
+    // [ 'tractor_beam', "Whenever you could fire your main laser at a robot that isn't in an adjacent space, you may instead fire the Tractor Beam. This moves the target robot 1 space toward your robot."]
+    // [ 'pressor_beam', "Whenever you could fire your main laser at a robot, you may instead fire the Pressor Beam. This moves the target robot 1 space away from your robot."]
+    //#### activate before submit
+    // 'gyroscopic_stabilizer'
+  ];
+
+  static async discardCardsAsync(game: Game, player: Player) {
+    const deck = await game.getDeckAsync();
+
+    const playerCards = await Cards.findOneAsync({ playerId: player._id });
+    if (playerCards) {
+      for (const unusedCard of playerCards.handCards) {
+        if (unusedCard >= 0) {
+          deck.cards.push(unusedCard);
+        }
+      }
+      const { chosenCards } = playerCards;
+      // compute notLockedCards inline using already-fetched chosenCards
+      const notLockedCards =
+        player.lockedCnt() === GameLogic.CARD_SLOTS
+          ? []
+          : chosenCards.slice(0, player.notLockedCnt());
+      for (let i = 0; i < notLockedCards.length; i++) {
+        // Rule note: You don't keep a discard pile. You always use the complete deck
+        const discardCard = notLockedCards[i];
+        if (discardCard >= 0) {
+          deck.cards.push(discardCard);
+        }
+        player.cards[i] = this.EMPTY;
+        chosenCards[i] = this.EMPTY;
+      }
+
+      await Players.updateAsync(player._id, {
+        $set: {
+          cards: player.cards,
+          playedCardsCnt: 0,
+          chosenCardsCnt: player.lockedCnt(),
+        },
+      });
+      await Cards.updateAsync(
+        { playerId: player._id },
+        {
+          $set: {
+            handCards: [],
+            chosenCards,
+          },
+        }
+      );
+    }
+
+    console.log(`${player.name}: returned cards, new total: ${deck.cards.length}`);
+    return await deck.saveAsync();
+  }
+
+  static async dealCardsAsync(game: Game, player: Player) {
+    const deck = await game.getDeckAsync();
+    const handCards: number[] = [];
+
+    //for every damage you get a card less
+    let nrOfNewCards = this._MAX_NUMBER_OF_CARDS - player.damage;
+    if (player.hasOptionCard('extra_memory')) {
+      nrOfNewCards++;
+    }
+    //grab card from deck, so it can't be handed out twice
+    for (let i = 0; i < nrOfNewCards; i++) {
+      // `pop()` on an exhausted deck would put `undefined` in the hand, exactly as it did
+      // before the types; the `!` records that rather than changing it.
+      handCards.push(deck.cards.pop()!);
+    }
+    console.log(`${player.name}: hand cards ${handCards.length}, new total: ${deck.cards.length}`);
+
+    await Cards.updateAsync(
+      { playerId: player._id },
+      {
+        $set: {
+          handCards,
+        },
+      }
+    );
+    return await deck.saveAsync();
+  }
+
+  static async submitCardsAsync(player: Player) {
+    if (player.isPoweredDown()) {
+      await Players.updateAsync(player._id, {
+        $set: {
+          submitted: true,
+          damage: 0,
+        },
+      });
+    } else {
+      const approvedCards = await verifySubmittedCardsAsync(player);
+
+      await Players.updateAsync(player._id, {
+        $set: {
+          submitted: true,
+          optionalInstantPowerDown: false,
+          cards: approvedCards,
+        },
+      });
+    }
+
+    const playerCnt = await Players.find({
+      gameId: player.gameId,
+      lives: { $gt: 0 },
+    }).countAsync();
+    const readyPlayerCnt = await Players.find({
+      gameId: player.gameId,
+      submitted: true,
+      lives: { $gt: 0 },
+    }).countAsync();
+    // Read as late as possible: both timer writes below are claims, and the `step` this
+    // read carries is what they are conditional on. Two submits for the same straggler
+    // — the client's timer-0 playCards and the server's own auto-submit — both count
+    // everyone ready, but only one of them wins the claim and drives the turn. A claim
+    // lost to another player's concurrent submit leaves the game to that submit.
+    // A player always belongs to a game, the same invariant collections/players.ts asserts
+    // on; the guarded read in the catch below is for a game that has since been removed.
+    const game = (await Games.findOneAsync(player.gameId))!;
+    if (readyPlayerCnt === playerCnt) {
+      if (!(await game.advanceAsync({ $set: { timer: -1, timerStartedAt: null } }))) return;
+      return await GameState.nextGamePhaseAsync(player.gameId);
+    } else if (readyPlayerCnt === playerCnt - 1) {
+      // start timer — capture timerStart so the scheduled callback can verify
+      // it is still acting on the same timer instance when it fires
+      const timerStart = new Date();
+      if (!(await game.advanceAsync({ $set: { timer: 1, timerStartedAt: timerStart } }))) return;
+      return Meteor.setTimeout(
+        Meteor.bindEnvironment(() =>
+          // Fire-and-forget, so the catch is load-bearing: without it a rejection here
+          // becomes an unhandled promise rejection. It cannot recover, though — if this
+          // throws, the last player is never force-submitted and the game sits in the
+          // program phase indefinitely. The gameId is in the message because this log
+          // line is the only trace such a game leaves.
+          autoSubmitIfTimedOut(player.gameId, timerStart).catch(async (err) => {
+            console.error(`autoSubmitIfTimedOut failed for game ${player.gameId}`, err);
+            // Say so in the game chat: without this the turn simply stops and the
+            // players have no idea why. Guarded because the most likely reason for
+            // getting here is that the game no longer exists.
+            try {
+              const game = await Games.findOneAsync(player.gameId);
+              await game?.chatAsync(
+                'The programming timer failed — please submit your cards to continue.'
+              );
+            } catch (announceErr) {
+              console.error(`could not announce timer failure for ${player.gameId}`, announceErr);
+            }
+          })
+        ),
+        GameLogic.TIMER * 1000
+      );
+    }
+  }
+
+  static getOptionName(index: number) {
+    return this._option_deck[index][0];
+  }
+
+  static getOptionTitle(name: string) {
+    return name
+      .replace(/_/g, ' ')
+      .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
+  }
+
+  // `undefined` for a name that is not in the option deck: the loop simply ends. Every
+  // caller passes a name that came out of `getOptionName`, so no caller can see it.
+  static getOptionId(name: string) {
+    for (let id = 0; id < this._option_deck.length; id++) {
+      const option = this._option_deck[id];
+      if (option[0] === name) {
+        return id;
+      }
+    }
+  }
+
+  static getOptionDesc(name: string) {
+    // The `!` is the invariant above, written down: an unknown name throws here today, as
+    // indexing by `undefined` always has.
+    return this._option_deck[this.getOptionId(name)!][1];
+  }
+
+  // `undefined` for a card id at or past the end of the deck — the loop falls off its end.
+  // Card ids come out of the same deck this walks, so no caller reaches that.
+  static cardType(cardId: number, playerCnt: number): CardType | undefined {
+    const deck = playerCnt <= 8 ? this._8_deck : this._12_deck;
+    let cnt = 0;
+    for (let index = 0; index < deck.length; index++) {
+      const cardTypeCnt = deck[index];
+      cnt += cardTypeCnt;
+      if (cardId < cnt) {
+        return this._cardTypes[index];
+      }
+    }
+  }
+
+  static priority(index: number) {
+    return (index + 1) * 10;
+  }
+}

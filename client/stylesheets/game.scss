@@ -371,7 +371,7 @@ span.length {
 
 .fadeInAndOut {
   animation-name: fadeInAndOut;
-  animation-duration: 1.75s; /* match to _ANNOUNCE_CARD_TIME in gamestate.js */
+  animation-duration: 1.75s; /* match to _ANNOUNCE_CARD_TIME in gamestate.ts */
   animation-fill-mode: both;
   animation-iteration-count: 1;
 }

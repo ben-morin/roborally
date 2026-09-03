@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
-import { GameState, setBuildHighscores } from '../../both/gamestate.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { CardLogic } from '../../both/cardlogic.js';
-import { Games } from '../../collections/games.js';
-import { Players } from '../../collections/players.js';
-import { Cards } from '../../collections/cards.js';
-import { Chat } from '../../collections/chat.js';
-import { Deck } from '../../collections/deck.js';
+import { GameState, setBuildHighscores } from '../../both/gamestate.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { CardLogic } from '../../both/cardlogic.ts';
+import { Games } from '../../collections/games.ts';
+import { Players } from '../../collections/players.ts';
+import { Cards } from '../../collections/cards.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Decks } from '../../collections/deck.ts';
 import { stubBoard } from '../helpers/board.js';
 
 // GameState's phase-dispatch methods (nextGamePhaseAsync/nextPlayPhaseAsync) often
@@ -94,7 +94,7 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     expect(playerDoc.submitted).toBe(true);
     expect(playerDoc.damage).toBe(0);
     expect(playerDoc.optionCards.circuit_breaker).toBeUndefined();
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.discardedOptionCards).toContain(CardLogic.getOptionId('circuit_breaker'));
     // All three facts land in the same deal pass, far too fast to follow from the UI,
     // so each must leave a chat line.
@@ -246,7 +246,7 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     const gameDoc = await Games.findOneAsync(game._id);
     expect(gameDoc.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(gameDoc.winner).toBe('winner');
-    // The name is for the board; the userId is what server/highscores.js groups on.
+    // The name is for the board; the userId is what server/highscores.ts groups on.
     expect(gameDoc.winnerUserId).toBe(winner.userId);
     expect(highscores).toHaveBeenCalled();
     const winnerDoc = await Players.findOneAsync(winner._id);
@@ -558,7 +558,7 @@ describe('resumeAsync', () => {
       games,
       players: plain(await Players.find().fetchAsync()),
       cards: plain(await Cards.find().fetchAsync()),
-      deck: plain(await Deck.find().fetchAsync()),
+      deck: plain(await Decks.find().fetchAsync()),
     };
   }
 
@@ -682,7 +682,7 @@ describe('resumeAsync', () => {
       [-1, -1, -1, -1, -1],
       [-1, -1, -1, -1, -1],
     ]);
-    const deck = await Deck.findOneAsync({ gameId: game._id });
+    const deck = await Decks.findOneAsync({ gameId: game._id });
     expect(deck.cards).toHaveLength(everyCard.length - 18);
     // Every card is somewhere, exactly once.
     expect([...deck.cards, ...hands.flatMap((h) => h.handCards)].sort((x, y) => x - y)).toEqual(
@@ -711,13 +711,13 @@ describe('resumeAsync', () => {
     await vi.runAllTimersAsync();
     expect(await crashed).toBeInstanceOf(Error);
     deal.mockRestore();
-    expect((await Deck.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 9);
+    expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 9);
 
     await drive(() => GameState.resumeAsync(game._id));
 
     // Restoring to "no deck" removed the half-dealt one; the replayed deal built a full
     // 8-player deck and dealt both hands from it. Nothing went missing.
-    expect((await Deck.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 18);
+    expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 18);
     expect((await Games.findOneAsync(game._id)).gamePhase).toBe(GameState.PHASE.PROGRAM);
   });
 

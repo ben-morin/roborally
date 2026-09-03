@@ -58,7 +58,7 @@ describe('selector equality', () => {
   });
 
   // Mongo's range operators only order values of the same type; plain JS `<` coerces, and
-  // `null < new Date()` is true. server/resume.js selects on `lastStepAt: { $lt: cutoff }`
+  // `null < new Date()` is true. server/resume.ts selects on `lastStepAt: { $lt: cutoff }`
   // over games whose `lastStepAt` may still be null, and must find none of those.
   it('never orders null, a missing field or a number against a Date', async () => {
     const cutoff = new Date(1_700_000_000_000);

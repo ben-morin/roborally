@@ -1,6 +1,6 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
-import { createGame } from '../../../both/methods/games.js';
-import { Games } from '../../../collections/games.js';
+import { createGame } from '../../../both/methods/games.ts';
+import { Games } from '../../../collections/games.ts';
 import { modalAlert } from '../../helper/modalDialogs.js';
 import './game_list.html';
 

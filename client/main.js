@@ -4,15 +4,15 @@
 // Each of those modules imports its own `.html` and its own dependencies.
 
 // First, so the production `console.log` no-op is installed before anything else runs.
-import '../both/logging.js';
+import '../both/logging.ts';
 
 // Before anything that reaches a collection: a schema is attached in the collection's
-// module body, and it reads this configuration as it goes. See both/easySchemaConfig.js.
-import '../both/easySchemaConfig.js';
+// module body, and it reads this configuration as it goes. See both/easySchemaConfig.ts.
+import '../both/easySchemaConfig.ts';
 
 // Same rule, for the same reason: jam:method reads this configuration when a method module
-// runs `createMethod`. See both/methods/config.js.
-import '../both/methods/config.js';
+// runs `createMethod`. See both/methods/config.ts.
+import '../both/methods/config.ts';
 
 // Bootstrap's JS. Imported for its side effects: each component registers a delegated
 // `data-bs-*` handler on `document` at module load, which is what drives the markup-only
@@ -41,7 +41,7 @@ import './stylesheets/game.scss';
 import './stylesheets/layout.scss';
 
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
-import { Games } from '../collections/games.js';
+import { Games } from '../collections/games.ts';
 
 import './helper/datehelper.js';
 import './views/board/board.js';
@@ -53,9 +53,9 @@ import './views/game/game_page.js';
 import './views/layout/applicationLayout.js';
 import './views/ranking/ranking.js';
 
-// The one file nothing else imports: `collections/users.js` exists only for its
+// The one file nothing else imports: `collections/users.ts` exists only for its
 // load-time observe.
-import '../collections/users.js';
+import '../collections/users.ts';
 
 Meteor.subscribe('onlineUsers');
 

@@ -19,9 +19,9 @@ import { callHelper, globalHelper, resetClientState, templateEvent } from '../cl
 import { loginAs, logout, resetFakeCollections } from '../setup.js';
 import { navigations_, resetRouter, setRoute } from '../stubs/flow-router.js';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
-import { GameState } from '../../both/gamestate.js';
-import { Chat } from '../../collections/chat.js';
-import { Highscores } from '../../collections/highscores.js';
+import { GameState } from '../../both/gamestate.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Highscores } from '../../collections/highscores.ts';
 
 beforeEach(async () => {
   resetFakeCollections();

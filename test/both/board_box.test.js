@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
-import { BoardBox } from '../../both/board_box.js';
-import { Board } from '../../both/board.js';
+import { BoardBox } from '../../both/board_box.ts';
+import { Board } from '../../both/board.ts';
 
 beforeEach(() => resetFakeCollections());
 

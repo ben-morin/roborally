@@ -1,7 +1,7 @@
 # roborally
 
 Browser-based [RoboRally](https://en.wikipedia.org/wiki/RoboRally) board game implementation built with [Meteor 3](https://www.meteor.com).
-It uses Blaze for templating and plain JavaScript for the game models, game logic and server methods. The app is written as
+It uses Blaze for templating and TypeScript for the game models, game logic and server methods. The app is written as
 ES modules throughout and compiled with Meteor's modern build stack — Rspack for bundling, SWC for transpilation and minification.
 
 ## port
@@ -15,7 +15,7 @@ confusion with the original Meteor 1 and 2 versions.
 Goals of this project:
 
 - use the latest Meteor release (3.5 as of July 2026)
-- modernize the codebase and update dependencies (done, except the Blaze/Bootstrap UI layer)
+- modernize the codebase and update dependencies (done, except the Blaze/Bootstrap UI layer, which is also the only part still in plain JavaScript)
 - stabilize gameplay
 - run in docker
 

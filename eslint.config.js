@@ -1,5 +1,6 @@
 const globals = require('globals');
 const prettier = require('eslint-config-prettier/flat');
+const tseslint = require('typescript-eslint');
 
 // Meteor framework globals (would come from eslint-plugin-meteor's env in
 // legacy config; declared here for flat config).
@@ -59,6 +60,34 @@ module.exports = [
       // typeof comparisons, which nothing needs.
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+  // TypeScript files. The compiler owns undefined names and unused bindings, so the two
+  // core rules step aside for their typescript-eslint counterparts. `recommended`, not
+  // `recommendedTypeChecked`: the type-aware set builds a full tsc program on every lint,
+  // and `npm run typecheck` already is that run.
+  ...tseslint.configs.recommended.map((config) => ({ ...config, files: ['**/*.ts'] })),
+  {
+    files: ['**/*.ts'],
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // `interface Game extends GameDoc {}` is how a collection's transform type gets its
+      // document fields — see collections/games.ts.
+      '@typescript-eslint/no-empty-object-type': [
+        'error',
+        { allowInterfaces: 'with-single-extends' },
+      ],
+    },
+  },
+  {
+    files: ['collections/**/*.ts'],
+    rules: {
+      // The transform pattern merges an interface (the document's fields) into a class
+      // (the methods), and `Object.create(Game.prototype)` joins them at runtime. That is
+      // precisely the merge this rule exists to flag, and here it is the design.
+      '@typescript-eslint/no-unsafe-declaration-merging': 'off',
     },
   },
   prettier,

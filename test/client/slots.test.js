@@ -1,8 +1,8 @@
 // Slot cycling: after a card is clicked into a register, the selection jumps to the next
 // free slot, wrapping around. Fiddly enough to be worth pinning precisely.
 import { describe, expect, it } from 'vitest';
-import { firstEmptySlot, nextEmptySlot } from '../../client/lib/slots.js';
-import { CardLogic } from '../../both/cardlogic.js';
+import { firstEmptySlot, nextEmptySlot } from '../../client/lib/slots.ts';
+import { CardLogic } from '../../both/cardlogic.ts';
 
 const E = CardLogic.EMPTY;
 const C = 7; // any real card id

@@ -4,8 +4,8 @@
 // equal its length, and checkIfWeHaveAWinner would end the game on the first CHECKPOINTS
 // phase. Installed through a spy on BoardBox.getBoard, so vi.restoreAllMocks() removes it.
 import { vi } from 'vitest';
-import { Board } from '../../both/board.js';
-import { BoardBox } from '../../both/board_box.js';
+import { Board } from '../../both/board.ts';
+import { BoardBox } from '../../both/board_box.ts';
 
 export function stubBoard(width = 6, height = 6) {
   const board = new Board('stub-board', 1, 8, width, height);

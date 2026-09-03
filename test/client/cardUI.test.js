@@ -2,9 +2,9 @@
 // ids into the class/priority/type bags the Blaze card templates render, and it decides
 // which cards look locked, chosen, or blank.
 import { describe, expect, it } from 'vitest';
-import { addUIData } from '../../client/lib/cardUI.js';
-import { CardLogic } from '../../both/cardlogic.js';
-import { GameLogic } from '../../both/gamelogic.js';
+import { addUIData } from '../../client/lib/cardUI.ts';
+import { CardLogic } from '../../both/cardlogic.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
 
 // 8-player deck ranges (CardLogic._8_deck = [6,18,18,6,18,12,6]):
 //   0-5 u-turn | 6-23 turn-right | 24-41 turn-left | 42-47 step-backward

@@ -1,4 +1,4 @@
-import { getUsername } from '../../../both/permissions.js';
+import { getUsername } from '../../../both/permissions.ts';
 import './users.html';
 
 Template.usersPill.helpers({

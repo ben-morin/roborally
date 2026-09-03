@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
-import { autoSubmitIfTimedOut, CardLogic } from '../../both/cardlogic.js';
-import { GameLogic } from '../../both/gamelogic.js';
-import { GameState } from '../../both/gamestate.js';
-import { Games } from '../../collections/games.js';
-import { Players } from '../../collections/players.js';
-import { Cards } from '../../collections/cards.js';
-import { Chat } from '../../collections/chat.js';
-import { Deck } from '../../collections/deck.js';
+import { autoSubmitIfTimedOut, CardLogic } from '../../both/cardlogic.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { Games } from '../../collections/games.ts';
+import { Players } from '../../collections/players.ts';
+import { Cards } from '../../collections/cards.ts';
+import { Chat } from '../../collections/chat.ts';
+import { Decks } from '../../collections/deck.ts';
 
 beforeEach(() => resetFakeCollections());
 afterEach(() => vi.restoreAllMocks());
@@ -24,7 +24,7 @@ describe('dealCardsAsync', () => {
 
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
     expect(cardsDoc.handCards).toEqual([19, 18, 17, 16, 15, 14, 13]); // 9 - 2 = 7 cards
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.cards).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
@@ -50,7 +50,7 @@ describe('dealCardsAsync', () => {
 
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
     expect(cardsDoc.handCards).toEqual([]);
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.cards).toEqual([1, 2, 3]); // untouched
   });
 });
@@ -67,7 +67,7 @@ describe('discardCardsAsync', () => {
 
     await CardLogic.discardCardsAsync(game, player);
 
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect([...deckDoc.cards].sort((a, b) => a - b)).toEqual([1, 2, 3, 10, 11, 500]);
 
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
@@ -95,7 +95,7 @@ describe('discardCardsAsync', () => {
 
     await CardLogic.discardCardsAsync(game, player);
 
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.cards).not.toContain(99); // the locked card never returns to the deck
 
     const cardsDoc = await Cards.findOneAsync({ playerId: player._id });
@@ -112,7 +112,7 @@ describe('discardCardsAsync', () => {
     await insertDeck(game._id, { cards: [7] });
 
     await expect(CardLogic.discardCardsAsync(game, player)).resolves.not.toThrow();
-    const deckDoc = await Deck.findOneAsync({ gameId: game._id });
+    const deckDoc = await Decks.findOneAsync({ gameId: game._id });
     expect(deckDoc.cards).toEqual([7]);
   });
 });
@@ -137,7 +137,7 @@ describe('submitCardsAsync', () => {
   it('replaces an illegal (not-in-hand) card with a random one from the remaining hand, and force-fills unsubmitted slots (characterization)', async () => {
     // The exhausted-hand branch is a genuine "shouldn't happen" — a full hand always
     // covers the unlocked slots exactly — so it reports through console.error, which
-    // both/logging.js leaves live in production. Assert on it rather than letting it
+    // both/logging.ts leaves live in production. Assert on it rather than letting it
     // print: it is the only signal this path produces, and it belongs in the test
     // rather than in the suite's output.
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});

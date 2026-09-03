@@ -1,4 +1,4 @@
-// Resolves `meteor/check` for both/easySchemaConfig.js, which builds a named
+// Resolves `meteor/check` for both/easySchemaConfig.ts, which builds a named
 // `Match.Where` matcher for null (jam:easy-schema 1.7.1 crashes on a bare `null` inside
 // `AnyOf`, and the crash is swallowed — the collection silently loses its DB validator).
 //

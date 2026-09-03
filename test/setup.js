@@ -8,7 +8,7 @@
 //
 // FakeCollection is a real (if minimal) in-memory Mongo-alike rather than an inert
 // stub: CardLogic/GameLogic/GameState tests drive genuine read-mutate-updateAsync
-// round trips through Games/Players/Cards/Deck, the same way the app does. Only the
+// round trips through Games/Players/Cards/Decks, the same way the app does. Only the
 // operators actually used by both/, collections/ and server/ are implemented (equality,
 // dotted paths, $gt/$gte/$lt/$lte/$ne/$exists, $set/$inc/$push on write, sort/skip/limit
 // and an all-inclusion or all-exclusion `fields` on find, and a four-stage aggregate) —
@@ -47,7 +47,7 @@ function unsetPath(obj, path) {
 }
 
 // Mongo resolves a dotted path through arrays of subdocuments: `{'emails.address': x}`
-// matches when ANY element of `emails` has that address (both/methods/accounts.js's
+// matches when ANY element of `emails` has that address (both/methods/accounts.ts's
 // resendVerificationEmail relies on this). Returns every candidate value the path
 // reaches — one entry for a plain nested field, N for an array, none when an array
 // holds no element carrying the key.
@@ -74,7 +74,7 @@ function getPathValues(obj, path) {
 
 // Mongo's range operators only order values of the same type: null and a missing field
 // never satisfy `{ $lt: <Date> }`, and a Date never satisfies `{ $lt: 5 }`. Plain JS `<`
-// would coerce both (`null < new Date()` is true). The sweep in server/resume.js relies
+// would coerce both (`null < new Date()` is true). The sweep in server/resume.ts relies
 // on the first: a game whose `lastStepAt` is still null is never "stalled".
 function ordered(v, bound) {
   if (v == null || bound == null) return false;
@@ -95,7 +95,7 @@ function matchesSelector(doc, selector) {
     // a Date is an object with no own keys, so down there it would read as an empty set
     // of operators and match every document. Every stored document is a structuredClone
     // of what was inserted, so a caller can never hold the stored Date object itself —
-    // the guarded `timer: 0` write in both/cardlogic.js pins `timerStartedAt` this way.
+    // the guarded `timer: 0` write in both/cardlogic.ts pins `timerStartedAt` this way.
     if (cond instanceof Date) {
       return some((v) => v instanceof Date && v.getTime() === cond.getTime());
     }
@@ -113,7 +113,7 @@ function matchesSelector(doc, selector) {
           case '$ne':
             // $ne is the negation of $eq, so it inherits $eq's treatment of null:
             // `{f: {$ne: 'x'}}` matches a document missing `f`, but `{f: {$ne: null}}`
-            // does *not* — "not null" also means "present". server/highscores.js relies
+            // does *not* — "not null" also means "present". server/highscores.ts relies
             // on the first (see its test) and client/views/chat/chat.js on the second.
             return opVal === null ? !some((v) => v == null) : !some((v) => v === opVal);
           case '$exists':
@@ -194,7 +194,7 @@ function applyModifier(doc, modifier) {
   }
 }
 
-// The only aggregation in the app is server/highscores.js, which uses exactly these
+// The only aggregation in the app is server/highscores.ts, which uses exactly these
 // four stages with a $sum and a $last accumulator. Anything else throws.
 function aggregate(docs, pipeline) {
   let result = docs.map((d) => structuredClone(d));
@@ -227,7 +227,7 @@ function aggregate(docs, pipeline) {
                 group[name] = (group[name] || 0) + (argValue(0) || 0);
                 break;
               // Documents arrive in insertion order, so the last one to be seen wins —
-              // which is what Mongo does for an unsorted group. server/highscores.js uses
+              // which is what Mongo does for an unsorted group. server/highscores.ts uses
               // it only to carry a fallback label out of the group, so which member of the
               // group supplies it does not matter.
               case '$last':
@@ -256,7 +256,7 @@ function aggregate(docs, pipeline) {
 
 // Mongo field projection, in both directions. Inclusion names what goes out — the
 // `onlineUsers` publication names the three fields it is willing to send, and the
-// profile-name backfill in server/accounts.js asks for `emails` alone. Exclusion names
+// profile-name backfill in server/accounts.ts asks for `emails` alone. Exclusion names
 // what stays home: the `games` publication drops the per-turn snapshot from the document
 // every client receives. Mixing the two throws, as Mongo does, because the point of the
 // option here is that a test can prove a field did or did not go out — a silently wrong
@@ -501,7 +501,7 @@ class FakeCollection {
     return matches.length;
   }
 
-  // Recorded rather than discarded: server/accounts.js's `Meteor.users.deny({update})` is
+  // Recorded rather than discarded: server/accounts.ts's `Meteor.users.deny({update})` is
   // the only thing standing between a client and its own profile.name, and a rule that
   // silently vanished would be untestable. Registered at import time, so unlike the
   // documents these survive _reset().
@@ -615,7 +615,7 @@ export async function runStartup() {
   for (const fn of startupCallbacks) await fn();
 }
 
-// Captures what server/cron.js configures inside Meteor.startup. `verificationEmails`
+// Captures what server/cron.ts configures inside Meteor.startup. `verificationEmails`
 // records userIds passed to Accounts.sendVerificationEmail.
 const accountsState = {
   validateNewUser: [],
@@ -638,7 +638,7 @@ export function resetAccounts() {
 }
 
 /**
- * Replace Meteor.settings wholesale. Call before runStartup() — server/cron.js reads
+ * Replace Meteor.settings wholesale. Call before runStartup() — server/cron.ts reads
  * VERIFY_EMAILS / MAIL_FROM / ALLOWED_* inside its startup block, not at import time.
  */
 export function setSettings(settings = {}) {
@@ -718,13 +718,13 @@ globalThis.Random = { id: () => 'rnd' + Math.random().toString(36).slice(2, 9) }
 
 // Board/Area construction logs to stdout on every build ("Load risky_exchange board",
 // "Start 5,3,up", "Checkpoint 1 located at 7,1", ...), and the server methods and cron
-// jobs narrate every step. both/logging.js only silences this in production and isn't
+// jobs narrate every step. both/logging.ts only silences this in production and isn't
 // part of the import graph under test, so silence it here instead of flipping
 // Meteor.isProduction (which would change what the code under test does).
-// console.error stays live, and deliberately so. both/logging.js silences only
+// console.error stays live, and deliberately so. both/logging.ts silences only
 // console.log in production, which makes warn/error the channels that actually reach a
 // production log — so error is a real signal, not decoration. Two sites use it
-// (both/cardlogic.js: the exhausted-hand branch and the auto-submit timer's catch), and
+// (both/cardlogic.ts: the exhausted-hand branch and the auto-submit timer's catch), and
 // several tests legitimately drive them.
 //
 // Keeping the run quiet is the reporter's job, not this file's: `silent: 'passed-only'`

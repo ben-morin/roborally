@@ -1,19 +1,19 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
-import { CardLogic } from '../../../both/cardlogic.js';
-import { GameLogic } from '../../../both/gamelogic.js';
-import { GameState } from '../../../both/gamestate.js';
+import { CardLogic } from '../../../both/cardlogic.ts';
+import { GameLogic } from '../../../both/gamelogic.ts';
+import { GameState } from '../../../both/gamestate.ts';
 import {
   deselectAllCards,
   deselectCard,
   playCards,
   selectCard,
   togglePowerDown,
-} from '../../../both/methods/cards.js';
-import { Cards } from '../../../collections/cards.js';
-import { Games } from '../../../collections/games.js';
-import { Players } from '../../../collections/players.js';
-import { addUIData } from '../../lib/cardUI.js';
-import { firstEmptySlot, nextEmptySlot } from '../../lib/slots.js';
+} from '../../../both/methods/cards.ts';
+import { Cards } from '../../../collections/cards.ts';
+import { Games } from '../../../collections/games.ts';
+import { Players } from '../../../collections/players.ts';
+import { addUIData } from '../../lib/cardUI.ts';
+import { firstEmptySlot, nextEmptySlot } from '../../lib/slots.ts';
 import { modalAlert } from '../../helper/modalDialogs.js';
 import './cards.html';
 

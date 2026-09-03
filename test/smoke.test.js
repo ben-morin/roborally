@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 describe('model imports outside Meteor', () => {
   it('imports every both/ and collections/ module and builds a real board', async () => {
-    const { Tile } = await import('../both/tile.js');
-    const { Area } = await import('../both/area.js');
-    const { BoardBox } = await import('../both/board_box.js');
-    const { GameLogic } = await import('../both/gamelogic.js');
-    const { GameState } = await import('../both/gamestate.js');
-    await import('../both/board.js');
-    await import('../both/cardlogic.js');
-    await import('../both/shuffle.js');
-    await import('../both/permissions.js');
-    await import('../collections/cards.js');
-    await import('../collections/chat.js');
-    await import('../collections/deck.js');
-    await import('../collections/games.js');
-    await import('../collections/highscores.js');
-    await import('../collections/players.js');
+    const { Tile } = await import('../both/tile.ts');
+    const { Area } = await import('../both/area.ts');
+    const { BoardBox } = await import('../both/board_box.ts');
+    const { GameLogic } = await import('../both/gamelogic.ts');
+    const { GameState } = await import('../both/gamestate.ts');
+    await import('../both/board.ts');
+    await import('../both/cardlogic.ts');
+    await import('../both/shuffle.ts');
+    await import('../both/permissions.ts');
+    await import('../collections/cards.ts');
+    await import('../collections/chat.ts');
+    await import('../collections/deck.ts');
+    await import('../collections/games.ts');
+    await import('../collections/highscores.ts');
+    await import('../collections/players.ts');
 
     expect(Tile.ROLLER).toBe('roller');
     expect(Area.course.exchange).toBeTypeOf('function');

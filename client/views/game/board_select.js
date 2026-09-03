@@ -1,7 +1,7 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
-import { BoardBox } from '../../../both/board_box.js';
-import { selectBoard } from '../../../both/methods/games.js';
-import { Games } from '../../../collections/games.js';
+import { BoardBox } from '../../../both/board_box.ts';
+import { selectBoard } from '../../../both/methods/games.ts';
+import { Games } from '../../../collections/games.ts';
 import { modalAlert } from '../../helper/modalDialogs.js';
 // board_select.html includes {{> thumbnail}}.
 import '../board/thumbnail.js';

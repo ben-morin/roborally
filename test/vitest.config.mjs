@@ -54,10 +54,10 @@ export default defineConfig({
     // would never match anyway — this writes the boundary down. Setting `exclude`
     // replaces vitest's defaults (node_modules and friends), hence the spread.
     exclude: [...configDefaults.exclude, 'test/e2e/**'],
-    // A passing test should say nothing. `both/logging.js` silences only console.log in
+    // A passing test should say nothing. `both/logging.ts` silences only console.log in
     // production, so console.error stays live in the harness (see test/setup.js) — and
     // several tests legitimately drive code that calls it, e.g. the exhausted-hand branch
-    // in both/cardlogic.js. Suppressing that for green tests keeps the run readable;
+    // in both/cardlogic.ts. Suppressing that for green tests keeps the run readable;
     // 'passed-only' still prints everything a *failing* test logged, which is the moment
     // the output is actually worth reading.
     silent: 'passed-only',

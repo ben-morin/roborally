@@ -1,10 +1,10 @@
 // Pins the jam:easy-schema configuration, because both halves of it are load-bearing and
 // neither one fails loudly when it is wrong: a bad `Null` compiles to "accepts anything"
 // and a missing `Number` remap makes the database refuse every integer. See the comments
-// in both/easySchemaConfig.js.
+// in both/easySchemaConfig.ts.
 import { describe, expect, it } from 'vitest';
 import { easySchemaConfig } from 'meteor/jam:easy-schema';
-import { Null } from '../../both/easySchemaConfig.js';
+import { Null } from '../../both/easySchemaConfig.ts';
 
 describe('easy-schema configuration', () => {
   it('relaxes only the database validator, to moderate', () => {

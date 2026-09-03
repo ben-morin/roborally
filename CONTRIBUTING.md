@@ -17,18 +17,20 @@ receive or to decline.
 
    ```
    meteor npm run lint
+   meteor npm run typecheck
    meteor npm run format
    meteor npm test
    ```
 
-   All three must be clean. `format` rewrites files, so re-check `git status` afterwards. The
+   All four must be clean. `format` rewrites files, so re-check `git status` afterwards. The
    browser smoke test (`meteor npm run test:e2e`, see [tests](#tests)) is optional locally — CI
    runs it on every PR — but worth a run if you touched the build config, a stylesheet or a
    template.
 
 5. **Open a pull request against `main`.** Say what changed and why. If it fixes an issue, link it.
-6. **CI runs automatically** — lint, format, the vitest suite, the browser smoke test, and a full
-   production Docker build. All of it must pass. See [ci](#ci) below for what each job does.
+6. **CI runs automatically** — lint, typecheck, format, the vitest suite, the browser smoke test,
+   and a full production Docker build. All of it must pass. See [ci](#ci) below for what each job
+   does.
 
 Some things worth knowing:
 
@@ -38,7 +40,8 @@ Some things worth knowing:
   to be revisited over time. So a mismatch is not automatically a bug: please open an issue and
   ask before "correcting" one, since the existing behaviour may be load-bearing.
 - **Match the surrounding style.** No implicit globals — every shared symbol is an ES module
-  export, and ESLint treats `no-undef` as an error.
+  export, and ESLint treats `no-undef` as an error. The game model, engine, methods and server are
+  TypeScript; see [types](#types).
 - **Tests are welcome** anywhere, and expected for game-logic changes. The suite needs no Meteor
   and no MongoDB, so adding a case is cheap.
 - **Releases are cut by the maintainer.** You do not need to bump a version or tag anything.
@@ -136,6 +139,29 @@ On a failure the HTML report opens with a trace of the run. Reports and traces l
 `meteor npm run test:e2e:ui` opens Playwright's UI mode. After a `@playwright/test` version bump,
 run `e2e:install` again so the browser matches.
 
+## types
+
+```
+meteor npm run typecheck
+```
+
+`both/`, `collections/`, `server/` and `client/lib/` are TypeScript under `strict`, checked by
+`tsc --noEmit` against the root `tsconfig.json`. The build does not type-check — SWC only strips
+types — so this script is the only thing that catches a type error, and CI runs it on every PR.
+Three conventions to match:
+
+- **Import specifiers name the real file**, extension included: `import { Tile } from './tile.ts'`.
+  Nothing in the build or the test runner rewrites `.js` to `.ts`, so renaming a module means
+  updating every importer, tests included.
+- **No `any`.** `@typescript-eslint/no-explicit-any` is an error, and a `!`, an `as` or a
+  `@ts-expect-error` wants a one-line comment saying why it is safe.
+- **The Blaze view layer is still JavaScript** — `client/main.js`, `client/helper/` and
+  `client/views/` — and so are the tests under `test/`. Both are left for the React migration, so
+  match what is already in the directory you are adding to.
+
+Types for the Atmosphere packages the app imports are hand-written in `both/types/*.d.ts`, so an
+import from a package that is not declared there is a compile error until you add it.
+
 ## lint and format
 
 ```
@@ -144,8 +170,10 @@ meteor npm run format
 ```
 
 ESLint treats `no-undef` as an error. Every app symbol is an ES module export, so a reintroduced
-implicit global fails the lint rather than waiting to surface as a runtime `ReferenceError`. Both
-commands should stay at zero errors and zero warnings.
+implicit global fails the lint rather than waiting to surface as a runtime `ReferenceError`. In
+`.ts` files that rule and `no-unused-vars` are off, because the compiler owns both and
+`typescript-eslint` replaces the second. Both commands should stay at zero errors and zero
+warnings.
 
 ## ci
 
@@ -154,8 +182,9 @@ Three GitHub Actions workflows gate a change, in `.github/workflows/` (a fourth,
 `main`):
 
 - `ci.yml` — on every push to `main` and every PR. Runs `npm ci`, `npm run lint`,
-  `npm run format:check` and `npm test` on Node 24. No Meteor, no Docker, no MongoDB: the vitest
-  suite shims Meteor, so plain `npm` is enough and the job takes well under a minute.
+  `npm run typecheck`, `npm run format:check` and `npm test` on Node 24. No Meteor, no Docker, no
+  MongoDB: `tsc` and the vitest suite both run under plain `npm`, so the job takes well under a
+  minute.
 - `image.yml` — on every PR, builds the production `Dockerfile` for `linux/amd64` and throws the
   result away. This is the only check that catches a broken `meteor build`; the vitest suite
   cannot. On a `v*` tag it builds both architectures and publishes the image to Docker Hub;

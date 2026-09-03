@@ -1,10 +1,10 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
-import { GameState } from '../../../both/gamestate.js';
-import { addMessage } from '../../../both/methods/chat.js';
-import { leaveGame } from '../../../both/methods/games.js';
-import { Chat } from '../../../collections/chat.js';
-import { Games } from '../../../collections/games.js';
-import { Players } from '../../../collections/players.js';
+import { GameState } from '../../../both/gamestate.ts';
+import { addMessage } from '../../../both/methods/chat.ts';
+import { leaveGame } from '../../../both/methods/games.ts';
+import { Chat } from '../../../collections/chat.ts';
+import { Games } from '../../../collections/games.ts';
+import { Players } from '../../../collections/players.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.js';
 import './chat.html';
 

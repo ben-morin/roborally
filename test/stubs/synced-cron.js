@@ -1,4 +1,4 @@
-// Resolves `meteor/quave:synced-cron` for server/cron.js. Instead of scheduling, this
+// Resolves `meteor/quave:synced-cron` for server/cron.ts. Instead of scheduling, this
 // records each job by name so a test can invoke its body directly — the three cron jobs
 // hold real cleanup logic (abandoned games, inactive users, highscore rebuilds) that is
 // otherwise unreachable without waiting out a schedule.
@@ -29,7 +29,7 @@ export function cronStarted() {
   return started;
 }
 
-/** Run a cron job's body. Names must match server/cron.js exactly. */
+/** Run a cron job's body. Names must match server/cron.ts exactly. */
 export function runCronJob(name) {
   const job = jobs.get(name);
   if (!job) {
@@ -41,7 +41,7 @@ export function runCronJob(name) {
 }
 
 /**
- * The human schedule string, e.g. 'every 1 hour'. server/cron.js expresses schedules as
+ * The human schedule string, e.g. 'every 1 hour'. server/cron.ts expresses schedules as
  * `(parser) => parser.text('...')`, so this replays that callback with a probe.
  */
 export function cronSchedule(name) {

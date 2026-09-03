@@ -14,8 +14,8 @@
 //     anonymous call with malformed arguments therefore gets the logged-out error, not a
 //     400.
 //   - `open` and `serverOnly` are read at DEFINITION time; `loggedOutError` and the global
-//     `before`/`after` per call. That split is the reason every both/methods/*.js starts
-//     with `import './config.js'` — a method defined before the configure call would keep
+//     `before`/`after` per call. That split is the reason every both/methods/*.ts starts
+//     with `import './config.ts'` — a method defined before the configure call would keep
 //     the package defaults forever, and only for itself.
 //   - Pipeline threading: a `before` result is discarded and the validated input flows on;
 //     `run`'s result is what `after` receives and what the call returns.
@@ -118,7 +118,7 @@ export function createMethod(definition) {
     // A `schema` is a pass-through for the same reason test/stubs/jam-easy-schema.js
     // validates nothing: the real validator needs a Meteor build and a live MongoDB, and
     // is exercised in the browser by test/e2e/. Every method here passes `validate`
-    // instead — see the header of both/schemas/methods.js for why.
+    // instead — see the header of both/schemas/methods.ts for why.
     if (validate) await validate.call(this, data);
 
     const onResult = [];

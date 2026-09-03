@@ -1,14 +1,14 @@
 // Shared fixtures for tests that exercise CardLogic/GameLogic/GameState through the
-// real collection transforms (Games/Players/Cards/Deck), backed by the in-memory
+// real collection transforms (Games/Players/Cards/Decks), backed by the in-memory
 // FakeCollection from test/setup.js. Each insert*/make* helper returns the freshly
 // read-back, transform-wrapped instance (exactly what production code operates on),
 // not the raw insert payload.
-import { Games } from '../../collections/games.js';
-import { Players } from '../../collections/players.js';
-import { Cards } from '../../collections/cards.js';
-import { Deck } from '../../collections/deck.js';
-import { GameState } from '../../both/gamestate.js';
-import { GameLogic } from '../../both/gamelogic.js';
+import { Games } from '../../collections/games.ts';
+import { Players } from '../../collections/players.ts';
+import { Cards } from '../../collections/cards.ts';
+import { Decks } from '../../collections/deck.ts';
+import { GameState } from '../../both/gamestate.ts';
+import { GameLogic } from '../../both/gamelogic.ts';
 
 export async function insertGame(overrides = {}) {
   const id = await Games.insertAsync({
@@ -66,12 +66,12 @@ export async function insertCards(playerId, gameId, overrides = {}) {
 }
 
 export async function insertDeck(gameId, overrides = {}) {
-  const id = await Deck.insertAsync({
+  const id = await Decks.insertAsync({
     gameId,
     cards: [],
     optionCards: [],
     discardedOptionCards: [],
     ...overrides,
   });
-  return Deck.findOneAsync(id);
+  return Decks.findOneAsync(id);
 }

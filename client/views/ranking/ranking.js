@@ -1,4 +1,4 @@
-import { Highscores } from '../../../collections/highscores.js';
+import { Highscores } from '../../../collections/highscores.ts';
 import './ranking.html';
 
 Template.ranking.helpers({
