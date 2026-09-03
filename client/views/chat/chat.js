@@ -1,5 +1,7 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
 import { GameState } from '../../../both/gamestate.js';
+import { addMessage } from '../../../both/methods/chat.js';
+import { leaveGame } from '../../../both/methods/games.js';
 import { Chat } from '../../../collections/chat.js';
 import { Games } from '../../../collections/games.js';
 import { Players } from '../../../collections/players.js';
@@ -58,7 +60,7 @@ Template.chat.events({
     };
 
     if (message.message.length > 0) {
-      Meteor.callAsync('addMessage', message).then(
+      addMessage(message).then(
         () => {
           event.target.elements.message.value = '';
         },
@@ -81,7 +83,7 @@ Template.chat.events({
           'If you leave, you will forfeit the game, are you sure you want to give up?'
         )
       ) {
-        Meteor.callAsync('leaveGame', game._id).then(
+        leaveGame({ gameId: game._id }).then(
           () => FlowRouter.go(FlowRouter.path('gamelist.page')),
           (error) => {
             modalAlert(error.reason);

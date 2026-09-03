@@ -1,10 +1,11 @@
-// Drives the real server/methods.js handlers through Meteor.callAsync against the
+// Drives the real both/methods/ handlers through Meteor.callAsync against the
 // in-memory collections — no reimplementation, no mocks except where a handler would
 // otherwise run the whole phase machine (GameState) or the card submission pipeline
 // (CardLogic), both of which have their own tests under test/both/.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import { loginAs, logout, registeredMethods, resetFakeCollections } from '../setup.js';
+import { methodsConfig, simulatedMethods } from '../stubs/jam-method.js';
 import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { BoardBox } from '../../both/board_box.js';
 import { CardLogic } from '../../both/cardlogic.js';
@@ -27,8 +28,9 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('method registration', () => {
   it('registers every method the client calls', () => {
-    // cardMethods.js is loaded for its side effects by the entry point; if that import
-    // is ever dropped, card selection silently stops working. Same for the rest.
+    // Every module under both/methods/ is loaded for its side effects by the entry
+    // point; if one of those imports is ever dropped, that whole surface silently stops
+    // working — card selection, or chat, or the lobby.
     expect(registeredMethods()).toEqual([
       'addMessage',
       'createGame',
@@ -46,6 +48,26 @@ describe('method registration', () => {
       'startGame',
       'togglePowerDown',
     ]);
+  });
+
+  it('configures jam:method before any method module defines a method', () => {
+    // Both are read by `createMethod` in a method module's body, so a module that loaded
+    // ahead of both/methods/config.js would silently keep the package defaults — see the
+    // header there. The 401 is what the deleted `if (!user) throw ...` preambles threw.
+    expect(methodsConfig()).toMatchObject({ serverOnly: true });
+    expect(methodsConfig().loggedOutError).toMatchObject({
+      error: 401,
+      reason: 'You need to login',
+    });
+  });
+
+  // The exceptions to that global default, and the tripwire for it. These three are the
+  // only methods with `serverOnly: false`, so the only ones the browser registers a stub
+  // for — which is what fills a register slot before the round trip. A fourth name here
+  // means some other method started writing to minimongo and reconciling; a missing one
+  // means card selection quietly stopped being instant. Neither shows up as an error.
+  it('simulates the three card-selection methods and nothing else', () => {
+    expect(simulatedMethods()).toEqual(['deselectAllCards', 'deselectCard', 'selectCard']);
   });
 });
 
@@ -114,19 +136,19 @@ describe('createGame', () => {
 describe('joinGame', () => {
   it('refuses an anonymous caller', async () => {
     logout();
-    await expect(call('joinGame', 'nope')).rejects.toMatchObject({ error: 401 });
+    await expect(call('joinGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 401 });
   });
 
   it('refuses an unknown game id', async () => {
     await loginAs();
-    await expect(call('joinGame', 'nope')).rejects.toMatchObject({ error: 404 });
+    await expect(call('joinGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 404 });
   });
 
   it('creates a player with three lives, off-board, and a matching Cards doc', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0, started: false });
 
-    await call('joinGame', gameId);
+    await call('joinGame', { gameId: gameId });
 
     const player = await Players.findOneAsync({ gameId, userId: user._id });
     expect(player).toMatchObject({
@@ -154,7 +176,7 @@ describe('joinGame', () => {
       started: false,
     });
 
-    await call('joinGame', gameId);
+    await call('joinGame', { gameId: gameId });
 
     const player = await Players.findOneAsync({ gameId, userId: user._id });
     expect(player.lives).toBe(1);
@@ -164,8 +186,8 @@ describe('joinGame', () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0, started: false });
 
-    await call('joinGame', gameId);
-    await call('joinGame', gameId);
+    await call('joinGame', { gameId: gameId });
+    await call('joinGame', { gameId: gameId });
 
     expect(await Players.find({ gameId, userId: user._id }).countAsync()).toBe(1);
     expect(await Cards.find({ gameId, userId: user._id }).countAsync()).toBe(1);
@@ -177,9 +199,9 @@ describe('joinGame', () => {
 describe('leaveGame', () => {
   it('refuses an anonymous caller and an unknown game', async () => {
     logout();
-    await expect(call('leaveGame', 'nope')).rejects.toMatchObject({ error: 401 });
+    await expect(call('leaveGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 401 });
     await loginAs();
-    await expect(call('leaveGame', 'nope')).rejects.toMatchObject({ error: 404 });
+    await expect(call('leaveGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 404 });
   });
 
   it('refuses to let a seated player quit outside the program phase', async () => {
@@ -191,7 +213,7 @@ describe('leaveGame', () => {
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
-    await expect(call('leaveGame', gameId)).rejects.toMatchObject({ error: 403 });
+    await expect(call('leaveGame', { gameId: gameId })).rejects.toMatchObject({ error: 403 });
     expect(await Players.find({ gameId }).countAsync()).toBe(1);
   });
 
@@ -203,7 +225,7 @@ describe('leaveGame', () => {
       gamePhase: GameState.PHASE.PLAY,
     });
 
-    await expect(call('leaveGame', gameId)).resolves.not.toThrow();
+    await expect(call('leaveGame', { gameId: gameId })).resolves.not.toThrow();
   });
 
   it('returns held hand and chosen cards to the deck before removing the player', async () => {
@@ -224,7 +246,7 @@ describe('leaveGame', () => {
     });
     await Deck.insertAsync({ gameId, cards: [1], optionCards: [], discardedOptionCards: [] });
 
-    await call('leaveGame', gameId);
+    await call('leaveGame', { gameId: gameId });
 
     const deck = await Deck.findOneAsync({ gameId });
     expect([...deck.cards].sort((a, b) => a - b)).toEqual([1, 11, 12, 20, 21]);
@@ -248,7 +270,7 @@ describe('leaveGame', () => {
     await Players.insertAsync({ gameId, userId: 'other', name: 'other' });
     await Deck.insertAsync({ gameId, cards: [], optionCards: [], discardedOptionCards: [] });
 
-    await call('leaveGame', gameId);
+    await call('leaveGame', { gameId: gameId });
 
     const deck = await Deck.findOneAsync({ gameId });
     expect(deck.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
@@ -266,7 +288,7 @@ describe('leaveGame', () => {
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
     await Players.insertAsync({ gameId, userId: 'other', name: 'survivor' });
 
-    await call('leaveGame', gameId);
+    await call('leaveGame', { gameId: gameId });
 
     const game = await Games.findOneAsync(gameId);
     expect(game.gamePhase).toBe(GameState.PHASE.ENDED);
@@ -288,7 +310,7 @@ describe('leaveGame', () => {
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
-    await call('leaveGame', gameId);
+    await call('leaveGame', { gameId: gameId });
 
     const game = await Games.findOneAsync(gameId);
     expect(game.gamePhase).toBe(GameState.PHASE.ENDED);
@@ -303,7 +325,7 @@ describe('leaveGame', () => {
     const gameId = await Games.insertAsync({ boardId: 0, started: false });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
-    await call('leaveGame', gameId);
+    await call('leaveGame', { gameId: gameId });
 
     const game = await Games.findOneAsync(gameId);
     expect(game.gamePhase).toBeUndefined();
@@ -317,7 +339,9 @@ describe('selectBoard', () => {
     await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('selectBoard', 'no such board', gameId)).rejects.toMatchObject({
+    await expect(
+      call('selectBoard', { boardName: 'no such board', gameId: gameId })
+    ).rejects.toMatchObject({
       error: 404,
     });
     expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
@@ -325,14 +349,16 @@ describe('selectBoard', () => {
 
   it('refuses an unknown game id', async () => {
     await loginAs();
-    await expect(call('selectBoard', 'checkmate', 'nope')).rejects.toMatchObject({ error: 404 });
+    await expect(
+      call('selectBoard', { boardName: 'checkmate', gameId: 'nope' })
+    ).rejects.toMatchObject({ error: 404 });
   });
 
   it('switches the board and copies its player limits onto the game', async () => {
     await loginAs({ profile: { name: 'Ben' } });
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await call('selectBoard', 'checkmate', gameId);
+    await call('selectBoard', { boardName: 'checkmate', gameId: gameId });
 
     const boardId = BoardBox.getBoardId('checkmate');
     const game = await Games.findOneAsync(gameId);
@@ -351,7 +377,9 @@ describe('selectBoard', () => {
     logout();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('selectBoard', 'checkmate', gameId)).rejects.toMatchObject({ error: 401 });
+    await expect(
+      call('selectBoard', { boardName: 'checkmate', gameId: gameId })
+    ).rejects.toMatchObject({ error: 401 });
     expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
   });
 });
@@ -363,17 +391,17 @@ describe('startGame', () => {
     await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
     await Players.insertAsync({ gameId, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
 
-    await expect(call('startGame', gameId)).rejects.toMatchObject({ error: 403 });
+    await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({ error: 403 });
   });
 
   it('refuses an anonymous caller and an unknown game', async () => {
     const gameId = await Games.insertAsync({ boardId: 0, max_player: 8 });
 
     logout();
-    await expect(call('startGame', gameId)).rejects.toMatchObject({ error: 401 });
+    await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({ error: 401 });
 
     await loginAs();
-    await expect(call('startGame', 'nope')).rejects.toMatchObject({ error: 404 });
+    await expect(call('startGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 404 });
   });
 
   it('places every robot on a start point and advances the phase', async () => {
@@ -387,7 +415,7 @@ describe('startGame', () => {
     await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
     await Players.insertAsync({ gameId, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
 
-    await call('startGame', gameId);
+    await call('startGame', { gameId: gameId });
 
     const board = BoardBox.getBoard(0);
     const players = await Players.find({ gameId }).fetchAsync();
@@ -422,7 +450,10 @@ describe('startGame', () => {
       await insertCards(b._id, game._id, { userId: 'b' });
       const updates = vi.spyOn(Games, 'updateAsync');
 
-      const both = Promise.all([call('startGame', game._id), call('startGame', game._id)]);
+      const both = Promise.all([
+        call('startGame', { gameId: game._id }),
+        call('startGame', { gameId: game._id }),
+      ]);
       await vi.runAllTimersAsync();
       await both;
 
@@ -453,7 +484,9 @@ describe('playCards', () => {
     await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('playCards', gameId, 0)).rejects.toMatchObject({ error: 404 });
+    await expect(call('playCards', { gameId, programRound: 0 })).rejects.toMatchObject({
+      error: 404,
+    });
   });
 
   it('submits the caller’s full program and announces it', async () => {
@@ -468,7 +501,7 @@ describe('playCards', () => {
       chosenCardsCnt: GameLogic.CARD_SLOTS,
     });
 
-    await call('playCards', gameId, 2);
+    await call('playCards', { gameId, programRound: 2 });
 
     expect(submit).toHaveBeenCalledTimes(1);
     expect(submit.mock.calls[0][0]._id).toBe(playerId);
@@ -481,7 +514,7 @@ describe('playCards', () => {
     const gameId = await Games.insertAsync({ boardId: 0, programRound: 1 });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben', submitted: true });
 
-    await call('playCards', gameId, 1);
+    await call('playCards', { gameId, programRound: 1 });
 
     expect(submit).not.toHaveBeenCalled();
     expect(await messages(gameId)).toEqual([]);
@@ -504,7 +537,9 @@ describe('playCards', () => {
       chosenCardsCnt: GameLogic.CARD_SLOTS,
     });
 
-    await expect(call('playCards', gameId, 1)).rejects.toMatchObject({ error: 409 });
+    await expect(call('playCards', { gameId, programRound: 1 })).rejects.toMatchObject({
+      error: 409,
+    });
     expect(submit).not.toHaveBeenCalled();
     expect(await messages(gameId)).toEqual([]);
   });
@@ -521,7 +556,9 @@ describe('playCards', () => {
       chosenCardsCnt: 3,
     });
 
-    await expect(call('playCards', gameId, 1)).rejects.toMatchObject({ error: 403 });
+    await expect(call('playCards', { gameId, programRound: 1 })).rejects.toMatchObject({
+      error: 403,
+    });
     expect(submit).not.toHaveBeenCalled();
   });
 
@@ -537,7 +574,7 @@ describe('playCards', () => {
       chosenCardsCnt: 0,
     });
 
-    await call('playCards', gameId, 1);
+    await call('playCards', { gameId, programRound: 1 });
 
     expect(submit).toHaveBeenCalledTimes(1);
   });
@@ -555,7 +592,7 @@ describe('playCards', () => {
       chosenCardsCnt: 0,
     });
 
-    await call('playCards', gameId, 1);
+    await call('playCards', { gameId, programRound: 1 });
 
     expect(submit).toHaveBeenCalledTimes(1);
   });
@@ -574,7 +611,7 @@ describe('respawn selection', () => {
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
     // The client converts the DOM data attributes; the method's schema says Number.
-    await call('selectRespawnPosition', gameId, 3, 4);
+    await call('selectRespawnPosition', { gameId: gameId, x: 3, y: 4 });
 
     expect(respawn).toHaveBeenCalledTimes(1);
     expect(respawn.mock.calls[0].slice(1)).toEqual([3, 4]);
@@ -593,7 +630,7 @@ describe('respawn selection', () => {
     const gameId = await Games.insertAsync({ boardId: 0 });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
-    await call('selectRespawnDirection', gameId, GameLogic.LEFT);
+    await call('selectRespawnDirection', { gameId: gameId, direction: GameLogic.LEFT });
 
     expect(respawn.mock.calls[0][1]).toBe(GameLogic.LEFT);
     expect(nextPhase).toHaveBeenCalledWith(gameId);
@@ -606,10 +643,14 @@ describe('respawn selection', () => {
     logout();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('selectRespawnPosition', gameId, 3, 4)).rejects.toMatchObject({
+    await expect(
+      call('selectRespawnPosition', { gameId: gameId, x: 3, y: 4 })
+    ).rejects.toMatchObject({
       error: 401,
     });
-    await expect(call('selectRespawnDirection', gameId, GameLogic.LEFT)).rejects.toMatchObject({
+    await expect(
+      call('selectRespawnDirection', { gameId: gameId, direction: GameLogic.LEFT })
+    ).rejects.toMatchObject({
       error: 401,
     });
   });
@@ -618,10 +659,14 @@ describe('respawn selection', () => {
     await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('selectRespawnPosition', gameId, 3, 4)).rejects.toMatchObject({
+    await expect(
+      call('selectRespawnPosition', { gameId: gameId, x: 3, y: 4 })
+    ).rejects.toMatchObject({
       error: 404,
     });
-    await expect(call('selectRespawnDirection', gameId, GameLogic.LEFT)).rejects.toMatchObject({
+    await expect(
+      call('selectRespawnDirection', { gameId: gameId, direction: GameLogic.LEFT })
+    ).rejects.toMatchObject({
       error: 404,
     });
   });
@@ -642,7 +687,7 @@ describe('togglePowerDown', () => {
       powerState: from,
     });
 
-    await expect(call('togglePowerDown', gameId)).resolves.toBe(to);
+    await expect(call('togglePowerDown', { gameId })).resolves.toBe(to);
     expect((await Players.findOneAsync(playerId)).powerState).toBe(to);
   });
 
@@ -650,7 +695,7 @@ describe('togglePowerDown', () => {
     await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0 });
 
-    await expect(call('togglePowerDown', gameId)).rejects.toMatchObject({ error: 404 });
+    await expect(call('togglePowerDown', { gameId })).rejects.toMatchObject({ error: 404 });
   });
 });
 
@@ -676,7 +721,9 @@ describe('addMessage', () => {
 
 describe('resendVerificationEmail', () => {
   it('refuses an address with no account', async () => {
-    await expect(call('resendVerificationEmail', 'nobody@example.com')).rejects.toMatchObject({
+    await expect(
+      call('resendVerificationEmail', { email: 'nobody@example.com' })
+    ).rejects.toMatchObject({
       error: 'user-not-found',
     });
   });
@@ -687,7 +734,9 @@ describe('resendVerificationEmail', () => {
       emails: [{ address: 'done@example.com', verified: true }],
     });
 
-    await expect(call('resendVerificationEmail', 'done@example.com')).rejects.toMatchObject({
+    await expect(
+      call('resendVerificationEmail', { email: 'done@example.com' })
+    ).rejects.toMatchObject({
       error: 'already-verified',
     });
   });
@@ -699,7 +748,7 @@ describe('resendVerificationEmail', () => {
     });
     const send = vi.spyOn(Accounts, 'sendVerificationEmail').mockImplementation(() => {});
 
-    await call('resendVerificationEmail', 'pending@example.com');
+    await call('resendVerificationEmail', { email: 'pending@example.com' });
 
     expect(send).toHaveBeenCalledWith('u2');
   });

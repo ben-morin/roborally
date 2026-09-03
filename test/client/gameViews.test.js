@@ -133,7 +133,7 @@ describe('game page actions', () => {
 
     templateEvent('gamePageActions', `click .${cssClass}`).call(game, { preventDefault() {} });
 
-    expect(call).toHaveBeenCalledWith(method, game._id);
+    expect(call).toHaveBeenCalledWith(method, { gameId: game._id });
   });
 
   it('surfaces a rejected start to the player', async () => {
@@ -267,7 +267,7 @@ describe('board select', () => {
       currentTarget: target,
     });
 
-    expect(call).toHaveBeenCalledWith('selectBoard', 'checkmate', game._id);
+    expect(call).toHaveBeenCalledWith('selectBoard', { boardName: 'checkmate', gameId: game._id });
     await vi.waitFor(() => expect(navigations_()).toEqual([`game.page?_id=${game._id}`]));
   });
 

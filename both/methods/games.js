@@ -1,23 +1,80 @@
-import { BoardBox } from '../both/board_box.js';
-import { CardLogic } from '../both/cardlogic.js';
-import { GameLogic } from '../both/gamelogic.js';
-import { GameState } from '../both/gamestate.js';
-import { getUsername } from '../both/permissions.js';
-import { checkArgs, schemas } from '../both/schemas/methods.js';
-import { Cards } from '../collections/cards.js';
-import { Chat } from '../collections/chat.js';
-import { Deck } from '../collections/deck.js';
-import { Games } from '../collections/games.js';
-import { Players } from '../collections/players.js';
-import { buildHighscores } from './highscores.js';
+import './config.js';
+import { createMethod } from 'meteor/jam:method';
+import { BoardBox } from '../board_box.js';
+import { CardLogic } from '../cardlogic.js';
+import { GameLogic } from '../gamelogic.js';
+import { GameState, buildHighscoresAsync } from '../gamestate.js';
+import { getUsername } from '../permissions.js';
+import { checkArgsWith, schemas } from '../schemas/methods.js';
+import { Cards } from '../../collections/cards.js';
+import { Chat } from '../../collections/chat.js';
+import { Deck } from '../../collections/deck.js';
+import { Games } from '../../collections/games.js';
+import { Players } from '../../collections/players.js';
 
-Meteor.methods({
-  async createGame(postAttributes) {
-    checkArgs(postAttributes, schemas.createGame);
+// The lobby and lifecycle surface: making a game, sitting down at one, leaving it,
+// choosing its board, starting it, and the two halves of a respawn.
+//
+// All seven take the app-wide `serverOnly: true` from ./config.js — no stub is registered
+// and no body runs in the browser. They live under `both/` anyway so the view modules can
+// import the functions instead of naming a method by string; the whole gain of jam:method
+// is that a typo is a build error rather than a 404 at click time.
+//
+// That import direction is also why nothing here may reach into `server/`. `leaveGame`
+// used to `import { buildHighscores } from '../../server/highscores.js'`, which Meteor
+// excludes from the client bundle — the specifier would have no target. It calls
+// `buildHighscoresAsync()` from `both/gamestate.js` instead, the same injected function
+// the phase machine ends a game with.
+
+// The seating half of `joinGame`, lifted out so `createGame` can finish the job itself.
+// It used to end with a nested `Meteor.callAsync` of `joinGame`, which still works on the
+// server (a nested call inherits `userId`), but a method calling a method is one more
+// thing every reader and the test harness has to model. A plain function is not.
+export async function joinGameAsync(gameId, user) {
+  const game = await Games.findOneAsync(gameId);
+  if (!game) throw new Meteor.Error(404, 'Game id not found!');
+
+  const author = getUsername(user);
+  let playerId;
+  if (!(await Players.findOneAsync({ gameId, userId: user._id }))) {
+    // The dev-test board is meant for exercising elimination flows quickly,
+    // so seat players with a single life instead of the standard three.
+    const startingLives = game.boardId === BoardBox.dev_test_board_id ? 1 : 3;
+    playerId = await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: author,
+      lives: startingLives,
+      damage: 0,
+      visited_checkpoints: 0,
+      needsRespawn: false,
+      powerState: GameLogic.ON,
+      optionalInstantPowerDown: false,
+      position: { x: -1, y: -1 },
+      chosenCardsCnt: 0,
+      optionCards: {},
+      cards: Array.from({ length: GameLogic.CARD_SLOTS }, () => CardLogic.EMPTY),
+    });
+    await Cards.insertAsync({
+      gameId,
+      playerId,
+      userId: user._id,
+      chosenCards: Array.from({ length: GameLogic.CARD_SLOTS }, () => CardLogic.EMPTY),
+      handCards: [],
+    });
+  }
+  await game.chatAsync(`${author} joined the game`, gameId);
+  return true;
+}
+
+export const createGame = createMethod({
+  name: 'createGame',
+  // A deliberate click, so a low ceiling costs a real player nothing.
+  rateLimit: { limit: 3, interval: 10000 },
+  validate: checkArgsWith(schemas.createGame),
+  async run(postAttributes) {
     const user = await Meteor.userAsync();
 
-    // ensure the user is logged in
-    if (!user) throw new Meteor.Error(401, 'You need to login to create a game');
     // The schema says `String`, which accepts the empty one; v1 of the schemas uses plain
     // types only, so the name's own rule stays here.
     if (!postAttributes.name || postAttributes.name === '') {
@@ -57,56 +114,27 @@ Meteor.methods({
       message: 'Game created',
       submitted: new Date().getTime(),
     });
-    await Meteor.callAsync('joinGame', gameId);
+    await joinGameAsync(gameId, user);
 
     return gameId;
   },
+});
 
-  async joinGame(gameId) {
-    checkArgs({ gameId }, schemas.joinGame);
-    const user = await Meteor.userAsync();
-
-    if (!user) throw new Meteor.Error(401, 'You need to login to join a game');
-    const game = await Games.findOneAsync(gameId);
-    if (!game) throw new Meteor.Error(404, 'Game id not found!');
-
-    const author = getUsername(user);
-    let playerId;
-    if (!(await Players.findOneAsync({ gameId, userId: user._id }))) {
-      // The dev-test board is meant for exercising elimination flows quickly,
-      // so seat players with a single life instead of the standard three.
-      const startingLives = game.boardId === BoardBox.dev_test_board_id ? 1 : 3;
-      playerId = await Players.insertAsync({
-        gameId,
-        userId: user._id,
-        name: author,
-        lives: startingLives,
-        damage: 0,
-        visited_checkpoints: 0,
-        needsRespawn: false,
-        powerState: GameLogic.ON,
-        optionalInstantPowerDown: false,
-        position: { x: -1, y: -1 },
-        chosenCardsCnt: 0,
-        optionCards: {},
-        cards: Array.from({ length: GameLogic.CARD_SLOTS }, () => CardLogic.EMPTY),
-      });
-      await Cards.insertAsync({
-        gameId,
-        playerId,
-        userId: user._id,
-        chosenCards: Array.from({ length: GameLogic.CARD_SLOTS }, () => CardLogic.EMPTY),
-        handCards: [],
-      });
-    }
-    await game.chatAsync(`${author} joined the game`, gameId);
-    return true;
+export const joinGame = createMethod({
+  name: 'joinGame',
+  // A deliberate click too, one step looser than createGame.
+  rateLimit: { limit: 5, interval: 10000 },
+  validate: checkArgsWith(schemas.joinGame),
+  async run({ gameId }) {
+    return await joinGameAsync(gameId, await Meteor.userAsync());
   },
+});
 
-  async leaveGame(gameId) {
-    checkArgs({ gameId }, schemas.leaveGame);
+export const leaveGame = createMethod({
+  name: 'leaveGame',
+  validate: checkArgsWith(schemas.leaveGame),
+  async run({ gameId }) {
     const user = await Meteor.userAsync();
-    if (!user) throw new Meteor.Error(401, 'You need to login to leave a game');
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
@@ -162,7 +190,7 @@ Meteor.methods({
             stopped: new Date().getTime(),
           },
         });
-        await buildHighscores();
+        await buildHighscoresAsync();
       } else if (players.length === 0) {
         console.log('Nobody left in the game.');
         await Games.updateAsync(game._id, {
@@ -176,11 +204,13 @@ Meteor.methods({
     }
     await game.chatAsync(`${author} left the game`);
   },
+});
 
-  async selectBoard(boardName, gameId) {
-    checkArgs({ boardName, gameId }, schemas.selectBoard);
+export const selectBoard = createMethod({
+  name: 'selectBoard',
+  validate: checkArgsWith(schemas.selectBoard),
+  async run({ boardName, gameId }) {
     const user = await Meteor.userAsync();
-    if (!user) throw new Meteor.Error(401, 'You need to login to select a board');
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
@@ -196,10 +226,12 @@ Meteor.methods({
     const author = getUsername(user);
     await game.chatAsync(`${author} selected board ${boardName}`, `for game${gameId}`);
   },
+});
 
-  async startGame(gameId) {
-    checkArgs({ gameId }, schemas.startGame);
-    if (!Meteor.userId()) throw new Meteor.Error(401, 'You need to login to start a game');
+export const startGame = createMethod({
+  name: 'startGame',
+  validate: checkArgsWith(schemas.startGame),
+  async run({ gameId }) {
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
@@ -223,46 +255,12 @@ Meteor.methods({
     await game.chatAsync('Game started');
     await GameState.nextGamePhaseAsync(gameId);
   },
+});
 
-  async playCards(gameId, programRound) {
-    checkArgs({ gameId, programRound }, schemas.playCards);
-    const game = await Games.findOneAsync(gameId);
-    const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
-    if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
-
-    // A submit can arrive a whole turn late: the final submitter's call spans the
-    // entire turn (submitCardsAsync awaits the phase machine), so a duplicate queued
-    // behind it on the same connection — or a Meteor retry after a reconnect —
-    // executes against the NEXT program phase, where `submitted` has been reset and
-    // the check below passes again. The round number pins a submission to the turn
-    // the client actually saw.
-    if (programRound !== game.programRound) {
-      throw new Meteor.Error(409, 'This submission was for a previous turn.');
-    }
-
-    if (player.submitted) {
-      console.warn('Player already submitted his cards.');
-      return;
-    }
-
-    // Filling empty slots with random cards is the timeout penalty, not a player
-    // choice: outside the expired-timer window an incomplete program can only be a
-    // stale or hand-crafted call, so refuse it rather than submit five random cards.
-    if (
-      !player.isPoweredDown() &&
-      (player.chosenCardsCnt ?? 0) < GameLogic.CARD_SLOTS &&
-      game.timer !== 0
-    ) {
-      throw new Meteor.Error(403, 'Not all program slots are filled.');
-    }
-
-    await player.chatAsync('submitted cards');
-    await CardLogic.submitCardsAsync(player);
-  },
-
-  async selectRespawnPosition(gameId, x, y) {
-    checkArgs({ gameId, x, y }, schemas.selectRespawnPosition);
-    if (!Meteor.userId()) throw new Meteor.Error(401, 'You need to login to respawn');
+export const selectRespawnPosition = createMethod({
+  name: 'selectRespawnPosition',
+  validate: checkArgsWith(schemas.selectRespawnPosition),
+  async run({ gameId, x, y }) {
     const game = await Games.findOneAsync(gameId);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
     if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
@@ -271,10 +269,12 @@ Meteor.methods({
     await player.chatAsync('chose position', `(${x},${y})`);
     await game.nextRespawnPhaseAsync(GameState.RESPAWN_PHASE.CHOOSE_DIRECTION);
   },
+});
 
-  async selectRespawnDirection(gameId, direction) {
-    checkArgs({ gameId, direction }, schemas.selectRespawnDirection);
-    if (!Meteor.userId()) throw new Meteor.Error(401, 'You need to login to respawn');
+export const selectRespawnDirection = createMethod({
+  name: 'selectRespawnDirection',
+  validate: checkArgsWith(schemas.selectRespawnDirection),
+  async run({ gameId, direction }) {
     const game = await Games.findOneAsync(gameId);
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
     if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
@@ -282,47 +282,5 @@ Meteor.methods({
     await GameLogic.respawnPlayerWithDirAsync(player, direction);
     await player.chatAsync('reentered the race', direction);
     await GameState.nextGamePhaseAsync(game._id);
-  },
-
-  async togglePowerDown(gameId) {
-    checkArgs({ gameId }, schemas.togglePowerDown);
-    const player = await Players.findOneAsync({ gameId, userId: Meteor.userId() });
-    if (!player) throw new Meteor.Error(404, `Player not found! ${gameId}`);
-
-    return await player.togglePowerDownAsync();
-  },
-
-  async addMessage(postAttributes) {
-    checkArgs(postAttributes, schemas.addMessage);
-    const user = await Meteor.userAsync();
-
-    // ensure the user is logged in
-    if (!user) throw new Meteor.Error(401, 'You need to login to post messages');
-
-    const author = getUsername(user);
-    const message = {
-      message: postAttributes.message,
-      gameId: postAttributes.gameId,
-      userId: user._id,
-      author,
-      submitted: new Date().getTime(),
-    };
-    await Chat.insertAsync(message);
-  },
-
-  isEmailAvailable() {
-    return !!process.env.EMAIL_URL || Meteor.isDevelopment;
-  },
-
-  async resendVerificationEmail(email) {
-    checkArgs({ email }, schemas.resendVerificationEmail);
-    const user = await Meteor.users.findOneAsync({ 'emails.address': email });
-    if (!user) {
-      throw new Meteor.Error('user-not-found', 'No account found with that email address.');
-    }
-    if (user.emails.some((e) => e.verified)) {
-      throw new Meteor.Error('already-verified', 'Email is already verified.');
-    }
-    Accounts.sendVerificationEmail(user._id);
   },
 });

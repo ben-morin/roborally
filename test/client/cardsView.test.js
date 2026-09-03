@@ -330,7 +330,7 @@ describe('countdown timer', () => {
 
     callHelper('cards', 'timer');
 
-    expect(call).toHaveBeenCalledWith('playCards', game._id, 3);
+    expect(call).toHaveBeenCalledWith('playCards', { gameId: game._id, programRound: 3 });
   });
 
   // Regression: the helper re-runs on every reactive invalidation while the timer sits
@@ -518,7 +518,11 @@ describe('card clicks', () => {
     // Blaze binds the clicked card's data context as `this`.
     templateEvent('card', 'click .available').call({ cardId: TURN_RIGHT, chosen: false });
 
-    expect(call).toHaveBeenCalledWith('selectCard', game._id, TURN_RIGHT, 0);
+    expect(call).toHaveBeenCalledWith('selectCard', {
+      gameId: game._id,
+      card: TURN_RIGHT,
+      index: 0,
+    });
     // Selection moved on, so the next click fills slot 1.
     expect(callHelper('card', 'isSelected', { slot: 1 })).toBe(true);
   });
@@ -548,7 +552,7 @@ describe('card clicks', () => {
 
     templateEvent('card', 'click .played').call({ slot: 0, locked: false });
 
-    expect(call).toHaveBeenCalledWith('deselectCard', game._id, 0);
+    expect(call).toHaveBeenCalledWith('deselectCard', { gameId: game._id, index: 0 });
     expect(callHelper('card', 'isSelected', { slot: 0 })).toBe(true);
   });
 

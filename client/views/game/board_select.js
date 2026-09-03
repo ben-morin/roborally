@@ -1,5 +1,6 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
 import { BoardBox } from '../../../both/board_box.js';
+import { selectBoard } from '../../../both/methods/games.js';
 import { Games } from '../../../collections/games.js';
 import { modalAlert } from '../../helper/modalDialogs.js';
 // board_select.html includes {{> thumbnail}}.
@@ -75,7 +76,7 @@ Template.boardselect.events({
     const game = getGame();
     if (!game) return;
 
-    Meteor.callAsync('selectBoard', boardName, game._id).then(
+    selectBoard({ boardName, gameId: game._id }).then(
       () => FlowRouter.go(FlowRouter.path('game.page', { _id: game._id })),
       (error) => modalAlert(error.reason)
     );

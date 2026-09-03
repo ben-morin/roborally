@@ -136,7 +136,7 @@ describe('games nobody won', () => {
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ann' });
 
-    await Meteor.callAsync('leaveGame', gameId);
+    await Meteor.callAsync('leaveGame', { gameId });
 
     expect((await Games.findOneAsync(gameId)).winner).toBe('Nobody');
     await buildHighscores();
@@ -218,7 +218,7 @@ describe('wins by default', () => {
     await Players.insertAsync({ gameId, userId: user._id, name: 'quitter' });
     await Players.insertAsync({ gameId, userId: 'ann', name: 'ann' });
 
-    await Meteor.callAsync('leaveGame', gameId);
+    await Meteor.callAsync('leaveGame', { gameId });
 
     expect((await Games.findOneAsync(gameId)).winner).toBe('ann');
     expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);

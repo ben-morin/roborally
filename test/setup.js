@@ -1,10 +1,16 @@
 // Vitest setupFile: makes the game model and the server importable outside Meteor.
 //
-// Ground truth: the M2 import graph
-// means even "pure" classes like Tile transitively import collections that call
-// `new Meteor.Collection(...)` at module-body time. Without a `Meteor` global, every
-// both/*.js file except area.js and shuffle.js throws `ReferenceError: Meteor is not
-// defined` on import.
+// Needed because even "pure" classes like Tile transitively import collections, and a
+// collection constructs at module-body time. Measured with the setup file removed: of the
+// eleven both/*.js modules, only area.js, shuffle.js, permissions.js and
+// easySchemaConfig.js import cleanly with no Meteor global. The other seven throw on
+// import — logging.js with `ReferenceError: Meteor is not defined`, and the six that reach
+// a collection (tile, board, board_box, gamelogic, cardlogic, gamestate) with
+// `TypeError: Cannot read properties of undefined (reading 'Collection')`, thrown inside
+// test/stubs/meteor-mongo.js. That stub is the indirection: the collections construct
+// through `new Mongo.Collection(...)`, because jam:easy-schema wraps only `Mongo` and not
+// the `Meteor.Collection` alias, so the stub resolves `meteor/mongo` and hands back the
+// `Meteor.Collection` this file installs below.
 //
 // FakeCollection is a real (if minimal) in-memory Mongo-alike rather than an inert
 // stub: CardLogic/GameLogic/GameState tests drive genuine read-mutate-updateAsync
@@ -47,7 +53,7 @@ function unsetPath(obj, path) {
 }
 
 // Mongo resolves a dotted path through arrays of subdocuments: `{'emails.address': x}`
-// matches when ANY element of `emails` has that address (server/methods.js's
+// matches when ANY element of `emails` has that address (both/methods/accounts.js's
 // resendVerificationEmail relies on this). Returns every candidate value the path
 // reaches — one entry for a plain nested field, N for an array, none when an array
 // holds no element carrying the key.

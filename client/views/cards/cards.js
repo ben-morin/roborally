@@ -2,6 +2,13 @@ import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
 import { CardLogic } from '../../../both/cardlogic.js';
 import { GameLogic } from '../../../both/gamelogic.js';
 import { GameState } from '../../../both/gamestate.js';
+import {
+  deselectAllCards,
+  deselectCard,
+  playCards,
+  selectCard,
+  togglePowerDown,
+} from '../../../both/methods/cards.js';
 import { Cards } from '../../../collections/cards.js';
 import { Games } from '../../../collections/games.js';
 import { Players } from '../../../collections/players.js';
@@ -397,8 +404,8 @@ Template.playerStatus.helpers({
 // slot indices (its `selectable` argument), so a small-hand card has no `slot` at all —
 // which is the test for "this card is not one of mine". Without it, clicking someone
 // else's empty slot reset your own selection to the first free slot, and clicking a card
-// they had revealed sent `deselectCard(gameId, undefined)` to the server. That call is
-// ignored today only because `undefined < notLockedCnt()` is false.
+// they had revealed sent `deselectCard({ gameId, index: undefined })` to the server. That
+// call is ignored today only because `undefined < notLockedCnt()` is false.
 Template.card.events({
   'click .available'() {
     if (this.chosen) return;
@@ -412,7 +419,7 @@ Template.card.events({
     console.log('choose card ', this.cardId, ' for slot ', currentSlot);
 
     if (player.isPoweredDown()) {
-      Meteor.callAsync('togglePowerDown', player.gameId).then(
+      togglePowerDown({ gameId: player.gameId }).then(
         () => refreshPlayButton(),
         (error) => modalAlert(error.reason)
       );
@@ -444,7 +451,7 @@ Template.cards.events({
   'click .powerBtn'() {
     const game = getGame();
     if (!game) return;
-    Meteor.callAsync('togglePowerDown', game._id).then(
+    togglePowerDown({ gameId: game._id }).then(
       (powerState) => {
         if (powerState === GameLogic.OFF) {
           unchooseAllCards(getPlayer());
@@ -468,14 +475,14 @@ function refreshPlayButton() {
 }
 
 function chooseCard(gameId, card, slot) {
-  Meteor.callAsync('selectCard', gameId, card, slot).then(
+  selectCard({ gameId, card, index: slot }).then(
     () => refreshPlayButton(),
     (error) => modalAlert(error.reason)
   );
 }
 
 function unchooseCard(gameId, slot) {
-  Meteor.callAsync('deselectCard', gameId, slot).then(
+  deselectCard({ gameId, index: slot }).then(
     () => refreshPlayButton(),
     (error) => modalAlert(error.reason)
   );
@@ -483,7 +490,7 @@ function unchooseCard(gameId, slot) {
 
 function unchooseAllCards(player) {
   cardsState.set('selectedSlot', 0);
-  Meteor.callAsync('deselectAllCards', player.gameId).catch((error) => modalAlert(error.reason));
+  deselectAllCards({ gameId: player.gameId }).catch((error) => modalAlert(error.reason));
 }
 
 function getChosenCnt() {
@@ -521,7 +528,7 @@ function submitCards(game) {
     .forEach((el) => el.classList.remove('countdown', 'finish'));
   // The round number lets the server reject this call if it arrives after the turn
   // it was meant for (queued duplicate, or a Meteor retry after a reconnect).
-  Meteor.callAsync('playCards', game._id, game.programRound).then(
+  playCards({ gameId: game._id, programRound: game.programRound }).then(
     () => cardsState.set('selectedSlot', 0),
     (error) => {
       cardsState.set('selectedSlot', 0);

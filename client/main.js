@@ -10,6 +10,10 @@ import '../both/logging.js';
 // module body, and it reads this configuration as it goes. See both/easySchemaConfig.js.
 import '../both/easySchemaConfig.js';
 
+// Same rule, for the same reason: jam:method reads this configuration when a method module
+// runs `createMethod`. See both/methods/config.js.
+import '../both/methods/config.js';
+
 // Bootstrap's JS. Imported for its side effects: each component registers a delegated
 // `data-bs-*` handler on `document` at module load, which is what drives the markup-only
 // widgets (the navbar `collapse`, the board-select `pill` tabs, `data-bs-dismiss` in the
@@ -49,10 +53,8 @@ import './views/game/game_page.js';
 import './views/layout/applicationLayout.js';
 import './views/ranking/ranking.js';
 
-// Files nothing else imports: `cardMethods.js` registers method stubs for the
-// client-side simulation, and `collections/users.js` exists only for its load-time
-// observe.
-import '../both/cardMethods.js';
+// The one file nothing else imports: `collections/users.js` exists only for its
+// load-time observe.
 import '../collections/users.js';
 
 Meteor.subscribe('onlineUsers');

@@ -6,7 +6,13 @@ import '../both/logging.js';
 // Before anything that reaches a collection: a schema is attached in the collection's
 // module body, and it reads this configuration as it goes. See both/easySchemaConfig.js.
 import '../both/easySchemaConfig.js';
-import '../both/cardMethods.js';
+// Same rule, for the same reason: jam:method reads this configuration when a method module
+// runs `createMethod`. See both/methods/config.js.
+import '../both/methods/config.js';
+import '../both/methods/accounts.js';
+import '../both/methods/cards.js';
+import '../both/methods/chat.js';
+import '../both/methods/games.js';
 import '../collections/users.js';
 
 import { SyncedCron } from 'meteor/quave:synced-cron';
@@ -19,9 +25,7 @@ import { markBooted, bootedAtMs } from './boot.js';
 import { buildHighscores } from './highscores.js';
 import { resumeStalledTurnsAsync } from './resume.js';
 import './accounts.js';
-import './methods.js';
 import './publications.js';
-import './rateLimits.js';
 
 Meteor.settings = Meteor.settings || {};
 Meteor.settings.public = Meteor.settings.public || {};

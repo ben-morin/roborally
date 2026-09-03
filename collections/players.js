@@ -280,7 +280,7 @@ const schema = {
   //
   // 0..3, set when the game starts and on respawn.
   direction: Optional(Number),
-  // A stringified array index — see the `for...in` note in server/methods.js.
+  // A stringified array index — see the `for...in` note in both/methods/games.js.
   robotId: Optional(String),
   // `startGame` writes the board's startpoint, {x, y, direction}; the first checkpoint or
   // repair tile then REPLACES it with {x, y} only, so `direction` has to stay optional.

@@ -390,7 +390,7 @@ Template._loginButtonsLoggedOutDropdown.events({
       return;
     }
 
-    Meteor.call('resendVerificationEmail', email, (error) => {
+    Meteor.call('resendVerificationEmail', { email }, (error) => {
       if (error) {
         loginButtonsSession.set('needsEmailVerification', true);
         loginButtonsSession.errorMessage(error.reason || 'Failed to resend verification email.');

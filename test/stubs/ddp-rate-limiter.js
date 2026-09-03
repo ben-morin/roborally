@@ -1,4 +1,5 @@
-// server/rateLimits.js is the only importer. The real package throttles DDP messages,
+// test/stubs/jam-method.js is the only importer: a `rateLimit:` on a createMethod
+// definition registers a rule here. The real package throttles DDP messages,
 // which the harness has none of; what a test can meaningfully check is that the rules
 // were registered at all, and against which methods — so record them.
 const rules = [];

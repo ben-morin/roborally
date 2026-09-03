@@ -192,7 +192,7 @@ describe('chat', () => {
       await clickCancel();
 
       expect(modalConfirm).toHaveBeenCalled();
-      expect(call).toHaveBeenCalledWith('leaveGame', game._id);
+      expect(call).toHaveBeenCalledWith('leaveGame', { gameId: game._id });
       await vi.waitFor(() => expect(navigations_()).toEqual(['gamelist.page']));
     });
 

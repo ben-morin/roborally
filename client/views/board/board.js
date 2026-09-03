@@ -2,6 +2,11 @@ import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
 import { CardLogic } from '../../../both/cardlogic.js';
 import { GameLogic } from '../../../both/gamelogic.js';
 import { GameState } from '../../../both/gamestate.js';
+import {
+  leaveGame,
+  selectRespawnDirection,
+  selectRespawnPosition,
+} from '../../../both/methods/games.js';
 import { Games } from '../../../collections/games.js';
 import { Players } from '../../../collections/players.js';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.js';
@@ -439,7 +444,7 @@ Template.board.events({
           'If you leave, you will forfeit the game, are you sure you want to give up?'
         )
       ) {
-        Meteor.callAsync('leaveGame', game._id).then(
+        leaveGame({ gameId: game._id }).then(
           () => {
             FlowRouter.go(FlowRouter.path('gamelist.page'));
           },
@@ -457,16 +462,15 @@ Template.board.events({
     const game = getGame();
     // `dataset` values are strings; the method's schema says Number, and the server no
     // longer coerces.
-    Meteor.callAsync(
-      'selectRespawnPosition',
-      game._id,
-      Number(e.target.dataset.x),
-      Number(e.target.dataset.y)
-    ).catch((error) => modalAlert(error.reason));
+    selectRespawnPosition({
+      gameId: game._id,
+      x: Number(e.target.dataset.x),
+      y: Number(e.target.dataset.y),
+    }).catch((error) => modalAlert(error.reason));
   },
   'click .direction-select'(e) {
     const game = getGame();
-    Meteor.callAsync('selectRespawnDirection', game._id, Number(e.target.dataset.dir)).catch(
+    selectRespawnDirection({ gameId: game._id, direction: Number(e.target.dataset.dir) }).catch(
       (error) => modalAlert(error.reason)
     );
   },

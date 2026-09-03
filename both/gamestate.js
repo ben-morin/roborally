@@ -41,6 +41,12 @@ export function setBuildHighscores(fn) {
   buildHighscores = fn;
 }
 
+// For code in both/ that ends a game outside the phase machine (leaveGame). Same
+// injected function; the default no-op is never reached, for the reason above.
+export function buildHighscoresAsync() {
+  return buildHighscores();
+}
+
 const _NEXT_PHASE_DELAY = 250;
 const _ANNOUNCE_NEXT_PHASE = 1000;
 const _ANNOUNCE_CARD_TIME = 1750; // match to .fadeInAndOut duration in game.scss

@@ -2,10 +2,15 @@ import { check } from 'meteor/jam:easy-schema';
 
 // The shape of every method's arguments, in one place.
 //
-// Methods take positional arguments, so each handler builds a small object out of them and
-// hands it to `checkArgs` with the shape below. That is on purpose: P5 turns these methods
-// into `createMethod({ schema })`, which takes exactly one named-argument object — so the
-// shapes move over as they are instead of being rewritten.
+// A jam:method takes exactly one argument object, and these are its keys. Each method
+// declares its shape as `validate: checkArgsWith(schemas.x)`.
+//
+// `validate`, and not the package's own `schema:` option, because the two take different
+// routes: `schema` makes jam:method call easy-schema itself and throw the raw
+// ValidationError before a method's pipeline even exists, which is precisely the generic
+// error `checkArgs` below exists to translate. `validate` is the seam — a plain function,
+// so the mapping stays ours. (The two are mutually exclusive; passing both throws at
+// definition time.)
 //
 // The publications that take a `gameId` use `gameIdOnly` too. They used to pass whatever
 // arrived straight into a Mongo query.
@@ -24,6 +29,11 @@ export const checkArgs = (data, schema) => {
     throw new Meteor.Error(400, details || error.reason || 'Invalid arguments.');
   }
 };
+
+// The `validate` a method declares: a function of the one argument object, which throws
+// the mapped error above when the shape is wrong. `this` is the method invocation, and is
+// deliberately unused — validation never depends on who is calling.
+export const checkArgsWith = (schema) => (args) => checkArgs(args, schema);
 
 // Six methods and the three game publications all take nothing but a game id.
 export const gameIdOnly = { gameId: String };

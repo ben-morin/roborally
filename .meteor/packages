@@ -31,10 +31,11 @@ email@3.2.0
 
 accounts-password@3.3.1
 ben-morin:accounts-ui-roborally
-ddp-rate-limiter@1.3.0        # server/rateLimits.js; was already in the bundle transitively
+ddp-rate-limiter@1.3.0        # the rateLimit: option on the methods; already in the bundle transitively
 
 ostrio:flow-router-extra
 
 quave:synced-cron@2.4.0
 rspack@1.2.0
 jam:easy-schema
+jam:method

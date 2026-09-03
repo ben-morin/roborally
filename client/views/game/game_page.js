@@ -1,4 +1,5 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { joinGame, leaveGame, startGame } from '../../../both/methods/games.js';
 import { Games } from '../../../collections/games.js';
 import { Players } from '../../../collections/players.js';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.js';
@@ -63,19 +64,19 @@ Template.gamePageActions.events({
   'click .join'(e) {
     e.preventDefault();
 
-    Meteor.callAsync('joinGame', this._id).catch((error) => modalAlert(error.reason));
+    joinGame({ gameId: this._id }).catch((error) => modalAlert(error.reason));
   },
   'click .leave'(e) {
     e.preventDefault();
 
-    Meteor.callAsync('leaveGame', this._id).catch((error) => modalAlert(error.reason));
+    leaveGame({ gameId: this._id }).catch((error) => modalAlert(error.reason));
   },
 
   'click .start'(e) {
     e.preventDefault();
     const gameId = this._id;
 
-    Meteor.callAsync('startGame', gameId).catch((error) => modalAlert(error.reason));
+    startGame({ gameId }).catch((error) => modalAlert(error.reason));
   },
 });
 

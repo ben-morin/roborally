@@ -1,4 +1,5 @@
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
+import { createGame } from '../../../both/methods/games.js';
 import { Games } from '../../../collections/games.js';
 import { modalAlert } from '../../helper/modalDialogs.js';
 import './game_list.html';
@@ -28,7 +29,7 @@ Template.gameItemPostForm.events({
       name: event.target.elements.name.value,
     };
 
-    Meteor.callAsync('createGame', game).then(
+    createGame(game).then(
       (id) => FlowRouter.go(FlowRouter.path('game.page', { _id: id })),
       (error) => modalAlert(error.reason)
     );

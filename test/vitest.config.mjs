@@ -37,6 +37,7 @@ export default defineConfig({
       { find: /^meteor\/mongo$/, replacement: stub('meteor-mongo.js') },
       { find: /^meteor\/check$/, replacement: stub('meteor-check.js') },
       { find: /^meteor\/jam:easy-schema$/, replacement: stub('jam-easy-schema.js') },
+      { find: /^meteor\/jam:method$/, replacement: stub('jam-method.js') },
       { find: /^meteor\/ddp-rate-limiter$/, replacement: stub('ddp-rate-limiter.js') },
       { find: /^meteor\/quave:synced-cron$/, replacement: stub('synced-cron.js') },
       { find: /^meteor\/ostrio:flow-router-extra$/, replacement: stub('flow-router.js') },
