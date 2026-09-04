@@ -17,8 +17,11 @@
     "verbatimModuleSyntax": true,
     // Specifiers name the real file (`./tile.ts`); legal because nothing is emitted.
     "allowImportingTsExtensions": true,
+    // Matches the automatic runtime .swcrc selects, so a .tsx file needs no React import.
+    "jsx": "react-jsx",
     // Off on purpose: with it on, errors in both/types/*.d.ts are swallowed too.
     "skipLibCheck": false
   },
-  "include": ["both", "collections", "server", "client"]
+  // The component tests are TypeScript and are checked; the .js tests are not.
+  "include": ["both", "collections", "server", "client", "test/**/*.tsx"]
 }

@@ -533,6 +533,7 @@ const publications = new Map();
 const startupCallbacks = [];
 let currentUserId = null;
 let userSeq = 0;
+let loggingIn = false;
 
 function methodInvocation() {
   return {
@@ -550,6 +551,7 @@ export function resetFakeCollections() {
   for (const c of allFakeCollections) c._reset();
   currentUserId = null;
   userSeq = 0;
+  loggingIn = false;
   writes = 0;
   armedCrash = null;
 }
@@ -573,6 +575,15 @@ export async function loginAs(user = {}) {
 
 export function logout() {
   currentUserId = null;
+}
+
+/**
+ * Drive Meteor.loggingIn(), the reactive flag the accounts component reads to decide
+ * between the sign-in link and a spinner. Real Meteor sets it for the duration of a login
+ * round trip; nothing here fakes that timing, so a test says when it is on.
+ */
+export function setLoggingIn(value) {
+  loggingIn = value;
 }
 
 /** Names of every method server/ registered — handy when a rename slips through. */
@@ -622,6 +633,12 @@ const accountsState = {
   validateLoginAttempt: [],
   onCreateUser: [],
   verificationEmails: [],
+  // Typed, unlike the four above, because a .tsx test calls what it finds here and an
+  // untyped empty array infers as never[].
+  /** @type {((token: string, done: () => void) => void)[]} */
+  resetPasswordLink: [],
+  /** @type {((token: string, done: () => void) => void)[]} */
+  emailVerificationLink: [],
 };
 
 export function accountsHooks() {
@@ -633,6 +650,8 @@ export function resetAccounts() {
   accountsState.validateLoginAttempt.length = 0;
   accountsState.onCreateUser.length = 0;
   accountsState.verificationEmails.length = 0;
+  // The two link callbacks are deliberately not cleared: they are registered once, at
+  // module import, so a reset would erase a fact nothing can re-establish.
   globalThis.Accounts._options = {};
   globalThis.Accounts.emailTemplates = {};
 }
@@ -645,7 +664,15 @@ export function setSettings(settings = {}) {
   globalThis.Meteor.settings = { public: {}, ...settings };
 }
 
-globalThis.Meteor = {
+// Installed through a local alias rather than as `globalThis.Meteor = {...}`. In a .js
+// file TypeScript reads the direct form as a *declaration* of the global, so the moment a
+// type-checked .tsx test imports this harness, the whole program's `Meteor` and `Accounts`
+// become these shims instead of @types/meteor's — and 20-odd unrelated errors appear in
+// both/, collections/ and server/. The alias hides the assignment from that inference;
+// checkJs is off, so nothing here is type-checked either way.
+const globals = globalThis;
+
+globals.Meteor = {
   Collection: FakeCollection,
   isServer: true,
   isClient: false,
@@ -673,6 +700,13 @@ globalThis.Meteor = {
     return Promise.resolve().then(() => handler.apply(methodInvocation(), args));
   },
   userId: () => currentUserId,
+  loggingIn: () => loggingIn,
+  // Faithful enough to be worth having: client/views/accounts/accountsApi.ts promisifies
+  // this one, and a logout really does clear the current user.
+  logout(callback) {
+    currentUserId = null;
+    callback?.();
+  },
   // Guard the null case explicitly: FakeCollection treats a null selector as
   // "match everything", so findOneAsync(null) would hand back an arbitrary user.
   user: () => (currentUserId ? globalThis.Meteor.users.findOne(currentUserId) : undefined),
@@ -691,7 +725,7 @@ globalThis.Meteor = {
   },
 };
 
-globalThis.Accounts = {
+globals.Accounts = {
   _options: {},
   emailTemplates: {},
   config(options) {
@@ -712,9 +746,18 @@ globalThis.Accounts = {
   sendVerificationEmail(userId) {
     accountsState.verificationEmails.push(userId);
   },
+  // Registered once, at the module body of client/views/accounts/accountsApi.ts, because
+  // accounts-base fires these from its own Meteor.startup and ignores a later
+  // registration. Recorded here so a test can prove the registration happened at all.
+  onResetPasswordLink(fn) {
+    accountsState.resetPasswordLink.push(fn);
+  },
+  onEmailVerificationLink(fn) {
+    accountsState.emailVerificationLink.push(fn);
+  },
 };
 
-globalThis.Random = { id: () => 'rnd' + Math.random().toString(36).slice(2, 9) };
+globals.Random = { id: () => 'rnd' + Math.random().toString(36).slice(2, 9) };
 
 // Board/Area construction logs to stdout on every build ("Load risky_exchange board",
 // "Start 5,3,up", "Checkpoint 1 located at 7,1", ...), and the server methods and cron
@@ -731,7 +774,13 @@ globalThis.Random = { id: () => 'rnd' + Math.random().toString(36).slice(2, 9) }
 // in vitest.config.mjs drops console output from passing tests and keeps every line a
 // failing test produced. Silencing console.error here instead would throw that diagnostic
 // away exactly when it is needed.
-console.log = () => {};
-console.info = () => {};
-console.debug = () => {};
-console.warn = () => {};
+//
+// Through Object.assign for the same reason the globals above go through `globals`:
+// `console.log = ...` in a .js file reads to TypeScript as a declaration of the global
+// console, which then collides with @types/node's own.
+Object.assign(console, {
+  log: () => {},
+  info: () => {},
+  debug: () => {},
+  warn: () => {},
+});

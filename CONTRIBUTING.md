@@ -58,9 +58,9 @@ meteor run
 ```
 
 The dev server listens on `http://localhost:3000` and starts its own MongoDB, as a single-node
-replica set on `:3001`. Rspack runs a second HMR server on `:8080` alongside it. Blaze templates do
-not hot-patch under Rspack — every edit triggers a full page reload instead, normally visible in
-well under a second.
+replica set on `:3001`. Rspack runs a second HMR server on `:8080` alongside it. Neither Blaze
+templates nor React components hot-patch under Rspack — every edit triggers a full page reload
+instead, normally visible in well under a second.
 
 For settings, copy `settings-dev.json.example` to `settings-dev.json` (gitignored) and run
 `meteor npm run dev`, which is `meteor run --settings settings-dev.json`.
@@ -107,10 +107,11 @@ meteor npm run test:watch
 A [vitest](https://vitest.dev) suite (`test/both`, `test/server`, `test/client`) covering the game
 model — board composition and wall/movement queries, deck composition and dealing,
 movement/conveyor/gear/pusher/laser resolution, the phase machine — plus the server methods,
-publications, cron jobs and account rules through a small Meteor shim (`test/setup.js`), and the
-Blaze helpers and event handlers through a `Template` capture (`test/clientSetup.js`). The tests
-import the ES modules directly and need no Meteor, no MongoDB and no network, so the whole suite
-runs in about a second. Its config is `test/vitest.config.mjs`.
+publications, cron jobs and account rules through a small Meteor shim (`test/setup.js`), the
+Blaze helpers and event handlers through a `Template` capture (`test/clientSetup.js`), and the
+React accounts menu rendered for real with `@testing-library/react` in a jsdom environment. The
+tests import the ES modules directly and need no Meteor, no MongoDB and no network, so the whole
+suite runs in about a second. Its config is `test/vitest.config.mjs`.
 
 What it cannot see: it never builds a bundle, evaluates a stylesheet or renders a Blaze template,
 so it stays green through a broken build-config change. That is what the next suite is for.
@@ -155,9 +156,10 @@ Three conventions to match:
   updating every importer, tests included.
 - **No `any`.** `@typescript-eslint/no-explicit-any` is an error, and a `!`, an `as` or a
   `@ts-expect-error` wants a one-line comment saying why it is safe.
-- **The Blaze view layer is still JavaScript** — `client/main.js`, `client/helper/` and
-  `client/views/` — and so are the tests under `test/`. Both are left for the React migration, so
-  match what is already in the directory you are adding to.
+- **The Blaze view layer is still JavaScript** — `client/main.js`, `client/helper/` and most of
+  `client/views/` — and so are most tests under `test/`. The exceptions are the React accounts
+  menu in `client/views/accounts/` and the two `.tsx` test files, which are type-checked. Match
+  what is already in the directory you are adding to.
 
 Types for the Atmosphere packages the app imports are hand-written in `both/types/*.d.ts`, so an
 import from a package that is not declared there is a compile error until you add it.

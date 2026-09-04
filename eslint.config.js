@@ -1,6 +1,7 @@
 const globals = require('globals');
 const prettier = require('eslint-config-prettier/flat');
 const tseslint = require('typescript-eslint');
+const reactHooks = require('eslint-plugin-react-hooks');
 
 // Meteor framework globals (would come from eslint-plugin-meteor's env in
 // legacy config; declared here for flat config).
@@ -33,7 +34,6 @@ module.exports = [
     ignores: [
       '.meteor/**',
       'node_modules/**',
-      'packages/meteor-accounts-ui-roborally/**',
       'public/**',
       '_build/**',
       'test/e2e/playwright-report/**',
@@ -66,9 +66,12 @@ module.exports = [
   // core rules step aside for their typescript-eslint counterparts. `recommended`, not
   // `recommendedTypeChecked`: the type-aware set builds a full tsc program on every lint,
   // and `npm run typecheck` already is that run.
-  ...tseslint.configs.recommended.map((config) => ({ ...config, files: ['**/*.ts'] })),
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['**/*.ts', '**/*.tsx'],
+  })),
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.tsx'],
     rules: {
       'no-undef': 'off',
       'no-unused-vars': 'off',
@@ -80,6 +83,14 @@ module.exports = [
         { allowInterfaces: 'with-single-extends' },
       ],
     },
+  },
+  // React components only. The two rules the plugin exists for — rules-of-hooks and
+  // exhaustive-deps — catch the mistakes first React code actually makes. `configs.recommended`
+  // is the whole 7.x set; relax an individual rule with its reason rather than the plugin.
+  {
+    files: ['**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: { ...reactHooks.configs.recommended.rules },
   },
   {
     files: ['collections/**/*.ts'],

@@ -1,6 +1,5 @@
 .meteor/
 node_modules/
-packages/meteor-accounts-ui-roborally/
 public/
 _build/
 package-lock.json

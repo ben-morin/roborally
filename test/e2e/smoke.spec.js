@@ -49,7 +49,7 @@ test('a new player signs up, creates a game and plays a register', async ({ page
     // base.scss beating Bootstrap's _reboot, which alone gives 16px and underline.
     await expect(page.locator('body')).toHaveCSS('font-size', '14px');
     await expect(page.locator('.tutorial a')).toHaveCSS('text-decoration-line', 'none');
-    // components.scss, the layer that overrides the accounts-ui package's own CSS.
+    // components.scss, whose own rules dress the navbar's accounts menu.
     await expect(page.locator('#login-buttons')).toHaveCSS('padding-top', '15px');
     // layout.scss: $footer-bg-color.
     await expect(page.locator('.footer-below')).toHaveCSS('background-color', 'rgb(35, 49, 64)');

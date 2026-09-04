@@ -41,6 +41,7 @@ export default defineConfig({
       { find: /^meteor\/ddp-rate-limiter$/, replacement: stub('ddp-rate-limiter.js') },
       { find: /^meteor\/quave:synced-cron$/, replacement: stub('synced-cron.js') },
       { find: /^meteor\/ostrio:flow-router-extra$/, replacement: stub('flow-router.js') },
+      { find: /^meteor\/react-meteor-data$/, replacement: stub('react-meteor-data.js') },
       { find: /^bootstrap$/, replacement: stub('bootstrap.js') },
     ],
   },
@@ -49,7 +50,7 @@ export default defineConfig({
     // `// @vitest-environment jsdom`, so the server suite stays as fast as it was.
     environment: 'node',
     setupFiles: ['./test/setup.js', './test/clientSetup.js'],
-    include: ['test/**/*.test.js'],
+    include: ['test/**/*.test.{js,tsx}'],
     // The Playwright suite shares the folder. Its files are *.spec.js, which `include`
     // would never match anyway — this writes the boundary down. Setting `exclude`
     // replaces vitest's defaults (node_modules and friends), hence the spread.

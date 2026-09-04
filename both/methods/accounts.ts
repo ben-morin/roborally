@@ -3,17 +3,16 @@ import { createMethod } from 'meteor/jam:method';
 import type { Doc } from '../schemas/infer.ts';
 import { checkArgsWith, schemas } from '../schemas/methods.ts';
 
-// The two methods the local accounts-ui package calls, and the only two that are `open`:
-// both run before a login exists — `isEmailAvailable` from the "forgot password" panel,
-// `resendVerificationEmail` from the unverified-email one — so the package's built-in
+// The two methods the accounts menu calls, and the only two that are `open`: both run
+// before a login exists — `isEmailAvailable` from the "forgot password" panel,
+// `resendVerificationEmail` from the unverified-email one — so jam:method's built-in
 // logged-in check has to be switched off for them.
 //
 // Neither may ever run on the client: one reads `process.env`, the other calls a
-// server-only `Accounts` API. Two things keep them off it. They are server-only through
-// the global `serverOnly: true` in ./config.ts, so no client stub is registered; and
-// nothing under `client/` imports this module — only `server/cron.ts` does, as a
-// side-effect import — so it is not even in the client bundle. Keep it that way: an
-// import from a view module would ship both bodies to the browser.
+// server-only `Accounts` API. The global `serverOnly: true` in ./config.ts is what keeps
+// them off it — no client stub is registered, so neither body is ever reached in a
+// browser. The accounts component imports these functions the way every view imports its
+// methods, and the bodies ride along as dead code exactly as the other thirteen do.
 
 export const isEmailAvailable = createMethod({
   name: 'isEmailAvailable',
