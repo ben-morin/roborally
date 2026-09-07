@@ -32,7 +32,7 @@
     "@swc/helpers": "^0.5.17",
     "bootstrap": "^5.3.8",
     "jquery": "^4.0.0",
-    "meteor-node-stubs": "^1.2.29"
+    "meteor-node-stubs": "^1.2.30"
   },
   "meteor": {
     "mainModule": {
