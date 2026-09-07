@@ -42,7 +42,7 @@
     "modern": true
   },
   "devDependencies": {
-    "@meteorjs/rspack": "^2.1.0",
+    "@meteorjs/rspack": "^2.2.0",
     "@playwright/test": "^1.62.1",
     "@rsdoctor/rspack-plugin": "^1.6.3",
     "@rspack/cli": "^1.7.1",
@@ -51,13 +51,13 @@
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-meteor": "^7.3.0",
-    "globals": "^17.11.0",
+    "globals": "^17.12.0",
     "jsdom": "^30.0.1",
     "prettier": "^3.8.3",
-    "sass-embedded": "1.103",
+    "sass-embedded": "1.104",
     "sass-loader": "^17.0.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.69.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   }
 }
