@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useSubscribe, useTracker } from 'meteor/react-meteor-data';
-import { joinGame, leaveGame, startGame } from '../../../both/methods/games.ts';
+import { cancelGame, joinGame, leaveGame, startGame } from '../../../both/methods/games.ts';
 import { Games } from '../../../collections/games.ts';
 import { Players } from '../../../collections/players.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.ts';
@@ -68,14 +68,14 @@ export function GameActions() {
 
   const onCancel = async (event: MouseEvent) => {
     event.preventDefault();
-    if (await modalConfirm('Remove this game?')) {
-      // The one client-side collection write left in the app, and it lands: Games is the
-      // only collection whose allow rules permit anything (remove, for the owner). It takes
-      // the game document and leaves its players, cards, deck and chat behind. Ported as it
-      // stands; it is a P10 item.
-      Games.remove(game._id);
-      navigate(paths.gameList());
-    }
+    if (!(await modalConfirm('Remove this game?'))) return;
+    // Off the page first, then the round trip. The effect above alerts "The game was
+    // canceled." when the game disappears from under the reader, and awaiting the method
+    // here would let the removal arrive while this page is still mounted — so the owner who
+    // asked for it would get that alert too. A rejection still surfaces: <Modal> belongs to
+    // the layout, not to this component.
+    navigate(paths.gameList());
+    cancelGame({ gameId: game._id }).catch((error) => modalAlert(error.reason));
   };
 
   return (

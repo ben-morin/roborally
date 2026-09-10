@@ -29,6 +29,10 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // A `Meteor.callAsync` spy left standing would answer the next test's method calls —
+  // harmless while the handlers were never reached, load-bearing now that one test asserts
+  // a method was called and another asserts it was not.
+  vi.restoreAllMocks();
 });
 
 /** A lobby the caller is looking at, routed the way FlowRouter would have it. */
@@ -111,7 +115,8 @@ describe('GameActions', () => {
     await vi.waitFor(() => expect(modalAlert).toHaveBeenCalledWith('Too many players.'));
   });
 
-  it('deletes the game after confirmation and returns to the list', async () => {
+  it('sends the cancel to the server after confirmation and returns to the list', async () => {
+    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
     const game = await openLobby({ ownerId: 'me' });
 
     renderAt(<GameActions />);
@@ -119,8 +124,11 @@ describe('GameActions', () => {
 
     expect(modalConfirm).toHaveBeenCalledWith('Remove this game?');
     await vi.waitFor(() => expect(navigations_()).toEqual(['/']));
-    // A client-side write that really lands: Games.allow permits the owner to remove.
-    expect(await Games.findOneAsync(game._id)).toBeUndefined();
+    // A method now, not the client-side `Games.remove` the app's last allow rule permitted;
+    // what it takes with it is pinned in test/server/methods.test.js.
+    expect(call).toHaveBeenCalledWith('cancelGame', { gameId: game._id });
+    // The owner asked for this, so the effect's "cancelled under you" alert must not fire.
+    expect(modalAlert).not.toHaveBeenCalled();
   });
 
   it('keeps the game when the confirmation is declined', async () => {

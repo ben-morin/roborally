@@ -13,7 +13,9 @@ import { insertCards, insertDeck, insertGame, insertPlayer } from '../helpers/fi
 import { stubBoard } from '../helpers/board.js';
 import { GameLogic } from '../../both/gamelogic.ts';
 import { GameState } from '../../both/gamestate.ts';
+import { Cards } from '../../collections/cards.ts';
 import { Chat } from '../../collections/chat.ts';
+import { Decks } from '../../collections/deck.ts';
 import { Games } from '../../collections/games.ts';
 import { Highscores } from '../../collections/highscores.ts';
 import { Players } from '../../collections/players.ts';
@@ -517,6 +519,25 @@ describe(UNSTARTED, () => {
     await runWithRecheck(UNSTARTED);
 
     expect(await Games.findOneAsync(gameId)).toBeUndefined();
+  });
+
+  // The job used to remove the game document alone, leaving its rows behind with nothing
+  // left to find them by. It goes through the same `removeWithChildrenAsync` as cancelGame.
+  it('removes the players, cards, deck and chat with the game', async () => {
+    const owner = await user('owner', { online: false });
+    const game = await insertGame({ userId: owner, started: false });
+    const player = await insertPlayer(game._id, { userId: owner });
+    await insertCards(player._id, game._id);
+    await insertDeck(game._id);
+    await Chat.insertAsync({ gameId: game._id, message: 'owner joined', submitted: Date.now() });
+
+    await runWithRecheck(UNSTARTED);
+
+    expect(await Games.findOneAsync(game._id)).toBeUndefined();
+    expect(await Players.find({ gameId: game._id }).countAsync()).toBe(0);
+    expect(await Cards.find({ gameId: game._id }).countAsync()).toBe(0);
+    expect(await Decks.find({ gameId: game._id }).countAsync()).toBe(0);
+    expect(await Chat.find({ gameId: game._id }).countAsync()).toBe(0);
   });
 
   it('keeps the game while the owner is online', async () => {

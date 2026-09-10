@@ -83,7 +83,9 @@ SyncedCron.add({
         const ownerRecheck = await Meteor.users.findOneAsync(game.userId);
         if (ownerRecheck && !ownerRecheck.status!.online) {
           console.log(`Removing unstarted game: ${game._id}`);
-          await Games.removeAsync(game._id);
+          // Rows and all, the same way `cancelGame` does it — a bare `Games.removeAsync`
+          // here left the players, cards, deck and chat behind as orphans.
+          await game.removeWithChildrenAsync();
         }
       }
     }

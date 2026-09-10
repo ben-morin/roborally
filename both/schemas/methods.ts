@@ -58,6 +58,7 @@ export const schemas = {
   createGame: { name: String },
   joinGame: gameIdOnly,
   leaveGame: gameIdOnly,
+  cancelGame: gameIdOnly,
   selectBoard: { boardName: String, gameId: String },
   startGame: gameIdOnly,
   playCards: { gameId: String, programRound: Number },

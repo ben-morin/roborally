@@ -4,7 +4,13 @@
 // (CardLogic), both of which have their own tests under test/both/.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
-import { loginAs, logout, registeredMethods, resetFakeCollections } from '../setup.js';
+import {
+  collectionRules,
+  loginAs,
+  logout,
+  registeredMethods,
+  resetFakeCollections,
+} from '../setup.js';
 import { methodsConfig, simulatedMethods } from '../stubs/jam-method.js';
 import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { BoardBox } from '../../both/board_box.ts';
@@ -33,6 +39,7 @@ describe('method registration', () => {
     // working — card selection, or chat, or the lobby.
     expect(registeredMethods()).toEqual([
       'addMessage',
+      'cancelGame',
       'createGame',
       'deselectAllCards',
       'deselectCard',
@@ -68,6 +75,25 @@ describe('method registration', () => {
   // means card selection quietly stopped being instant. Neither shows up as an error.
   it('simulates the three card-selection methods and nothing else', () => {
     expect(simulatedMethods()).toEqual(['deselectAllCards', 'deselectCard', 'selectCard']);
+  });
+
+  // The other half of "the browser writes through a method": no collection may permit a
+  // direct client write. `Games` was the exception until `cancelGame` replaced the lobby's
+  // `Games.remove(id)` — that rule let the owner delete a game document and orphan its
+  // players, cards, deck and chat, and it is gone now. The other five declare an all-false
+  // block, and a collection with no block at all is denied by default, so both shapes pass;
+  // what fails is a callback that says yes. Rules are registered at import time and survive
+  // resetFakeCollections, so this reads what the six modules actually declared.
+  it('lets no collection be written from the client', () => {
+    for (const collection of [Cards, Chat, Decks, Games, Highscores, Players]) {
+      for (const rules of collectionRules(collection).allow) {
+        // Two arguments covers all three callbacks: `update` also takes the field names and
+        // the modifier, and none of these reads past the document.
+        for (const permit of Object.values(rules)) {
+          expect(permit('u1', { _id: 'd1', userId: 'u1' })).toBe(false);
+        }
+      }
+    }
   });
 });
 
@@ -339,6 +365,52 @@ describe('leaveGame', () => {
     expect(game.gamePhase).toBeUndefined();
     expect(game.winner).toBeUndefined();
     expect(await Players.find({ gameId }).countAsync()).toBe(0);
+  });
+});
+
+describe('cancelGame', () => {
+  it('refuses an anonymous caller and an unknown game', async () => {
+    logout();
+    await expect(call('cancelGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 401 });
+    await loginAs();
+    await expect(call('cancelGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 404 });
+  });
+
+  it('removes the game and every row that belongs to it', async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, userId: user._id, started: false });
+    await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
+    await Cards.insertAsync({ gameId, userId: user._id, handCards: [], chosenCards: [] });
+    await Decks.insertAsync({ gameId, cards: [], optionCards: [], discardedOptionCards: [] });
+    await Chat.insertAsync({ gameId, message: 'ben joined the game', submitted: Date.now() });
+
+    await call('cancelGame', { gameId });
+
+    expect(await Games.findOneAsync(gameId)).toBeUndefined();
+    expect(await Players.find({ gameId }).countAsync()).toBe(0);
+    expect(await Cards.find({ gameId }).countAsync()).toBe(0);
+    expect(await Decks.find({ gameId }).countAsync()).toBe(0);
+    expect(await Chat.find({ gameId }).countAsync()).toBe(0);
+  });
+
+  it('refuses a caller who does not own the game, and removes nothing', async () => {
+    await loginAs('me');
+    const gameId = await Games.insertAsync({ boardId: 0, userId: 'them', started: false });
+    await Players.insertAsync({ gameId, userId: 'them', name: 'them' });
+
+    await expect(call('cancelGame', { gameId })).rejects.toMatchObject({ error: 403 });
+    expect(await Games.findOneAsync(gameId)).toBeDefined();
+    expect(await Players.find({ gameId }).countAsync()).toBe(1);
+  });
+
+  // Narrower than the allow rule it replaces, and unreachable from the UI: both pages that
+  // render the Cancel button send a started game to its board before they render.
+  it('refuses a started game — leaving is the way out of one', async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, userId: user._id, started: true });
+
+    await expect(call('cancelGame', { gameId })).rejects.toMatchObject({ error: 409 });
+    expect(await Games.findOneAsync(gameId)).toBeDefined();
   });
 });
 

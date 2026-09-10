@@ -5,7 +5,6 @@ import { CardLogic } from '../both/cardlogic.ts';
 import { Null } from '../both/easySchemaConfig.ts';
 import { GameLogic } from '../both/gamelogic.ts';
 import { GameState } from '../both/gamestate.ts';
-import { ownsDocument } from '../both/permissions.ts';
 import type { Doc, UpdateModifier } from '../both/schemas/infer.ts';
 import { shuffle } from '../both/shuffle.ts';
 import { Cards, type CardDoc } from './cards.ts';
@@ -249,6 +248,18 @@ export class Game {
       lives: { $gt: 0 },
     }).fetchAsync();
   }
+  // Cancelling a game: the rows that belong to it, then the document itself. Children
+  // first, because the game id is the only handle on them — a crash between the two leaves
+  // an empty lobby the owner can cancel again, where the other order would leave rows
+  // nothing can reach. Both callers are server-side: the `cancelGame` method and the
+  // unstarted-game cron job.
+  async removeWithChildrenAsync() {
+    await Chat.removeAsync({ gameId: this._id });
+    await Cards.removeAsync({ gameId: this._id });
+    await Players.removeAsync({ gameId: this._id });
+    await Decks.removeAsync({ gameId: this._id });
+    await Games.removeAsync(this._id);
+  }
 }
 
 // The whole game document, not just what `createGame` inserts: the block above the divider
@@ -329,20 +340,5 @@ export const Games = new Mongo.Collection<GameDoc, Game>('games', {
   transform(doc) {
     const newInstance = Object.create(Game.prototype);
     return Object.assign(newInstance, doc);
-  },
-});
-
-Games.allow({
-  insert(_userId, _doc) {
-    return false;
-  },
-  update(_userId, _doc) {
-    return false;
-  },
-  remove(userId, doc) {
-    // `ownsDocument` is written `doc && doc.userId === userId`, so it hands back the
-    // document's own falsy value when there is no document, not `false`. Same denial
-    // either way; `Boolean` is only what makes it the boolean `allow` declares.
-    return Boolean(ownsDocument(userId, doc));
   },
 });

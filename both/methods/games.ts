@@ -14,9 +14,9 @@ import { Games } from '../../collections/games.ts';
 import { Players } from '../../collections/players.ts';
 
 // The lobby and lifecycle surface: making a game, sitting down at one, leaving it,
-// choosing its board, starting it, and the two halves of a respawn.
+// cancelling it, choosing its board, starting it, and the two halves of a respawn.
 //
-// All seven take the app-wide `serverOnly: true` from ./config.ts — no stub is registered
+// All eight take the app-wide `serverOnly: true` from ./config.ts — no stub is registered
 // and no body runs in the browser. They live under `both/` anyway so the view modules can
 // import the functions instead of naming a method by string; the whole gain of jam:method
 // is that a typo is a build error rather than a 404 at click time.
@@ -227,6 +227,35 @@ export const leaveGame = createMethod({
       }
     }
     await game.chatAsync(`${author} left the game`);
+  },
+});
+
+// The owner's counterpart to leaveGame: the whole game goes, rows and all. It replaces a
+// client-side `Games.remove(id)` that landed through the app's only `allow` rule and took
+// the game document alone, leaving its players, cards, deck and chat behind as orphans.
+// That rule is gone with it, so nothing writes to a collection from the browser now.
+export const cancelGame = createMethod({
+  name: 'cancelGame',
+  validate: checkArgsWith(schemas.cancelGame),
+  async run({ gameId }: Doc<typeof schemas.cancelGame>) {
+    // Logged in, as in createGame above.
+    const user = (await Meteor.userAsync())!;
+    const game = await Games.findOneAsync(gameId);
+    if (!game) throw new Meteor.Error(404, 'Game id not found!');
+
+    if (game.userId !== user._id) {
+      throw new Meteor.Error(403, 'Only the owner can cancel this game');
+    }
+    // Narrower than the allow rule was, and unreachable from the UI: the lobby and
+    // board-select pages both send a started game to its board before they render, so the
+    // Cancel button is only ever on screen for one that has not started. `leaveGame` is
+    // the way out of a started game.
+    if (game.started) {
+      throw new Meteor.Error(409, 'A started game cannot be cancelled');
+    }
+
+    console.log(`User ${getUsername(user)} cancelling game ${gameId}`);
+    await game.removeWithChildrenAsync();
   },
 });
 
