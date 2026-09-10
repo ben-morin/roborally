@@ -21,8 +21,19 @@ test('a new player signs up, creates a game and plays a register', async ({ page
   // anywhere along the way still reports what the browser complained about.
   const browserErrors = [];
   page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
+  // One console error is let through, and only this one. react-meteor-data@4.0.1's `useTracker`
+  // builds its Tracker computation during render and forces an update on any change, mounted or
+  // not, so a subscription answering between render and commit updates an unmounted fiber and
+  // React 19 warns. Upstream meteor/react-packages#386, open since 2023, no released fix. It fires
+  // on slow runners (CI: twice a run; locally: once at 150 ms of added latency, right after the
+  // lobby mounts) and costs a re-render, nothing else. Everything else still fails the run.
+  const KNOWN_WARNINGS = [
+    /Can't perform a React state update on a component that hasn't mounted yet/,
+  ];
   page.on('console', (message) => {
-    if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
+    if (message.type() !== 'error') return;
+    if (KNOWN_WARNINGS.some((known) => known.test(message.text()))) return;
+    browserErrors.push(`console: ${message.text()}`);
   });
 
   await test.step('the logged-out page renders', async () => {
