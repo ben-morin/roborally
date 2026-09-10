@@ -36,9 +36,15 @@ afterEach(() => {
 });
 
 /** A lobby the caller is looking at, routed the way FlowRouter would have it. */
-async function openLobby({ ownerId = 'me', seated = false, started = false } = {}) {
+async function openLobby({ ownerId = 'me', seated = false, started = false, max_player = 8 } = {}) {
   // The fixture reads the document straight back, so there is always one.
-  const game = (await insertGame({ userId: ownerId, author: ownerId, started, min_player: 2 }))!;
+  const game = (await insertGame({
+    userId: ownerId,
+    author: ownerId,
+    started,
+    min_player: 2,
+    max_player,
+  }))!;
   if (seated) await insertPlayer(game._id, { userId: 'me', name: 'me' });
   setRoute(`/games/${game._id}`);
   return game;
@@ -66,13 +72,46 @@ describe('GameActions', () => {
     expect(screen.queryByRole('link', { name: 'Join game' })).not.toBeInTheDocument();
   });
 
-  it('closes the game to newcomers at eight players', async () => {
-    const game = await openLobby({ ownerId: 'them' });
-    for (let i = 0; i < 8; i++) await insertPlayer(game._id, { userId: `p${i}` });
+  it("closes the game to newcomers at the board's own maximum, not a fixed eight", async () => {
+    // A 12-player board still seats a ninth player; the gate used to be a hardcoded 8.
+    const big = await openLobby({ ownerId: 'them', max_player: 12 });
+    for (let i = 0; i < 8; i++) await insertPlayer(big._id, { userId: `p${i}` });
+    const { rerender } = renderAt(<GameActions />);
+    expect(screen.getByRole('link', { name: 'Join game' })).toBeVisible();
+
+    const full = await openLobby({ ownerId: 'them', max_player: 4 });
+    for (let i = 0; i < 4; i++) await insertPlayer(full._id, { userId: `q${i}` });
+    rerender(<GameActions />);
+
+    expect(screen.queryByRole('link', { name: 'Join game' })).not.toBeInTheDocument();
+  });
+
+  it('offers no seat once the game has started', async () => {
+    await openLobby({ ownerId: 'them', started: true });
 
     renderAt(<GameActions />);
 
     expect(screen.queryByRole('link', { name: 'Join game' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['the owner', { ownerId: 'me', seated: true }, 'Cancel game', ['Leave game', 'Join game']],
+    [
+      'a seated player',
+      { ownerId: 'them', seated: true },
+      'Leave game',
+      ['Cancel game', 'Join game'],
+    ],
+    ['an onlooker', { ownerId: 'them' }, 'Join game', ['Cancel game', 'Leave game']],
+  ])('shows %s exactly one action', async (_who, lobby, shown, hidden) => {
+    await openLobby(lobby);
+
+    renderAt(<GameActions />);
+
+    expect(screen.getByRole('link', { name: shown })).toBeVisible();
+    for (const name of hidden) {
+      expect(screen.queryByRole('link', { name })).not.toBeInTheDocument();
+    }
   });
 
   it('lets only the owner start, and only with somebody seated', async () => {
@@ -95,9 +134,10 @@ describe('GameActions', () => {
     ['Start game', 'startGame'],
   ])('sends %s to the server', async (label, method) => {
     const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
-    // Join is offered to somebody with no seat, Leave and Start to the seated owner.
-    const joining = label === 'Join game';
-    const game = await openLobby({ ownerId: joining ? 'them' : 'me', seated: !joining });
+    // Join goes to somebody with no seat, Leave to a seated player who is not the owner,
+    // Start to the seated owner.
+    const owned = label === 'Start game';
+    const game = await openLobby({ ownerId: owned ? 'me' : 'them', seated: label !== 'Join game' });
 
     renderAt(<GameActions />);
     await userEvent.click(screen.getByRole('link', { name: label }));

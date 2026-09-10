@@ -60,6 +60,10 @@ export function GameActions() {
   if (!game) return null;
 
   const ownGame = game.userId === userId;
+  // One action per role: the owner cancels, anyone else seated leaves, a stranger joins.
+  // Join hides for the same reasons `joinGame` refuses — a started game, and a board with
+  // no seat left — so the panel never offers a click the server answers with a 403.
+  const canJoin = !inGame && !game.started && playerCnt < game.max_player;
 
   const act = (run: () => Promise<unknown>) => (event: MouseEvent) => {
     event.preventDefault();
@@ -88,7 +92,7 @@ export function GameActions() {
       </h2>
       <hr className="star-well mt-3 mb-7" />
       <div className="space-y-3">
-        {playerCnt < 8 && !inGame && (
+        {canJoin && (
           <a
             className={`${BTN_LG} ${PRIMARY}`}
             href="#"
@@ -109,19 +113,22 @@ export function GameActions() {
         )}
       </div>
       <div className="mt-4 flex justify-center gap-3">
-        {inGame && (
-          <a
-            className={`${BTN_MD} ${GHOST}`}
-            href="#"
-            onClick={act(() => leaveGame({ gameId: game._id }))}
-          >
-            Leave game
-          </a>
-        )}
-        {ownGame && (
+        {ownGame ? (
+          // Never Leave as well: the game keeps its owner's name, so walking out of one's
+          // own game is not an action that means anything.
           <a className={`${BTN_MD} ${DANGER}`} href="#" onClick={onCancel}>
             Cancel game
           </a>
+        ) : (
+          inGame && (
+            <a
+              className={`${BTN_MD} ${GHOST}`}
+              href="#"
+              onClick={act(() => leaveGame({ gameId: game._id }))}
+            >
+              Leave game
+            </a>
+          )
         )}
       </div>
     </>
