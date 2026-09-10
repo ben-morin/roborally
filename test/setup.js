@@ -114,7 +114,7 @@ function matchesSelector(doc, selector) {
             // $ne is the negation of $eq, so it inherits $eq's treatment of null:
             // `{f: {$ne: 'x'}}` matches a document missing `f`, but `{f: {$ne: null}}`
             // does *not* — "not null" also means "present". server/highscores.ts relies
-            // on the first (see its test) and client/views/chat/chat.js on the second.
+            // on the first (see its test) and client/views/chat/ChatPanel.tsx on the second.
             return opVal === null ? !some((v) => v == null) : !some((v) => v === opVal);
           case '$exists':
             return some((v) => v !== undefined) === opVal;
@@ -124,7 +124,7 @@ function matchesSelector(doc, selector) {
       });
     }
     // Mongo treats `{field: null}` as "null or missing", which is how
-    // client/views/game/game_list.js selects the games that have no winner yet.
+    // client/views/game/GameList.tsx and CreateGameForm.tsx select the games that have no winner yet.
     if (cond === null) return some((v) => v == null);
     return some((v) => v === cond);
   });
@@ -758,6 +758,21 @@ globals.Accounts = {
 };
 
 globals.Random = { id: () => 'rnd' + Math.random().toString(36).slice(2, 9) };
+
+// The one Tracker primitive the client still constructs at module load
+// (client/views/accounts/accountsApi.ts). Inert, like the useTracker stub: it stores and
+// returns a value and invalidates nothing.
+globals.ReactiveVar = class ReactiveVar {
+  constructor(value) {
+    this._value = value;
+  }
+  get() {
+    return this._value;
+  }
+  set(value) {
+    this._value = value;
+  }
+};
 
 // Board/Area construction logs to stdout on every build ("Load risky_exchange board",
 // "Start 5,3,up", "Checkpoint 1 located at 7,1", ...), and the server methods and cron

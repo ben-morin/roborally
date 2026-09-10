@@ -1,0 +1,180 @@
+/* Tailwind whole — theme, Preflight, components, utilities — and the app's own base and
+   component rules beside it. This file is imported FIRST in client/main.js, and that is
+   load-bearing: a cascade layer takes its place in the order the first time a stylesheet
+   names it, and game.css and gamecard.css open with `@layer components`. Met before this
+   file's `@layer theme, base, components, utilities;` (inside the import below), `components`
+   would be placed ahead of `base`, and Preflight's `img { height: auto }` and
+   `h1..h6 { font-size: inherit }` would beat the board and the card panel. */
+@import 'tailwindcss';
+
+/* Every class is written in a component, and every component is a .tsx under views/. */
+@source '../views/**/*.tsx';
+
+/* Element defaults. Preflight resets every element to nothing; these are the few the app
+   sets for the whole document, most of them what base.scss used to set. */
+@layer base {
+  body {
+    overflow-x: scroll;
+    /* The teal ground the panels sit on, and the white text on them. */
+    background-color: var(--color-teal);
+    color: #fff;
+  }
+  a {
+    color: var(--color-teal);
+  }
+  /* The display headings: Montserrat, uppercase, as they have been since the Bootstrap 3
+     era. Sizes are the components' business (`text-3xl`, `text-2xl`); Preflight leaves a
+     heading at the body size until a component says otherwise. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  /* One focus ring for everything, per the design: the old stylesheets' four `outline: 0`
+     rules went with them. */
+  :focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+}
+
+/* The panel every page section sits on. A class rather than utilities because it carries
+   `--panel-bg`, which the card panel's countdown recolours: CardPanel writes `data-countdown`
+   on its own root and the panel around it reads that through `:has()`, so no class is toggled
+   from an effect. */
+@layer components {
+  .panel {
+    --panel-bg: var(--color-navy);
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-panel);
+    padding: 24px;
+    box-shadow: var(--shadow-panel);
+  }
+  .panel-tight {
+    padding: 16px;
+  }
+  .panel:has([data-countdown='running']) {
+    --panel-bg: var(--color-countdown);
+  }
+  .panel:has([data-countdown='urgent']) {
+    --panel-bg: var(--color-countdown-urgent);
+  }
+  /* The page under the 64px navbar, and its two-column grid. Centred text, as the old
+     `header` was: every component was written inside that, and the ones that want left-aligned
+     text (chat lines, the highscore lists) say so themselves. */
+  .page {
+    max-width: 1248px;
+    margin: 0 auto;
+    padding: 112px 24px 0;
+    text-align: center;
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  /* The section divider, as it always looked: a 5px rule with the bottom half of a star
+     hanging under it. The original got that by accident — the star sat in the hr's content
+     box and Chromium's `hr { overflow: hidden }` cut off the half above the line. Here the
+     star is clipped on purpose, so the rule stays 5px of layout and the line is unbroken.
+     Call sites set the margins. */
+  hr.star-well {
+    position: relative;
+    overflow: visible;
+    margin: 0.5em auto -0.5em;
+    padding: 0;
+    max-width: 250px;
+    height: 5px;
+    border: 0;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.25);
+    text-align: center;
+  }
+  hr.star-well::after {
+    content: '\2605';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    clip-path: inset(50% 0 0 0);
+    color: rgba(255, 255, 255, 0.25);
+    font-family: sans-serif;
+    font-size: 28px;
+    line-height: 1;
+  }
+}
+
+/* The one self-hosted face: Montserrat 700, latin subset. Named since the Bootstrap 3 era,
+   never loaded until P8 — every heading rendered Helvetica/Arial. */
+@font-face {
+  font-family: Montserrat;
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/montserrat-latin-700.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* The approved design tokens. Names are Tailwind v4 theme keys, so `--color-navy` yields
+   `bg-navy`, `text-navy`, `border-navy` and the rest.
+
+   `static` because game.css and gamecard.css read these as `var(--color-heart)`,
+   `var(--color-teal)`, … and Tailwind never sees those files: without it a token is emitted
+   only where a utility named after it is used, and a variable read from a stylesheet it does
+   not compile would resolve to nothing. */
+@theme static {
+  --color-navy: #2c3e50;
+  --color-navy-deep: #233140;
+  --color-teal: #70b9b0;
+  --color-brand: #337ab7;
+  --color-danger: #8f1402;
+  --color-muted: #aaa;
+  --color-checkpoint: #336699;
+  --color-checkpoint-visited: #449d44;
+  --color-countdown: #780300;
+  --color-countdown-urgent: #aa0500;
+  --color-heart: #b40a24;
+  --color-priority: #e5d839;
+  --color-position-select: #67a50a;
+  /* Readable red on navy: Bootstrap's `red` failed contrast there. */
+  --color-error: #ff8a7a;
+  /* Hairlines and the raised surface every list row, input and chip sits on. */
+  --color-line: rgba(255, 255, 255, 0.12);
+  --color-raised: rgba(255, 255, 255, 0.06);
+  --color-raised-hover: rgba(255, 255, 255, 0.1);
+
+  /* Headings, the brand, nav links and the timer digits. Body text keeps Tailwind's
+     --font-sans. */
+  --font-display: Montserrat, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  --radius-panel: 12px;
+  --radius-control: 8px;
+  --radius-card: 6px;
+  --shadow-panel: 0 16px 40px -20px rgba(0, 0, 0, 0.5);
+
+  /* The programming timer's pill in its last five seconds. */
+  --animate-timer-pulse: timer-pulse 1s ease-in-out infinite;
+  @keyframes timer-pulse {
+    50% {
+      transform: scale(1.08);
+    }
+  }
+
+  /* Bootstrap's old $grid-breakpoints, kept: 768px is Tailwind's own md already; lg and xl
+     are not. */
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 62rem;
+  --breakpoint-xl: 75rem;
+}

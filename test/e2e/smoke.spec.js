@@ -33,27 +33,30 @@ test('a new player signs up, creates a game and plays a register', async ({ page
   });
 
   await test.step('every stylesheet layer is applied', async () => {
-    // One computed-style assertion per layer, each taken from the layer's own rules, so a
-    // failure names the stylesheet that stopped applying. The import order in
-    // client/main.js is the cascade order; the `base` and `components` rows below are the
-    // two places where that order is load-bearing.
+    // One computed-style assertion per cascade layer of tailwind.css, each taken from the
+    // layer's own rules, so a failure names the part of the stylesheet that stopped
+    // applying: the @theme's tokens, the app's own @layer base rules, its @layer components
+    // rules, and the generated utilities. game.css and gamecard.css need a board on
+    // screen; see 'start the game'.
 
-    // Package CSS, which still goes through Meteor's bundler rather than Rspack.
-    await expect(page.locator('.fa').first()).toHaveCSS('font-family', /FontAwesome/);
-    // lib/bootstrap.scss — and `_variables.scss` feeding it: stock Bootstrap is #0d6efd.
-    await expect(page.locator(':root')).toHaveCSS('--bs-primary', /#337ab7/);
-    await expect(page.locator('.btn-primary').first()).toHaveCSS(
+    // @theme: `bg-brand`, on the landing card's GitHub button — stock Tailwind has no such
+    // token, so this is the app's palette reaching a utility.
+    await expect(page.getByRole('link', { name: 'GitHub' })).toHaveCSS(
       'background-color',
       'rgb(51, 122, 183)'
     );
-    // base.scss beating Bootstrap's _reboot, which alone gives 16px and underline.
-    await expect(page.locator('body')).toHaveCSS('font-size', '14px');
-    await expect(page.locator('.tutorial a')).toHaveCSS('text-decoration-line', 'none');
-    // components.scss, whose own rules dress the navbar's accounts menu.
-    await expect(page.locator('#login-buttons')).toHaveCSS('padding-top', '15px');
-    // layout.scss: $footer-bg-color.
-    await expect(page.locator('.footer-below')).toHaveCSS('background-color', 'rgb(35, 49, 64)');
-    // modules/gamecard.scss and game.scss need a board on screen; see 'start the game'.
+    // @layer base: the teal ground on `body`, and Montserrat on a heading — the self-hosted
+    // @font-face resolving, not the fallback stack.
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(112, 185, 176)');
+    await expect(page.locator('h2', { hasText: 'roborally' })).toHaveCSS(
+      'font-family',
+      /^Montserrat/
+    );
+    // @layer components: the panel, and the star divider's 5px rule beating Preflight's `hr`.
+    await expect(page.locator('.panel').first()).toHaveCSS('background-color', 'rgb(44, 62, 80)');
+    await expect(page.locator('hr.star-well').first()).toHaveCSS('height', '5px');
+    // @layer utilities: the accounts item's link is a 40px row like Games and Ranking.
+    await expect(page.locator('#login-buttons a')).toHaveCSS('height', '40px');
   });
 
   await test.step('sign up', async () => {
@@ -92,7 +95,7 @@ test('a new player signs up, creates a game and plays a register', async ({ page
   const selectBoard = async (boardName) => {
     await page.locator('a.select').click();
     await expect(page).toHaveURL(new RegExp(`/select/${gameId}$`));
-    await expect(page.locator('.nav-pills')).toBeVisible();
+    await expect(page.getByRole('tablist')).toBeVisible();
     // The thumbnail's id is the board name; the click handler reads it from there.
     await page.locator(`.boardchoice:has(#${boardName})`).click();
     await expect(page).toHaveURL(new RegExp(`/games/${gameId}$`));
@@ -119,11 +122,11 @@ test('a new player signs up, creates a game and plays a register', async ({ page
     await expect(page.locator('.right-panel h3', { hasText: 'Pick your cards' })).toBeVisible();
 
     // The two stylesheet layers that only apply once a board is on screen.
-    // game.scss positions the board; `--tile-size` is then set on it by board.js from
+    // game.css positions the board; `--tile-size` is then set on it by board.js from
     // the measured width, so a value here also proves that sizing code ran.
     await expect(page.locator('#board')).toHaveCSS('position', 'relative');
     await expect(page.locator('#board')).toHaveCSS('--tile-size', /^\s*\d+px$/);
-    // modules/gamecard.scss.
+    // gamecard.css.
     await expect(page.locator('.gamecard').first()).toHaveCSS('aspect-ratio', '99 / 153');
     await expect(page.locator('.gamecard').first()).toHaveCSS('cursor', 'pointer');
   });
@@ -182,7 +185,7 @@ test('a new player signs up, creates a game and plays a register', async ({ page
     await expect(page.locator('.announce-bar')).toBeVisible();
 
     // The card being played is announced on the board with a CSS animation from
-    // game.scss (`.fadeInAndOut`, 1.75 s, once per register). A running animation on it
+    // game.css (`.fadeInAndOut`, 1.75 s, once per register). A running animation on it
     // proves the stylesheet pipeline end to end, and does not depend on which card was
     // drawn — unlike the robot glide, which only plays for step cards.
     await expect

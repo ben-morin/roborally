@@ -1,0 +1,145 @@
+/* The card itself: artwork, aspect ratio and its states. How many sit in a row and how
+   far apart is the components' business (client/views/cards/), which is why nothing
+   here sets a width — a card fills whatever grid cell or inline width it is given. */
+@layer components {
+  .gamecard {
+    aspect-ratio: 99 / 153;
+    background-size: 100%;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    /* What sizes the priority digits: `cqw` below is a percentage of this box's width. */
+    container-type: inline-size;
+    transition: all 0.2s ease-in-out;
+
+    &:hover {
+      transform: scale(1.06);
+    }
+
+    &.step-forward {
+      background-image: url('/cards/f1.png');
+    }
+
+    &.step-forward-2 {
+      background-image: url('/cards/f2.png');
+    }
+
+    &.step-forward-3 {
+      background-image: url('/cards/f3.png');
+    }
+
+    &.turn-right {
+      background-image: url('/cards/r.png');
+    }
+
+    &.turn-left {
+      background-image: url('/cards/l.png');
+    }
+
+    &.step-backward {
+      background-image: url('/cards/b.png');
+    }
+
+    &.u-turn {
+      background-image: url('/cards/u.png');
+    }
+
+    &.empty {
+      border: 1px dashed rgba(255, 255, 255, 0.35);
+      box-shadow: none;
+    }
+
+    /* The cursor: the register slot the next hand click fills. */
+    &.selected {
+      border: 2px solid var(--color-teal);
+      background: rgba(112, 185, 176, 0.15);
+    }
+
+    &.powerdown {
+      background: rgba(255, 255, 255, 0.85);
+
+      svg {
+        color: var(--color-heart);
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 45%;
+        height: 45%;
+        transform: translate(-50%, -50%);
+      }
+    }
+
+    &.announce-move {
+      position: absolute;
+      overflow: visible;
+      aspect-ratio: 99 / 153;
+    }
+
+    &.covered {
+      border: 1px solid var(--color-line);
+      background-color: var(--color-navy-deep);
+    }
+
+    &.random {
+      border: 1px solid #e3e3e3;
+      background-color: var(--color-countdown);
+    }
+
+    &.damage {
+      border: 1px dashed rgba(255, 255, 255, 0.35);
+      box-shadow: none;
+      opacity: 0.7;
+      background-color: #777;
+      background-image: url('/damage-token.png');
+      background-repeat: no-repeat;
+      background-position: center center;
+
+      &:hover {
+        transform: none;
+      }
+    }
+
+    &.locked {
+      &:hover {
+        transform: none;
+      }
+    }
+
+    .priority-wrapper {
+      position: absolute;
+      top: 7%;
+      right: 9%;
+      width: 45%;
+      height: 15%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    span.priority {
+      font-size: 12.5cqw;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-priority);
+      line-height: 1;
+      max-width: 100%;
+    }
+
+    img.locked {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    &.chosen {
+      opacity: 0.3;
+    }
+  }
+
+  /* Other players' registers are not clickable, so they do not lift. */
+  .smallhand .gamecard:hover {
+    transform: none;
+  }
+}

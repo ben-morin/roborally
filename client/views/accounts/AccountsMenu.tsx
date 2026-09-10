@@ -3,9 +3,8 @@
 // widget whose flows and wording this mirrors — the messages are the ones users have been
 // reading for years, so they are kept verbatim.
 //
-// Bootstrap classes, no Bootstrap JS: client/main.js imports the bootstrap bundle, whose
-// delegated handlers key on `data-bs-*`, and a dropdown owned by both that and React state
-// fights itself. So there is no `data-bs-*` attribute here and dismissal is done by hand.
+// The panel is opened by React state and dismissed by hand (outside click, Escape); the
+// dialogs are fixed overlays of the panel's own making.
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Dispatch, ReactNode } from 'react';
 import { useTracker } from 'meteor/react-meteor-data';
@@ -35,6 +34,25 @@ import type { Notice, ResetRequest } from './accountsApi.ts';
 const ACCOUNT_CREATED =
   'Account created! Please check your inbox and verify your email before logging in.';
 
+// The panel sits in the navbar's uppercase display-font list, so it resets all of that.
+const PANEL =
+  'absolute top-[calc(100%+10px)] right-0 z-20 w-[320px] rounded-panel border border-line bg-navy-deep p-5 text-left font-sans text-base font-normal tracking-normal normal-case shadow-[0_24px_60px_-24px_rgba(0,0,0,.7)]';
+const LABEL = 'mb-2 block text-xs font-semibold tracking-[.08em] text-muted uppercase';
+const INPUT =
+  'block h-9 w-full rounded-control border border-white/16 bg-raised px-2.5 text-sm text-white placeholder:text-muted focus:border-teal';
+const BTN =
+  'inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-control px-3 text-sm font-semibold';
+const PRIMARY = `${BTN} border-0 bg-brand text-white hover:bg-[color-mix(in_srgb,var(--color-brand)_88%,white)]`;
+const GHOST = `${BTN} border border-white/22 bg-transparent text-white hover:border-white/40 hover:bg-raised`;
+// The same row as the navbar's Games and Ranking links; the journey pins its 40px height.
+const TOGGLE =
+  'inline-flex h-10 items-center rounded-control px-3 font-display text-sm font-bold tracking-[.08em] uppercase no-underline';
+const FOOTNOTE =
+  'text-xs font-bold tracking-[.04em] text-teal uppercase whitespace-nowrap hover:text-white';
+// Same reset as the panel: a dialog is rendered from inside the navbar item too.
+const DIALOG =
+  'w-[480px] max-w-[calc(100%-32px)] rounded-panel border border-line bg-navy-deep p-6 text-left font-sans text-base leading-normal font-normal tracking-normal normal-case shadow-[0_24px_60px_-24px_rgba(0,0,0,.8)]';
+
 interface PanelProps {
   panel: Panel;
   dispatch: Dispatch<PanelAction>;
@@ -45,7 +63,10 @@ interface PanelProps {
 function Messages({ panel }: { panel: Panel }) {
   if (!panel.error && !panel.info) return null;
   return (
-    <div role="alert" className={`login-message ${panel.error ? 'error-message' : 'info-message'}`}>
+    <div
+      role="alert"
+      className={`mt-3 text-center text-sm ${panel.error ? 'text-error' : 'text-teal'}`}
+    >
       {panel.error ?? panel.info}
     </div>
   );
@@ -144,13 +165,13 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
         void submit();
       }}
     >
-      <div className="mb-2">
-        <label className="form-label small mb-1" htmlFor="login-email">
+      <div className="mb-3">
+        <label className={LABEL} htmlFor="login-email">
           Email
         </label>
         <input
           id="login-email"
-          className="form-control form-control-sm"
+          className={INPUT}
           type="email"
           autoComplete="email"
           value={email}
@@ -158,13 +179,13 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
         />
       </div>
       {!isForgot && (
-        <div className="mb-2">
-          <label className="form-label small mb-1" htmlFor="login-password">
+        <div className="mb-3">
+          <label className={LABEL} htmlFor="login-password">
             Password
           </label>
           <input
             id="login-password"
-            className="form-control form-control-sm"
+            className={INPUT}
             type="password"
             autoComplete={isSignUp ? 'new-password' : 'current-password'}
             value={password}
@@ -176,23 +197,20 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
       <Messages panel={panel} />
 
       {panel.needsEmailVerification && (
-        <button
-          type="button"
-          className="btn btn-light btn-sm w-100 mb-2"
-          onClick={() => void resend()}
-        >
+        <button type="button" className={`${GHOST} mt-3`} onClick={() => void resend()}>
           Resend
         </button>
       )}
 
-      <button id="login-buttons-password" type="submit" className="btn btn-primary btn-sm w-100">
+      <button id="login-buttons-password" type="submit" className={`${PRIMARY} mt-3`}>
         {isSignUp ? 'Create account' : isForgot ? 'Reset password' : 'Sign in'}
       </button>
 
       {panel.mode === 'signIn' && (
-        <div className="additional-link-container mt-2">
+        <div className="mt-[14px] flex justify-between">
           <a
             href="#"
+            className={FOOTNOTE}
             onClick={(event) => {
               event.preventDefault();
               dispatch({ type: 'mode', mode: 'forgot' });
@@ -203,7 +221,7 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
           <a
             id="signup-link"
             href="#"
-            className="ms-3"
+            className={FOOTNOTE}
             onClick={(event) => {
               event.preventDefault();
               dispatch({ type: 'mode', mode: 'signUp' });
@@ -216,7 +234,7 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
       {panel.mode !== 'signIn' && (
         <button
           type="button"
-          className="btn btn-light btn-sm w-100 mt-2"
+          className={`${GHOST} mt-2`}
           onClick={() => dispatch({ type: 'mode', mode: 'signIn' })}
         >
           Cancel
@@ -258,26 +276,26 @@ function UserMenu({ panel, dispatch }: PanelProps) {
           void change();
         }}
       >
-        <div className="mb-2">
-          <label className="form-label small mb-1" htmlFor="login-old-password">
+        <div className="mb-3">
+          <label className={LABEL} htmlFor="login-old-password">
             Current password
           </label>
           <input
             id="login-old-password"
-            className="form-control form-control-sm"
+            className={INPUT}
             type="password"
             autoComplete="current-password"
             value={oldPassword}
             onChange={(event) => setOldPassword(event.target.value)}
           />
         </div>
-        <div className="mb-2">
-          <label className="form-label small mb-1" htmlFor="login-new-password">
+        <div className="mb-3">
+          <label className={LABEL} htmlFor="login-new-password">
             New password
           </label>
           <input
             id="login-new-password"
-            className="form-control form-control-sm"
+            className={INPUT}
             type="password"
             autoComplete="new-password"
             value={newPassword}
@@ -285,12 +303,12 @@ function UserMenu({ panel, dispatch }: PanelProps) {
           />
         </div>
         <Messages panel={panel} />
-        <button type="submit" className="btn btn-primary btn-sm w-100">
+        <button type="submit" className={`${PRIMARY} mt-3`}>
           Change password
         </button>
         <button
           type="button"
-          className="btn btn-light btn-sm w-100 mt-2"
+          className={`${GHOST} mt-2`}
           onClick={() => dispatch({ type: 'mode', mode: 'menu' })}
         >
           Cancel
@@ -304,34 +322,30 @@ function UserMenu({ panel, dispatch }: PanelProps) {
       <Messages panel={panel} />
       <button
         type="button"
-        className="btn btn-light btn-sm w-100"
+        className={`${GHOST}${panel.error || panel.info ? ' mt-3' : ''}`}
         onClick={() => dispatch({ type: 'mode', mode: 'changePassword' })}
       >
         Change password
       </button>
-      <button
-        type="button"
-        className="btn btn-primary btn-sm w-100 mt-2"
-        onClick={() => void logout()}
-      >
+      <button type="button" className={`${PRIMARY} mt-2`} onClick={() => void logout()}>
         Sign out
       </button>
     </>
   );
 }
 
-// Both dialogs are static Bootstrap markup — `.modal.d-block` plus a backdrop of our own —
-// because Bootstrap's own modal JS would want to own the same element React is rendering.
+// A fixed overlay rather than the layout's <dialog>: these two are raised by an emailed
+// link while the page loads, and keep their own state rather than a queued message.
 function Dialog({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <>
-      <div className="modal d-block" role="dialog" aria-modal="true" aria-label={label}>
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content p-3">{children}</div>
-        </div>
-      </div>
-      <div className="modal-backdrop show" />
-    </>
+    <div
+      className="fixed inset-0 z-30 flex items-start justify-center bg-[rgba(12,20,28,.7)] pt-30"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+    >
+      <div className={DIALOG}>{children}</div>
+    </div>
   );
 }
 
@@ -363,7 +377,14 @@ function ResetPasswordDialog({ request }: { request: ResetRequest }) {
 
   return (
     <Dialog label="Reset password">
-      <button type="button" className="btn-close ms-auto" aria-label="Close" onClick={close} />
+      <button
+        type="button"
+        className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-xl leading-none text-white/60 hover:bg-raised hover:text-white"
+        aria-label="Close"
+        onClick={close}
+      >
+        ×
+      </button>
       <form
         noValidate
         onSubmit={(event) => {
@@ -371,23 +392,23 @@ function ResetPasswordDialog({ request }: { request: ResetRequest }) {
           void set();
         }}
       >
-        <label className="form-label small mb-1" htmlFor="reset-password-new-password">
+        <label className={LABEL} htmlFor="reset-password-new-password">
           New password
         </label>
         <input
           id="reset-password-new-password"
-          className="form-control form-control-sm"
+          className={INPUT}
           type="password"
           autoComplete="new-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
         {error && (
-          <div role="alert" className="small text-danger mt-2">
+          <div role="alert" className="mt-3 text-sm text-error">
             {error}
           </div>
         )}
-        <button type="submit" className="btn btn-primary btn-sm w-100 mt-2">
+        <button type="submit" className={`${PRIMARY} mt-3`}>
           Set password
         </button>
       </form>
@@ -403,19 +424,15 @@ function NoticeDialog({ state, user }: { state: Notice; user: Meteor.User | null
     <Dialog label={heading ?? 'Error'}>
       {heading ? (
         <>
-          <p className="fw-bold mb-2">{heading}</p>
-          <p>You are now logged in as: {user ? getUsername(user) : ''}</p>
+          <p className="mb-2 font-semibold">{heading}</p>
+          <p className="mb-5">You are now logged in as: {user ? getUsername(user) : ''}</p>
         </>
       ) : (
-        <p role="alert" className="text-danger">
+        <p role="alert" className="mb-5 text-error">
           {state.kind === 'error' && state.message}
         </p>
       )}
-      <button
-        type="button"
-        className="btn btn-primary btn-sm w-100"
-        onClick={() => notice.set(null)}
-      >
+      <button type="button" className={PRIMARY} onClick={() => notice.set(null)}>
         Dismiss
       </button>
     </Dialog>
@@ -469,15 +486,18 @@ export function AccountsMenu() {
   const widget = (
     <>
       {loggingIn ? (
-        <span className="nav-link" role="status">
-          <span className="spinner-border spinner-border-sm" aria-hidden="true" />
-          <span className="visually-hidden">Signing in</span>
+        <span className={`${TOGGLE} text-white/55`} role="status">
+          <span
+            className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+            aria-hidden="true"
+          />
+          <span className="sr-only">Signing in</span>
         </span>
       ) : (
         <a
           id={user ? 'login-name-link' : 'login-sign-in-link'}
           ref={toggleRef}
-          className="nav-link"
+          className={`${TOGGLE} text-white/55 hover:text-white`}
           href="#"
           onClick={(event) => {
             event.preventDefault();
@@ -488,7 +508,7 @@ export function AccountsMenu() {
         </a>
       )}
       {panel.open && (
-        <div className="dropdown-menu dropdown-menu-end show p-3" ref={panelRef}>
+        <div className={PANEL} ref={panelRef}>
           {user ? (
             <UserMenu panel={panel} dispatch={dispatch} />
           ) : (

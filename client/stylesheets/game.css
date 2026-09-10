@@ -1,0 +1,239 @@
+/* The game's own geometry — board, tiles, robots, lasers, the chat box, the announce card —
+   kept as CSS rather than utilities: aspect ratios, keyframes and `--tile-size` arithmetic
+   (D11). Colours come from the @theme tokens in tailwind.css. In `components` so that
+   Preflight (`base`) cannot beat these rules; tailwind.css must be imported first for the
+   layer order to hold — see client/main.js. */
+@layer components {
+  .pointer {
+    cursor: pointer;
+  }
+
+  a.white {
+    color: #fff;
+  }
+
+  .users-pill {
+    margin: 5px;
+  }
+
+  .action-button {
+    margin: 5px;
+  }
+
+  .chat {
+    position: relative;
+    overflow: hidden;
+    margin: 0 auto 10px;
+
+    .messages {
+      width: 100%;
+      height: 300px;
+      overflow: auto;
+      text-align: left;
+
+      > div {
+        padding: 5px;
+      }
+
+      .system {
+        color: var(--color-muted);
+      }
+    }
+  }
+
+  /* The board geometry, one rule set for both sizes: `#board` sets `--tile-size` from its
+     measured width (Board.tsx), the preview thumbnail from the constant below. Nesting
+     compiles to `:is(#board, .board-thumbnail) …`, so these carry id specificity on the
+     thumbnail too; nothing in this layer competes with them, and utilities win regardless.
+
+     The tile positions its own items. Without `left`/`top` an absolutely placed item takes
+     the static position of an inline box in the tile's line, which text-align centres —
+     measured 2026-09-09: every wall and laser sat half a tile to the right. */
+  #board,
+  .board-thumbnail {
+    position: relative;
+
+    span.tile {
+      position: relative;
+      width: var(--tile-size);
+      height: var(--tile-size);
+      float: left;
+      background-size: 100%;
+    }
+
+    img.board-item {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: var(--tile-size);
+      height: var(--tile-size);
+    }
+
+    div.checkpoint {
+      font-size: calc(var(--tile-size) / 3.87);
+      background-color: var(--color-checkpoint);
+      width: calc(var(--tile-size) / 2.27);
+      height: calc(var(--tile-size) / 2.27);
+      border-radius: calc(var(--tile-size) / 4.54);
+      margin-top: calc(var(--tile-size) * 0.28);
+      margin-left: calc(var(--tile-size) * 0.28);
+      position: absolute;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &.visited {
+        background-color: var(--color-checkpoint-visited);
+      }
+    }
+
+    div.checkpoint-text {
+      color: white;
+      font-weight: bold;
+      line-height: 1;
+    }
+
+    .marker,
+    .laser {
+      position: absolute;
+      width: var(--tile-size);
+      height: var(--tile-size);
+
+      img {
+        width: var(--tile-size);
+        height: var(--tile-size);
+        transform-origin: 50% 50%;
+      }
+    }
+
+    .robot {
+      position: absolute;
+      width: calc(var(--tile-size) * 0.8);
+      height: calc(var(--tile-size) * 0.8);
+      margin-top: calc(var(--tile-size) * 0.1);
+      margin-left: calc(var(--tile-size) * 0.1);
+
+      img {
+        width: calc(var(--tile-size) * 0.8);
+        height: calc(var(--tile-size) * 0.8);
+        transform-origin: 50% 50%;
+      }
+    }
+  }
+
+  #board {
+    /* The size before Board.tsx has measured the element. */
+    --tile-size: 50px;
+    clear: both;
+    margin: 0 auto;
+    width: 100%;
+
+    .robot.eliminated {
+      opacity: 0.5;
+    }
+
+    .position-select {
+      position: absolute;
+      background-color: var(--color-position-select);
+      cursor: crosshair;
+      width: var(--tile-size);
+      height: var(--tile-size);
+      opacity: 0.7;
+    }
+
+    .direction-select {
+      position: absolute;
+      cursor: crosshair;
+      background-color: var(--color-checkpoint);
+      width: var(--tile-size);
+      height: var(--tile-size);
+      opacity: 0.7;
+    }
+
+    img.robot-off {
+      position: absolute;
+      top: calc(var(--tile-size) / 4);
+      left: calc(var(--tile-size) / 4);
+      width: 50%;
+      height: 50%;
+    }
+
+    .announce {
+      position: absolute;
+      top: 25%;
+      left: 37%;
+      width: 160px;
+      height: 215px;
+      background: rgba(44, 62, 80, 0.8);
+      text-align: center;
+    }
+  }
+
+  /* Preview size. Thumbnail.tsx's PREVIEW_TILE_SIZE is the same number, in pixels: it sizes
+     the box these tiles flow into. */
+  .board-thumbnail {
+    --tile-size: 20px;
+  }
+
+  .selected-board .board-thumbnail {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  span.players {
+    float: left;
+  }
+
+  span.length {
+    float: right;
+  }
+
+  .exit {
+    margin-top: 35px;
+  }
+
+  .laser {
+    background: #f00;
+  }
+
+  .highscores {
+    text-align: left;
+    padding-left: 60px;
+    padding-right: 60px;
+
+    h2 {
+      text-align: center;
+    }
+  }
+
+  @keyframes fadeInAndOut {
+    0%,
+    50%,
+    100% {
+      transition-timing-function: cubic-bezier(0.1, 0.5, 1, 0);
+    }
+
+    0% {
+      transform: scale(0, 0);
+      opacity: 1;
+    }
+
+    30% {
+      transform: scale(0.7, 0.7);
+      opacity: 1;
+    }
+
+    100% {
+      transform: scale(1.2, 1.2);
+      opacity: 0;
+    }
+  }
+
+  .fadeInAndOut {
+    animation-name: fadeInAndOut;
+    animation-duration: 1.75s; /* match to _ANNOUNCE_CARD_TIME in gamestate.ts */
+    animation-fill-mode: both;
+    animation-iteration-count: 1;
+  }
+}

@@ -14,3 +14,8 @@ test/
 # Profiler run output. A profiler writing a log during `meteor run` would otherwise
 # be picked up by the file watcher and trigger a pointless rebuild.
 logs/
+
+# Notes and the design canvas's working files. blaze-html-templates compiles every .html
+# under the project root, and an artboard is a whole document — the dev build stopped with
+# "Can't set DOCTYPE here" on each one.
+docs/

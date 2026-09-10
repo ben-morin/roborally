@@ -120,3 +120,9 @@ declare module 'meteor/mongo' {
     }
   }
 }
+
+// Set by Meteor's build when the app is built from a git checkout, and read by the landing
+// card. @types/meteor does not know it.
+declare namespace Meteor {
+  let gitCommitHash: string | undefined;
+}

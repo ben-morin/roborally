@@ -8,28 +8,9 @@ import { configDefaults, defineConfig } from 'vitest/config';
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const stub = (file) => fileURLToPath(new URL(`./stubs/${file}`, import.meta.url));
 
-// Blaze templates are compiled by Meteor's build, so `import './cards.html'` has nothing
-// to resolve to out here. The view modules import them purely for the side effect of
-// registering the template, and the helper tests never render, so resolve them to an
-// empty module rather than teaching vitest about Spacebars.
-const blazeHtmlStub = {
-  name: 'blaze-html-stub',
-  enforce: 'pre',
-  resolveId(id) {
-    if (id.endsWith('.html')) return '\0blaze-html-stub';
-    return null;
-  },
-  load(id) {
-    if (id === '\0blaze-html-stub') return 'export default {};';
-    return null;
-  },
-};
-
 export default defineConfig({
   root: projectRoot,
-  plugins: [blazeHtmlStub],
-  // The `meteor/...` specifiers the app reaches, plus `bootstrap`, whose real bundle
-  // touches `document` as it loads. Anchored regexes rather than plain string keys so a
+  // The `meteor/...` specifiers the app reaches. Anchored regexes rather than plain string keys so a
   // new `meteor/...` import fails to resolve loudly instead of silently picking up a
   // stub meant for something else.
   resolve: {
@@ -40,16 +21,14 @@ export default defineConfig({
       { find: /^meteor\/jam:method$/, replacement: stub('jam-method.js') },
       { find: /^meteor\/ddp-rate-limiter$/, replacement: stub('ddp-rate-limiter.js') },
       { find: /^meteor\/quave:synced-cron$/, replacement: stub('synced-cron.js') },
-      { find: /^meteor\/ostrio:flow-router-extra$/, replacement: stub('flow-router.js') },
       { find: /^meteor\/react-meteor-data$/, replacement: stub('react-meteor-data.js') },
-      { find: /^bootstrap$/, replacement: stub('bootstrap.js') },
     ],
   },
   test: {
     // Default node; the client tests opt into a DOM per file with
     // `// @vitest-environment jsdom`, so the server suite stays as fast as it was.
     environment: 'node',
-    setupFiles: ['./test/setup.js', './test/clientSetup.js'],
+    setupFiles: ['./test/setup.js'],
     include: ['test/**/*.test.{js,tsx}'],
     // The Playwright suite shares the folder. Its files are *.spec.js, which `include`
     // would never match anyway — this writes the boundary down. Setting `exclude`
