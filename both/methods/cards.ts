@@ -2,6 +2,7 @@ import './config.ts';
 import { createMethod } from 'meteor/jam:method';
 import { CardLogic } from '../cardlogic.ts';
 import { GameLogic } from '../gamelogic.ts';
+import { GameState } from '../gamestate.ts';
 import type { Doc } from '../schemas/infer.ts';
 import { checkArgsWith, schemas } from '../schemas/methods.ts';
 import { Games } from '../../collections/games.ts';
@@ -110,9 +111,16 @@ export const togglePowerDown = createMethod({
   name: 'togglePowerDown',
   validate: checkArgsWith(schemas.togglePowerDown),
   async run({ gameId }: Doc<typeof schemas.togglePowerDown>) {
+    const game = await Games.findOneAsync(gameId);
     // Logged in, as in selectCard above.
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId()! });
-    if (!player) throw new Meteor.Error(404, `Player not found! ${gameId}`);
+    if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
+
+    // Mirrors the guard the button already sits behind in the card panel. A direct call
+    // mid-turn would land, and a segment replay after a restart would then revert it.
+    if (game.gamePhase !== GameState.PHASE.PROGRAM || player.submitted) {
+      throw new Meteor.Error(409, 'Power down can only be changed while programming.');
+    }
 
     return await player.togglePowerDownAsync();
   },

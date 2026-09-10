@@ -759,7 +759,7 @@ describe('togglePowerDown', () => {
     ['OFF', GameLogic.OFF, GameLogic.ON],
   ])('cycles %s to the next state and persists it', async (_label, from, to) => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
     const playerId = await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -773,9 +773,41 @@ describe('togglePowerDown', () => {
 
   it('refuses a caller who holds no robot in that game', async () => {
     await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
 
     await expect(call('togglePowerDown', { gameId })).rejects.toMatchObject({ error: 404 });
+  });
+
+  // The button is only on screen while the player is programming, so these two are only
+  // reachable by a hand-crafted call — which used to land, and be reverted by the next
+  // segment replay.
+  it('refuses a toggle once the play phase has started', async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PLAY });
+    const playerId = await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      powerState: GameLogic.ON,
+    });
+
+    await expect(call('togglePowerDown', { gameId })).rejects.toMatchObject({ error: 409 });
+    expect((await Players.findOneAsync(playerId)).powerState).toBe(GameLogic.ON);
+  });
+
+  it('refuses a toggle once the player has submitted', async () => {
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
+    const playerId = await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      powerState: GameLogic.ON,
+      submitted: true,
+    });
+
+    await expect(call('togglePowerDown', { gameId })).rejects.toMatchObject({ error: 409 });
+    expect((await Players.findOneAsync(playerId)).powerState).toBe(GameLogic.ON);
   });
 });
 
