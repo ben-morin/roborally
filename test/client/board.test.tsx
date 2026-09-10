@@ -112,6 +112,20 @@ describe('the page', () => {
     expect(board().querySelectorAll('span.tile')).toHaveLength(tiles.width * tiles.height);
     expect(board().querySelector('img[src="/start.png"]')).toBeNull();
   });
+
+  it('draws the scrapyard strip under the tiles, beneath the robots', async () => {
+    await openBoard();
+
+    renderAt(<Board />);
+
+    const strips = board().querySelectorAll('.scrapyard');
+    expect(strips).toHaveLength(1);
+    // The strip and the robots are all absolutely positioned, so document order is paint
+    // order: the strip has to come first to lie under them.
+    expect(
+      strips[0].compareDocumentPosition(robot()) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
 });
 
 describe('tile geometry', () => {
@@ -123,7 +137,8 @@ describe('tile geometry', () => {
 
     expect(board().style.getPropertyValue('--tile-size')).toBe('32px');
     expect(board().style.width).toBe(`${game.board().width * 32}px`);
-    expect(board().style.height).toBe(`${game.board().height * 32}px`);
+    // One tile row more than the tiles: the parking row under the board.
+    expect(board().style.height).toBe(`${(game.board().height + 1) * 32}px`);
   });
 
   it('positions everything on the board from that tile size', async () => {

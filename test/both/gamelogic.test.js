@@ -179,6 +179,62 @@ describe('playCard: pushing', () => {
   });
 });
 
+// removePlayerWithDelay parks a destroyed robot one row under the board (y = board.height)
+// with needsRespawn set, and only a respawn clears the flag — an eliminated robot keeps it
+// for the rest of the game. isPlayerOnTile skips flagged robots and a robot laser walks only
+// on-board tiles, so a parked robot is never pushed, never blocks, and is never shot. The
+// board draws that row as the scrapyard; these two tests pin that it stays out of play.
+describe('a parked robot is not in play', () => {
+  it('stepping onto the parking row pushes nobody there and the mover falls', async () => {
+    vi.useFakeTimers();
+    const board = stubBoard();
+    const game = await insertGame();
+    const parked = await insertPlayer(game._id, {
+      position: { x: 2, y: board.height },
+      lives: 0,
+      needsRespawn: true,
+    });
+    const mover = await insertPlayer(game._id, {
+      direction: GameLogic.DOWN,
+      position: { x: 2, y: board.height - 1 },
+      lives: 3,
+    });
+    await insertCards(mover._id, game._id, { handCards: [11, 12] });
+    await insertDeck(game._id, { cards: [1, 2, 3] });
+
+    const cardPromise = GameLogic.playCard(mover, CARD.STEP_FORWARD);
+    await vi.advanceTimersByTimeAsync(2000); // clears the 1s removePlayerWithDelay pause
+    await cardPromise;
+
+    expect((await Players.findOneAsync(parked._id)).position).toEqual({ x: 2, y: board.height });
+    const fallen = await Players.findOneAsync(mover._id);
+    expect(fallen.lives).toBe(2);
+    expect(fallen.needsRespawn).toBe(true);
+    expect(fallen.position).toEqual({ x: board.width - 1, y: board.height });
+    vi.useRealTimers();
+  });
+
+  it('a robot laser stops at the board edge and never reaches a parked robot', async () => {
+    const board = stubBoard();
+    const game = await insertGame();
+    const shooter = await insertPlayer(game._id, {
+      position: { x: 2, y: board.height - 1 },
+      direction: GameLogic.DOWN,
+    });
+    const parked = await insertPlayer(game._id, {
+      position: { x: 2, y: board.height },
+      lives: 0,
+      needsRespawn: true,
+      damage: 0,
+    });
+    void shooter;
+
+    await GameLogic.executeLasers(await Players.find({ gameId: game._id }).fetchAsync());
+
+    expect((await Players.findOneAsync(parked._id)).damage).toBe(0);
+  });
+});
+
 describe('playCard: falling off the board / into a void', () => {
   // The death path used to read the game, push onto its queue and write the whole
   // document back — silently undoing every field another writer had set since the read,

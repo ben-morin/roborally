@@ -360,7 +360,9 @@ export function Board() {
       const size = Math.floor(el.offsetWidth / columns);
       el.style.setProperty('--tile-size', `${size}px`);
       el.style.width = `${size * columns}px`;
-      el.style.height = `${size * rows}px`;
+      // One row more than the tiles: the parking row, where a robot that is out or waiting
+      // to re-enter sits (removePlayerWithDelay parks at y = board.height).
+      el.style.height = `${size * (rows + 1)}px`;
       setTileSize(size);
     };
     measure();
@@ -506,6 +508,8 @@ export function Board() {
       {/* `#board` is contract: the browser journey checks its position and `--tile-size`. */}
       <div id="board" ref={boardRef}>
         <Tiles rows={board.tiles} showStart={false} />
+        {/* The parking row's floor; game.css draws it. Before the robots, so they sit on it. */}
+        <div className="scrapyard" aria-hidden="true" />
         <br />
         {players
           .filter((player) => player.lives > 0)
