@@ -23,7 +23,7 @@ import './stylesheets/game.css';
 
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RouterProvider } from 'react-router';
+import { RouterProvider } from 'react-router/dom';
 import { createAppRouter } from './views/router.tsx';
 
 // The one file nothing else imports: `collections/users.ts` exists only for its
