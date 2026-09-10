@@ -28,6 +28,17 @@ describe('dealCardsAsync', () => {
     expect(deckDoc.cards).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
+  it('throws when the deck runs out mid-deal instead of putting undefined in the hand', async () => {
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, { damage: 0 });
+    await insertCards(player._id, game._id);
+    await insertDeck(game._id, { cards: [] });
+
+    await expect(CardLogic.dealCardsAsync(game, player)).rejects.toThrow(
+      `Deck exhausted for game ${game._id}`
+    );
+  });
+
   it('deals one extra card with the extra_memory option', async () => {
     const game = await insertGame();
     const player = await insertPlayer(game._id, { damage: 0, optionCards: { extra_memory: true } });

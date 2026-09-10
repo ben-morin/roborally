@@ -13,6 +13,8 @@ import { GameLogic } from '../../both/gamelogic.ts';
 export async function insertGame(overrides = {}) {
   const id = await Games.insertAsync({
     boardId: 0,
+    min_player: 1,
+    max_player: 8,
     gamePhase: GameState.PHASE.PROGRAM,
     playPhase: GameState.PLAY_PHASE.IDLE,
     playPhaseCount: 1,

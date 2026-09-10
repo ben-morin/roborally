@@ -107,12 +107,12 @@ export interface PlayerStatusProps {
   own: boolean;
   checkpointCnt: number;
   // Which deck the card ids index — `addUIData` needs it to name a card's type.
-  playerCnt: number;
+  deckSize: number;
 }
 
-export function PlayerStatus({ player, game, own, checkpointCnt, playerCnt }: PlayerStatusProps) {
+export function PlayerStatus({ player, game, own, checkpointCnt, deckSize }: PlayerStatusProps) {
   const alive = player.lives > 0;
-  const cards = alive ? addUIData(player.cards, false, player.lockedCnt(), false, playerCnt) : [];
+  const cards = alive ? addUIData(player.cards, false, player.lockedCnt(), false, deckSize) : [];
   const powerDownPlayed = alive && player.powerState === GameLogic.DOWN;
   const programming = game.gamePhase === GameState.PHASE.PROGRAM;
 

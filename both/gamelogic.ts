@@ -73,7 +73,7 @@ async function playCard(player: Player, card: number) {
     const game = await player.gameAsync();
     // Every card in a register came out of this game's deck, so the lookup always finds
     // one — see the note on `cardType`.
-    const cardType = CardLogic.cardType(card, await game.playerCntAsync())!;
+    const cardType = CardLogic.cardType(card, await game.deckSizeAsync())!;
     console.log(`playing card ${cardType.name} for player ${player.name}`);
 
     player.rotate(cardType.direction);

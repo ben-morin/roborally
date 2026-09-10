@@ -86,11 +86,19 @@ async function nextGamePhaseAsync(gameId: string) {
   const game = (await Games.findOneAsync(gameId))!;
   await new Promise((resolve) => Meteor.setTimeout(resolve, _NEXT_PHASE_DELAY));
   switch (game.gamePhase) {
-    case GameState.PHASE.IDLE:
-      if (!(await game.advanceAsync({ $set: { started: true, gamePhase: GameState.PHASE.DEAL } })))
+    case GameState.PHASE.IDLE: {
+      // The claim that starts the game is also where the deck is fixed: the seats cannot
+      // change again in a way that should move a dealt card to the other deck.
+      const deckSize = CardLogic.deckSizeFor(await game.playerCntAsync());
+      if (
+        !(await game.advanceAsync({
+          $set: { started: true, gamePhase: GameState.PHASE.DEAL, deckSize },
+        }))
+      )
         return;
       await playDealPhase(game);
       break;
+    }
     case GameState.PHASE.DEAL:
       if (!(await game.stopAnnounceAsync())) return;
       await playDealPhase(game);

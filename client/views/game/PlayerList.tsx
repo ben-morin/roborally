@@ -17,7 +17,8 @@ export function PlayerList() {
   // landed; the panel says nothing rather than saying something wrong.
   if (gamesLoading || playersLoading) return null;
 
-  const minPlayer = game && game.min_player > 1 ? `${game.min_player} players` : 'One player';
+  // Both bounds, because both are refused: the maximum is what a board change can break.
+  const range = game && `${game.min_player} to ${game.max_player} players to start the game`;
 
   return (
     <>
@@ -39,7 +40,7 @@ export function PlayerList() {
       ) : (
         <p className="mt-4 text-base text-muted">nobody joined yet :-(</p>
       )}
-      <p className="mt-3 text-sm text-muted">min {minPlayer} recommended to start the game</p>
+      <p className="mt-3 text-sm text-muted">{range}</p>
     </>
   );
 }

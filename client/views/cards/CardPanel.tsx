@@ -137,6 +137,9 @@ export function CardPanel() {
   // The `cards` publication sends the reader's own document, so this is their hand.
   const cardDoc = useTracker(() => Cards.findOne());
   const playerCnt = useTracker(() => (gameId ? Players.find({ gameId }).count() : 0), [gameId]);
+  // The game carries the deck it started with; the live count is only the fallback for a
+  // game that started before that field existed.
+  const deckSize = game?.deckSize ?? CardLogic.deckSizeFor(playerCnt);
   const boardId = game?.boardId;
   const checkpointCnt = useMemo(
     () => (boardId === undefined ? 0 : BoardBox.getBoard(boardId).checkpoints.length),
@@ -269,7 +272,7 @@ export function CardPanel() {
         <div className="player-robot">
           <p className={EYEBROW}>Your hand</p>
           <div className={`hand ${GRID}`}>
-            {addUIData(hand, true, false, false, playerCnt, chosenIds).map((card, index) => (
+            {addUIData(hand, true, false, false, deckSize, chosenIds).map((card, index) => (
               // Keyed by card, so the deal replaces the placeholder nodes rather than
               // cross-fading each one into a card through the stylesheet's transition.
               <Card
@@ -294,7 +297,7 @@ export function CardPanel() {
             </div>
           ) : (
             <div className={`playing ${GRID}`}>
-              {addUIData(chosen, false, player.lockedCnt(), true, playerCnt).map((card) => (
+              {addUIData(chosen, false, player.lockedCnt(), true, deckSize).map((card) => (
                 // Keyed by slot and content, as the template's per-item nodes were: a slot
                 // that fills or empties is a new node, not a transition between two looks.
                 <Card
@@ -336,7 +339,7 @@ export function CardPanel() {
               game={game}
               own
               checkpointCnt={checkpointCnt}
-              playerCnt={playerCnt}
+              deckSize={deckSize}
             />
           </div>
         )
@@ -349,7 +352,7 @@ export function CardPanel() {
             game={game}
             own={false}
             checkpointCnt={checkpointCnt}
-            playerCnt={playerCnt}
+            deckSize={deckSize}
           />
         </div>
       ))}

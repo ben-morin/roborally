@@ -18,14 +18,13 @@ interface UICard {
 
 // What the three booleans decide, since their types cannot say it: `available` is the hand
 // (clickable) rather than played or chosen cards, `selectable` attaches the slot index so a
-// click knows which slot it hit, and `numberOfPlayers` picks the deck CardLogic.cardType()
-// reads.
+// click knows which slot it hit, and `deckSize` picks the deck CardLogic.cardType() reads.
 export function addUIData(
   cards: number[],
   available: boolean,
   locked: number | false,
   selectable: boolean,
-  numberOfPlayers: number,
+  deckSize: number,
   chosenIds?: Set<number>
 ) {
   const uiCards: UICard[] = [];
@@ -51,7 +50,7 @@ export function addUIData(
         break;
       default:
         if (card !== null && typeof card !== 'undefined') {
-          const ct = CardLogic.cardType(card, numberOfPlayers);
+          const ct = CardLogic.cardType(card, deckSize);
           if (ct) {
             cardProp.class = available ? 'available' : 'played';
             cardProp.priority = CardLogic.priority(card);

@@ -18,7 +18,7 @@ import '../collections/users.ts';
 // Types only — erased at build, so it cannot disturb the side-effect load order above.
 import type { Mongo } from 'meteor/mongo';
 import { SyncedCron } from 'meteor/quave:synced-cron';
-import { autoSubmitIfTimedOut, forceSubmitStragglerAsync } from '../both/cardlogic.ts';
+import { autoSubmitIfTimedOut, CardLogic, forceSubmitStragglerAsync } from '../both/cardlogic.ts';
 import { GameLogic } from '../both/gamelogic.ts';
 import { GameState } from '../both/gamestate.ts';
 import { Games, type SegmentSnapshot } from '../collections/games.ts';
@@ -225,6 +225,17 @@ Meteor.startup(async () => {
     { multi: true }
   );
   if (backfilled > 0) console.log(`Backfilled step on ${backfilled} game(s)`);
+
+  // Games started before the deck size was stored derive it from their seats. One update
+  // each, because the size depends on the game's own player count.
+  for (const game of await Games.find({
+    started: true,
+    deckSize: { $exists: false },
+  }).fetchAsync()) {
+    const deckSize = CardLogic.deckSizeFor(await game.playerCntAsync());
+    await Games.updateAsync(game._id, { $set: { deckSize } });
+    console.log(`Backfilled deckSize ${deckSize} on game ${game._id}`);
+  }
 
   // Five fields on the game and one on the player used to be `Optional(AnyOf(X, Null))`
   // and are now required keys that may be null. A document written before that has the

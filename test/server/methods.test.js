@@ -176,6 +176,24 @@ describe('joinGame', () => {
     await expect(call('joinGame', { gameId: 'nope' })).rejects.toMatchObject({ error: 404 });
   });
 
+  it('refuses a seat in a full game and in one that already started', async () => {
+    await loginAs();
+    const full = await Games.insertAsync({ boardId: 0, started: false, max_player: 2 });
+    await Players.insertAsync({ gameId: full, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
+    await Players.insertAsync({ gameId: full, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
+
+    await expect(call('joinGame', { gameId: full })).rejects.toMatchObject({
+      error: 403,
+      reason: 'Game is full.',
+    });
+
+    const started = await Games.insertAsync({ boardId: 0, started: true, max_player: 8 });
+    await expect(call('joinGame', { gameId: started })).rejects.toMatchObject({
+      error: 403,
+      reason: 'Game already started.',
+    });
+  });
+
   it('creates a player with three lives, off-board, and a matching Cards doc', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0, started: false });
@@ -416,8 +434,8 @@ describe('cancelGame', () => {
 
 describe('selectBoard', () => {
   it('refuses a board name that is not in the catalog', async () => {
-    await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const owner = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
 
     await expect(
       call('selectBoard', { boardName: 'no such board', gameId: gameId })
@@ -435,8 +453,8 @@ describe('selectBoard', () => {
   });
 
   it('switches the board and copies its player limits onto the game', async () => {
-    await loginAs({ profile: { name: 'Ben' } });
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const owner = await loginAs({ profile: { name: 'Ben' } });
+    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
 
     await call('selectBoard', { boardName: 'checkmate', gameId: gameId });
 
@@ -448,6 +466,43 @@ describe('selectBoard', () => {
       max_player: BoardBox.getBoard(boardId).max_player,
     });
     expect(await messages(gameId)).toEqual(['Ben selected board checkmate']);
+  });
+
+  it('refuses a caller who does not own the game, and a game already started', async () => {
+    const owner = await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
+    const started = await Games.insertAsync({ boardId: 0, userId: owner._id, started: true });
+
+    await loginAs();
+    await expect(
+      call('selectBoard', { boardName: 'checkmate', gameId: gameId })
+    ).rejects.toMatchObject({ error: 403, reason: 'Only the owner can change the board.' });
+
+    await loginAs(owner._id);
+    await expect(
+      call('selectBoard', { boardName: 'checkmate', gameId: started })
+    ).rejects.toMatchObject({ error: 409, reason: 'Game already started.' });
+
+    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
+  });
+
+  it('refuses a board that seats fewer players than are already sitting down', async () => {
+    const owner = await loginAs();
+    // `bloodbath_chess` seats 4; nine players are already in.
+    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
+    for (let i = 0; i < 9; i++) {
+      await Players.insertAsync({
+        gameId,
+        userId: `u${i}`,
+        name: `u${i}`,
+        position: { x: 0, y: 0 },
+      });
+    }
+
+    await expect(
+      call('selectBoard', { boardName: 'bloodbath_chess', gameId: gameId })
+    ).rejects.toMatchObject({ error: 403, reason: '9 players are seated; that board seats 4.' });
+    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
   });
 
   // Regression guard. selectBoard used to skip the login check every other method makes,
@@ -472,6 +527,36 @@ describe('startGame', () => {
     await Players.insertAsync({ gameId, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
 
     await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({ error: 403 });
+  });
+
+  it('refuses to start with fewer players than the board needs', async () => {
+    await loginAs();
+    const gameId = await Games.insertAsync({ boardId: 0, min_player: 2, max_player: 8 });
+    await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
+
+    await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({
+      error: 403,
+      reason: 'Not enough players.',
+    });
+  });
+
+  it('refuses more players than any deck covers, whatever the board declares', async () => {
+    await loginAs();
+    // A board seating 20 would still deal off the end of the 126-card deck.
+    const gameId = await Games.insertAsync({ boardId: 0, min_player: 1, max_player: 20 });
+    for (let i = 0; i <= CardLogic.MAX_PLAYERS; i++) {
+      await Players.insertAsync({
+        gameId,
+        userId: `u${i}`,
+        name: `u${i}`,
+        position: { x: -1, y: -1 },
+      });
+    }
+
+    await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({
+      error: 403,
+      reason: 'Too many players for a deck.',
+    });
   });
 
   it('refuses an anonymous caller and an unknown game', async () => {

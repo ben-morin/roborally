@@ -50,10 +50,11 @@ describe('PlayerList', () => {
   });
 
   it.each([
-    [1, 'min One player recommended to start the game'],
-    [3, 'min 3 players recommended to start the game'],
-  ])('phrases a minimum of %i', async (minPlayer, expected) => {
-    await openLobby({ min_player: minPlayer });
+    [1, 8, '1 to 8 players to start the game'],
+    [5, 8, '5 to 8 players to start the game'],
+    [8, 12, '8 to 12 players to start the game'],
+  ])('states the seat range %i-%i', async (min_player, max_player, expected) => {
+    await openLobby({ min_player, max_player });
 
     renderAt(<PlayerList />);
 

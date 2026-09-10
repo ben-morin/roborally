@@ -209,10 +209,14 @@ export class Player {
           slot < GameLogic.CARD_SLOTS - oldLockedCnt;
           slot++
         ) {
-          // `shift()` on an exhausted deck would put `undefined` in the slot, exactly as
-          // it did before the types; the `!` records that rather than changing it.
-          this.cards[slot] = deck.cards.shift()!;
-          chosenCards[slot] = this.cards[slot];
+          const card = deck.cards.shift();
+          // The deck holds more cards than every hand together can, so an empty one is a
+          // bug rather than a state to put `undefined` in a slot for.
+          if (card === undefined) {
+            throw new Error(`Deck exhausted for game ${game._id}`);
+          }
+          this.cards[slot] = card;
+          chosenCards[slot] = card;
         }
         await deck.saveAsync();
         await this.saveAsync();
@@ -258,10 +262,7 @@ export class Player {
     // A card can only be discarded if it was drawn, so the deck it came from is there.
     const deckDoc = (await Decks.findOneAsync({ gameId }))!;
     const discarded = deckDoc.discardedOptionCards;
-    // `getOptionId` falls off the end — undefined — for a name that is not in the option
-    // deck. Every `name` that reaches here is a key of some player's `optionCards`, and
-    // those are only ever written from `getOptionName`, so it is always a real card.
-    discarded.push(CardLogic.getOptionId(name)!);
+    discarded.push(CardLogic.getOptionId(name));
     await Decks.updateAsync({ gameId }, { $set: { discardedOptionCards: discarded } });
     // Announce the discard for the same reason as the draw: both circuit_breaker
     // (deal phase) and ablative_coat (mid-laser-fire) discard with no visual cue.

@@ -468,7 +468,10 @@ export function Board() {
       : null;
   const announcer = announceCard && players.find((p) => p._id === announceCard.playerId);
   // A card id off the deck: this already throws today, as the template's helper did.
-  const announceType = announceCard && CardLogic.cardType(announceCard.cardId, playerCnt)!.name;
+  // The game's own deck, not the live seat count — see the note on `deckSize` in
+  // collections/games.ts. The fallback covers a game started before that field existed.
+  const deckSize = game.deckSize ?? CardLogic.deckSizeFor(playerCnt);
+  const announceType = announceCard && CardLogic.cardType(announceCard.cardId, deckSize)!.name;
 
   const onChoosePosition = (x: number, y: number) =>
     selectRespawnPosition({ gameId: game._id, x, y }).catch((error) => modalAlert(error.reason));

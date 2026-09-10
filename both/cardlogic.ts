@@ -120,8 +120,19 @@ async function verifySubmittedCardsAsync(player: Player) {
   return player.cards;
 }
 
+// Card ids are only meaningful against the deck they were dealt from, and the two decks
+// disagree about every id past the u-turn band. Sizes, not player counts, are what the
+// lookups take — see `deckSizeFor` and `cardType`.
+function total(deck: readonly number[]) {
+  return deck.reduce((sum, cardTypeCnt) => sum + cardTypeCnt, 0);
+}
+
 export class CardLogic {
   static _MAX_NUMBER_OF_CARDS = 9;
+  // A deck has to cover every card held at once: nine per player, plus one for the single
+  // `extra_memory` option (the option deck holds one of each, so only one player can have
+  // it). 12 players need 109 of the 126-card deck; 14 would need 127.
+  static MAX_PLAYERS = 12;
   static EMPTY = -1;
   static COVERED = -2;
   static DAMAGE = -3;
@@ -269,9 +280,13 @@ export class CardLogic {
     }
     //grab card from deck, so it can't be handed out twice
     for (let i = 0; i < nrOfNewCards; i++) {
-      // `pop()` on an exhausted deck would put `undefined` in the hand, exactly as it did
-      // before the types; the `!` records that rather than changing it.
-      handCards.push(deck.cards.pop()!);
+      const card = deck.cards.pop();
+      // The deck holds more cards than every hand together can, so an empty one is a bug
+      // in the deal, not a state to carry on from with `undefined` in a hand.
+      if (card === undefined) {
+        throw new Error(`Deck exhausted for game ${game._id}`);
+      }
+      handCards.push(card);
     }
     console.log(`${player.name}: hand cards ${handCards.length}, new total: ${deck.cards.length}`);
 
@@ -368,8 +383,6 @@ export class CardLogic {
       .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
   }
 
-  // `undefined` for a name that is not in the option deck: the loop simply ends. Every
-  // caller passes a name that came out of `getOptionName`, so no caller can see it.
   static getOptionId(name: string) {
     for (let id = 0; id < this._option_deck.length; id++) {
       const option = this._option_deck[id];
@@ -377,18 +390,31 @@ export class CardLogic {
         return id;
       }
     }
+    // Every caller passes a name that came out of `getOptionName`, so an unknown one is a
+    // bug rather than a miss to hand back.
+    throw new Error(`Unknown option card: ${name}`);
   }
 
   static getOptionDesc(name: string) {
-    // The `!` is the invariant above, written down: an unknown name throws here today, as
-    // indexing by `undefined` always has.
-    return this._option_deck[this.getOptionId(name)!][1];
+    return this._option_deck[this.getOptionId(name)][1];
+  }
+
+  // The size of the deck a game with this many players deals from. Stored on the game at
+  // start, because a player leaving a started game must not change which deck the ids
+  // already in play belong to.
+  static deckSizeFor(playerCnt: number) {
+    return total(playerCnt <= 8 ? this._8_deck : this._12_deck);
   }
 
   // `undefined` for a card id at or past the end of the deck — the loop falls off its end.
   // Card ids come out of the same deck this walks, so no caller reaches that.
-  static cardType(cardId: number, playerCnt: number): CardType | undefined {
-    const deck = playerCnt <= 8 ? this._8_deck : this._12_deck;
+  static cardType(cardId: number, deckSize: number): CardType | undefined {
+    // The EMPTY/COVERED/DAMAGE/RANDOM sentinels are negative, so the first band would
+    // otherwise claim them as u-turns. A caller maps them before asking for a type.
+    if (cardId < 0) {
+      throw new Error(`Not a deck card: ${cardId}`);
+    }
+    const deck = deckSize > total(this._8_deck) ? this._12_deck : this._8_deck;
     let cnt = 0;
     for (let index = 0; index < deck.length; index++) {
       const cardTypeCnt = deck[index];

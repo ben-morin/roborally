@@ -43,6 +43,13 @@ export async function joinGameAsync(gameId: string, user: Meteor.User | null) {
   const author = getUsername(user!);
   let playerId;
   if (!(await Players.findOneAsync({ gameId, userId: user!._id }))) {
+    // A seat taken after the start has no start point and no robotId, and the deck was
+    // already sized for the seats the game started with — see `deckSize` in
+    // collections/games.ts.
+    if (game.started) throw new Meteor.Error(403, 'Game already started.');
+    if ((await Players.find({ gameId }).countAsync()) >= game.max_player) {
+      throw new Meteor.Error(403, 'Game is full.');
+    }
     // The dev-test board is meant for exercising elimination flows quickly,
     // so seat players with a single life instead of the standard three.
     const startingLives = game.boardId === BoardBox.dev_test_board_id ? 1 : 3;
@@ -268,11 +275,22 @@ export const selectBoard = createMethod({
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
+    if (game.userId !== user._id) {
+      throw new Meteor.Error(403, 'Only the owner can change the board.');
+    }
+    if (game.started) throw new Meteor.Error(409, 'Game already started.');
+
     const board_id = BoardBox.getBoardId(boardName);
     if (board_id < 0) throw new Meteor.Error(404, `Board ${boardName} not found!`);
 
     const min = BoardBox.getBoard(board_id).min_player;
     const max = BoardBox.getBoard(board_id).max_player;
+    // A maximum only: a game under the minimum is just a lobby still filling up. Both
+    // numbers are in the message because the owner's fix is to get people to leave.
+    const seated = await Players.find({ gameId }).countAsync();
+    if (seated > max) {
+      throw new Meteor.Error(403, `${seated} players are seated; that board seats ${max}.`);
+    }
     await Games.updateAsync(game._id, {
       $set: { boardId: board_id, min_player: min, max_player: max },
     });
@@ -290,8 +308,16 @@ export const startGame = createMethod({
     if (!game) throw new Meteor.Error(404, 'Game id not found!');
 
     const players = await Players.find({ gameId }).fetchAsync();
+    if (players.length < Math.max(1, game.min_player)) {
+      throw new Meteor.Error(403, 'Not enough players.');
+    }
     if (players.length > game.max_player) {
       throw new Meteor.Error(403, 'Too many players.');
+    }
+    // The board's own limit is above; this is the deck's, and it holds whatever a board
+    // declares — no deck covers more than 12 players.
+    if (players.length > CardLogic.MAX_PLAYERS) {
+      throw new Meteor.Error(403, 'Too many players for a deck.');
     }
 
     // NOTE: `for...in` on purpose — `i` is a string index, and robotId is persisted as

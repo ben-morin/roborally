@@ -43,7 +43,7 @@ async function renderRow(overrides: Record<string, unknown> = {}, own = false) {
       game={game}
       own={own}
       checkpointCnt={checkpointCnt}
-      playerCnt={2}
+      deckSize={84}
     />
   );
 }

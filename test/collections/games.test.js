@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { GameState } from '../../both/gamestate.ts';
 import { Games } from '../../collections/games.ts';
-import { insertGame } from '../helpers/fixtures.js';
+import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 
 beforeEach(() => resetFakeCollections());
 afterEach(() => vi.restoreAllMocks());
@@ -151,5 +151,24 @@ describe('the phase wrappers', () => {
 
     expect(dispatch).toHaveBeenCalledWith(game._id);
     expect((await Games.findOneAsync(game._id)).step).toBe(0);
+  });
+});
+
+describe('deckSizeAsync / newDeckAsync', () => {
+  it('deals from the size the game stored, whatever the seats say now', async () => {
+    // A 9-player game that has lost a player: the live count says 8, but the ids already
+    // dealt run up to 125 and still belong to the 126-card deck.
+    const game = await insertGame({ deckSize: 126 });
+    await insertPlayer(game._id);
+
+    expect(await game.deckSizeAsync()).toBe(126);
+    expect((await game.newDeckAsync()).cards).toHaveLength(126);
+  });
+
+  it('falls back to the live player count for a game started before the field existed', async () => {
+    const game = await insertGame();
+    for (let i = 0; i < 9; i++) await insertPlayer(game._id, { userId: `user_${i}` });
+
+    expect(await game.deckSizeAsync()).toBe(126);
   });
 });

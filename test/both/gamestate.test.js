@@ -56,6 +56,9 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     // Each deal opens a new programming round; playCards uses this to reject a
     // submit that arrives after the turn it was meant for.
     expect(gameDoc.programRound).toBe(2); // fixture seeds 1
+    // The starting claim also fixes the deck, so a later leaver cannot move a dealt
+    // card id to the other deck.
+    expect(gameDoc.deckSize).toBe(84);
     // Two claims: IDLE -> DEAL, then DEAL -> PROGRAM.
     expect(gameDoc.step).toBe(2);
     expect(gameDoc.lastStepAt).toBeInstanceOf(Date);

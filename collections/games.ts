@@ -207,10 +207,14 @@ export class Game {
     }
     return await this.newDeckAsync();
   }
+  // The deck this game deals from, fixed when it started. The fallback is for a game that
+  // was already in flight before the field existed; `Meteor.startup` backfills those, so it
+  // is only reached in the window before the first sweep.
+  async deckSizeAsync() {
+    return this.deckSize ?? CardLogic.deckSizeFor(await this.playerCntAsync());
+  }
   async newDeckAsync() {
-    const cnt = await this.playerCntAsync();
-    const deckSpec = cnt <= 8 ? CardLogic._8_deck : CardLogic._12_deck;
-    const deckSize = deckSpec.reduce((total, cardTypeCnt) => total + cardTypeCnt, 0);
+    const deckSize = await this.deckSizeAsync();
     // `newDeck`, not a bare object literal: an unsaved deck has to carry the same
     // prototype as a stored one so `getDeckAsync` hands every caller one shape, with
     // `saveAsync` on it either way.
@@ -321,6 +325,10 @@ const schema = {
   // again here would mean keeping three other schemas in sync forever. `SegmentSnapshot`
   // above is the type-level description.
   segmentSnapshot: Optional(Any),
+  // The size of the deck this game deals from, 84 or 126, written by the claim that starts
+  // it. Stored rather than derived because the live player count drops when someone leaves
+  // a started game, and the ids already dealt still belong to the original deck.
+  deckSize: Optional(Number),
   // The programming timer: -1 off, 1 running, 0 expired. Absent until the first deal, so
   // unlike `timerStartedAt` above it is genuinely two-state.
   timer: Optional(Number),
