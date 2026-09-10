@@ -290,19 +290,28 @@ describe('the hand and the registers', () => {
   });
 });
 
+const BACKGROUNDS = ['bg-transparent', 'bg-danger', 'bg-warning'];
+
 describe('the buttons', () => {
   it.each([
-    [GameLogic.ON, 'Announce power down', false],
-    [GameLogic.DOWN, 'Withdraw power down', true],
-    [GameLogic.OFF, 'Cancel power down', false],
-  ])('labels power state %s "%s"', async (powerState, name, armed) => {
+    // Announced reads as danger, cancelled as a warning; only the idle button is a ghost.
+    [GameLogic.ON, 'Announce', 'Announce power down', 'bg-transparent'],
+    [GameLogic.DOWN, 'Withdraw', 'Withdraw power down', 'bg-danger'],
+    [GameLogic.OFF, 'Cancel', 'Cancel power down', 'bg-warning'],
+  ])('labels power state %s "%s"', async (powerState, verb, name, background) => {
     await seat({ player: { powerState } });
 
     renderAt(<CardPanel />);
 
-    expect(powerButton()).toHaveTextContent(name);
-    // Armed reads as danger; the other two are ghost buttons.
-    expect(powerButton().className.includes('--color-danger')).toBe(armed);
+    // The power symbol says "power down", so only the verb is written out — but the
+    // accessible name is the whole wording.
+    expect(powerButton()).toHaveTextContent(verb);
+    expect(powerButton().querySelector('[data-icon="power"]')).toBeVisible();
+    expect(powerButton()).toHaveAccessibleName(name);
+    expect(powerButton().className).toContain(background);
+    for (const other of BACKGROUNDS.filter((name) => name !== background)) {
+      expect(powerButton().className).not.toContain(other);
+    }
   });
 
   it('enables submit only once all five registers are filled', async () => {

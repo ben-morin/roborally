@@ -31,7 +31,15 @@ import { Tiles } from './Tiles.tsx';
 const DANGER =
   'inline-flex h-10 cursor-pointer items-center justify-center rounded-control border-0 bg-danger px-4 text-sm font-semibold text-white no-underline hover:bg-[color-mix(in_srgb,var(--color-danger)_88%,white)] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const CHIP =
-  'flex h-[30px] items-center justify-center gap-1.5 rounded-card text-xs font-semibold tracking-[.04em] uppercase';
+  'flex h-[30px] items-center justify-center gap-[0.45em] rounded-card font-semibold tracking-[.04em] whitespace-nowrap uppercase';
+// The label may not wrap, so the font is sized from the strip's own width (`@container`
+// on it) and capped at the 12px it reads at when there is room. The rate is what the
+// longest label of that set fits in a quarter column: SHOOTING LASERS is 11.1em with its
+// icon, MOVE BOARD 8.3em. Both rows of a set share a rate, so the two lines match.
+const CHIP_TEXT = 'text-[length:min(0.75rem,2.1cqi)]';
+const CHIP_TEXT_SHORT = 'text-[length:min(0.75rem,2.8cqi)]';
+// Sized in `em` so the icon shrinks with the label it sits next to.
+const CHIP_ICON = 'size-[1.15em] shrink-0';
 // Each state carries the whole of its own colour, so no two utilities for one property
 // ever sit on the chip together.
 const CHIP_PENDING = 'bg-white/8 text-white/60';
@@ -39,6 +47,12 @@ const CHIP_ACTIVE = 'bg-teal text-navy';
 const CHIP_DONE = 'bg-checkpoint-visited text-white';
 const CHIP_ROW = 'm-0 grid list-none gap-1 p-0';
 
+/**
+ * The board width under which the chips read their short labels. The full ones need a
+ * 544px strip to stay at 12px, and shrinking them to 8px to keep SHOOTING LASERS whole
+ * was worse than abbreviating it.
+ */
+const SHORT_CHIP_WIDTH = 556;
 /** The tile size before the board has been measured, and when there is nothing to measure. */
 const DEFAULT_TILE_SIZE = 50;
 /** How far in from the robot's facing edge a beam starts. */
@@ -55,6 +69,8 @@ type ChipState = 'pending' | 'active' | 'done';
 
 interface Chip {
   name: string;
+  // What a narrow strip draws instead. See SHORT_CHIP_WIDTH.
+  short: string;
   state: ChipState;
 }
 
@@ -72,11 +88,11 @@ function chipClass(state: ChipState) {
 function ChipIcon({ state }: { state: ChipState }) {
   switch (state) {
     case 'active':
-      return <ArrowRightCircle size={14} />;
+      return <ArrowRightCircle className={CHIP_ICON} />;
     case 'done':
-      return <CheckCircle size={14} />;
+      return <CheckCircle className={CHIP_ICON} />;
     default:
-      return <Circle size={14} />;
+      return <Circle className={CHIP_ICON} />;
   }
 }
 
@@ -84,6 +100,7 @@ function ChipIcon({ state }: { state: ChipState }) {
 export function registerChips(game: Game): Chip[] {
   return [1, 2, 3, 4, 5].map((register) => ({
     name: `register ${register}`,
+    short: `reg ${register}`,
     state:
       game.playPhaseCount === register
         ? 'active'
@@ -93,11 +110,11 @@ export function registerChips(game: Game): Chip[] {
   }));
 }
 
-const PLAY_PHASE_NAMES: [string, string][] = [
-  [GameState.PLAY_PHASE.MOVE_BOTS, 'moving bots'],
-  [GameState.PLAY_PHASE.MOVE_BOARD, 'moving board'],
-  [GameState.PLAY_PHASE.LASERS, 'shooting lasers'],
-  [GameState.PLAY_PHASE.CHECKPOINTS, 'checkpoints'],
+const PLAY_PHASE_NAMES: [phase: string, name: string, short: string][] = [
+  [GameState.PLAY_PHASE.MOVE_BOTS, 'moving bots', 'move bots'],
+  [GameState.PLAY_PHASE.MOVE_BOARD, 'moving board', 'move board'],
+  [GameState.PLAY_PHASE.LASERS, 'shooting lasers', 'lasers'],
+  [GameState.PLAY_PHASE.CHECKPOINTS, 'checkpoints', 'checks'],
 ];
 
 /**
@@ -107,27 +124,37 @@ const PLAY_PHASE_NAMES: [string, string][] = [
  */
 export function playPhaseChips(game: Game): Chip[] {
   let finished = true;
-  return PLAY_PHASE_NAMES.map(([phase, name]) => {
+  return PLAY_PHASE_NAMES.map(([phase, name, short]) => {
     if (phase === game.playPhase) {
       finished = false;
-      return { name, state: 'active' };
+      return { name, short, state: 'active' };
     }
-    return { name, state: finished ? 'done' : 'pending' };
+    return { name, short, state: finished ? 'done' : 'pending' };
   });
 }
 
-function ChipRow({ chips, label, columns }: { chips: Chip[]; label: string; columns: string }) {
+function ChipRow({
+  chips,
+  label,
+  columns,
+  short,
+}: {
+  chips: Chip[];
+  label: string;
+  columns: string;
+  short: boolean;
+}) {
   return (
     <ol className={`${CHIP_ROW} ${columns}`} aria-label={label}>
       {chips.map((chip) => (
         <li
           key={chip.name}
-          className={`${CHIP} ${chipClass(chip.state)}`}
+          className={`${CHIP} ${short ? CHIP_TEXT_SHORT : CHIP_TEXT} ${chipClass(chip.state)}`}
           aria-current={chip.state === 'active' ? 'step' : undefined}
           data-state={chip.state}
         >
           <ChipIcon state={chip.state} />
-          {chip.name}
+          {short ? chip.short : chip.name}
         </li>
       ))}
     </ol>
@@ -444,6 +471,7 @@ export function Board() {
   };
 
   const boardWidth = board.width * tileSize;
+  const shortChipLabels = boardWidth < SHORT_CHIP_WIDTH;
   const playerCnt = players.length;
   const you = (player: Player) => (player.userId === userId ? 'You' : player.name);
 
@@ -500,11 +528,21 @@ export function Board() {
           // `announce-bar` is contract: the browser journey waits for it to be visible. The
           // strip is as wide as the board under it.
           <div
-            className="announce-bar mx-auto mb-3 flex flex-col gap-1 rounded-control bg-navy-deep p-1.5"
+            className="announce-bar @container mx-auto mb-3 flex flex-col gap-1 rounded-control bg-navy-deep p-1.5"
             style={{ width: `${boardWidth}px` }}
           >
-            <ChipRow chips={registerChips(game)} label="Registers" columns="grid-cols-5" />
-            <ChipRow chips={playPhaseChips(game)} label="Play phases" columns="grid-cols-4" />
+            <ChipRow
+              chips={registerChips(game)}
+              label="Registers"
+              columns="grid-cols-5"
+              short={shortChipLabels}
+            />
+            <ChipRow
+              chips={playPhaseChips(game)}
+              label="Play phases"
+              columns="grid-cols-4"
+              short={shortChipLabels}
+            />
           </div>
         )
       )}

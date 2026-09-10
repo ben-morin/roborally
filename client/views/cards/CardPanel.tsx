@@ -26,15 +26,22 @@ import { addUIData } from '../../lib/cardUI.ts';
 import { firstEmptySlot, nextEmptySlot } from '../../lib/slots.ts';
 import { modalAlert } from '../../helper/modalDialogs.ts';
 import { useRouteParam } from '../useRouteParam.ts';
+import { Power } from '../icons/Power.tsx';
 import { Card } from './Card.tsx';
 import type { UICard } from './Card.tsx';
 import { EYEBROW, OptionCards, PlayerHeader, PlayerStatus } from './PlayerStatus.tsx';
 
+// The label may not wrap, so the font is sized from the button row's own width
+// (`@container` on it) and capped at the 14px it reads at when there is room. 5.8cqi is
+// what the widest pair fits in: the power button's verb and symbol plus "Play cards"
+// measures 17.1em of text, icon and em-based padding.
+const BTN =
+  'inline-flex h-10 items-center justify-center gap-[0.45em] rounded-control px-[0.9em] text-[length:min(0.875rem,5.8cqi)] font-semibold whitespace-nowrap no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
+// Sized in `em` so the symbol shrinks with the verb beside it.
+const BTN_ICON = 'size-[1.15em] shrink-0';
 // Each variant carries the whole of its own cursor and colour, so no two utilities for
 // one property ever sit on the element together (the stylesheet, not the class
 // attribute, would decide between them).
-const BTN =
-  'inline-flex h-10 items-center justify-center rounded-control px-4 text-sm font-semibold no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const PRIMARY =
   'cursor-pointer bg-brand text-white hover:bg-[color-mix(in_srgb,var(--color-brand)_88%,white)] hover:text-white';
 // No `aria-disabled:` variant: the browser journey asserts `not.toHaveClass(/disabled/)`
@@ -42,6 +49,8 @@ const PRIMARY =
 const PRIMARY_OFF = 'disabled cursor-not-allowed bg-brand text-white opacity-45';
 const DANGER =
   'cursor-pointer border-0 bg-danger text-white hover:bg-[color-mix(in_srgb,var(--color-danger)_88%,white)]';
+const WARNING =
+  'cursor-pointer border-0 bg-warning text-white hover:bg-[color-mix(in_srgb,var(--color-warning)_88%,white)]';
 const GHOST =
   'cursor-pointer border border-white/22 bg-transparent text-white hover:border-white/40 hover:bg-raised';
 const TIMER_PILL =
@@ -108,14 +117,17 @@ function secondsLeft(game: Game, now: number) {
   return Math.min(GameLogic.TIMER, Math.max(0, GameLogic.TIMER - Math.floor(elapsed)));
 }
 
-function powerButton(powerState: number): [label: string, variant: string] {
+// The power symbol stands in for the words "power down", which leaves the button a verb
+// wide. The full wording is what `aria-label` carries, and the visible verb is a substring
+// of it, so the accessible name still contains the visible label.
+function powerButton(powerState: number): [verb: string, label: string, variant: string] {
   switch (powerState) {
     case GameLogic.DOWN:
-      return ['Withdraw power down', DANGER];
+      return ['Withdraw', 'Withdraw power down', DANGER];
     case GameLogic.OFF:
-      return ['Cancel power down', GHOST];
+      return ['Cancel', 'Cancel power down', WARNING];
     default:
-      return ['Announce power down', GHOST];
+      return ['Announce', 'Announce power down', GHOST];
   }
 }
 
@@ -245,6 +257,7 @@ export function CardPanel() {
     );
   };
 
+  const power = powerButton(player?.powerState ?? GameLogic.ON);
   const canSubmit = player !== undefined && (player.chosenCardsCnt === 5 || player.isPoweredDown());
   const onPlayClick = (event: MouseEvent) => {
     event.preventDefault();
@@ -311,13 +324,15 @@ export function CardPanel() {
             </div>
           )}
           <OptionCards optionCards={player.optionCards} />
-          <div className="play-buttons mt-4 flex justify-center gap-3">
+          <div className="play-buttons @container mt-4 flex justify-center gap-3">
             <button
               type="button"
-              className={`${BTN} ${powerButton(player.powerState)[1]}`}
+              className={`${BTN} ${power[2]}`}
+              aria-label={power[1]}
               onClick={onPowerClick}
             >
-              {powerButton(player.powerState)[0]}
+              {power[0]}
+              <Power className={BTN_ICON} />
             </button>
             {/* `a.playBtn` and its `disabled` class are contract: the browser journey waits
                 for the class to go and then clicks the anchor. */}

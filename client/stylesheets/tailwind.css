@@ -146,6 +146,9 @@
   --color-countdown: #780300;
   --color-countdown-urgent: #aa0500;
   --color-heart: #b40a24;
+  /* The Cancel power down button. Dark enough that its white label clears AA (4.6:1);
+     the priority digits' brighter yellow does not. */
+  --color-warning: #a67c00;
   --color-priority: #e5d839;
   --color-position-select: #67a50a;
   /* Readable red on navy: Bootstrap's `red` failed contrast there. */

@@ -504,6 +504,32 @@ describe('the announce strip', () => {
     expect(document.querySelector('[aria-current="step"]')).toHaveTextContent('register 3');
   });
 
+  it('abbreviates every label once the board is too narrow for the full ones', async () => {
+    const { game } = await openBoard({
+      game: { announce: true, playPhaseCount: 3, playPhase: GameState.PLAY_PHASE.LASERS },
+    });
+    // 12 tiles at 40px is a 480px strip, under the 556px the full labels need.
+    boardWidth = game.board().width * 40;
+
+    renderAt(<Board />);
+
+    expect(chips('Registers').map((chip) => chip.name)).toEqual([
+      'reg 1',
+      'reg 2',
+      'reg 3',
+      'reg 4',
+      'reg 5',
+    ]);
+    expect(chips('Play phases').map((chip) => chip.name)).toEqual([
+      'move bots',
+      'move board',
+      'lasers',
+      'checks',
+    ]);
+    // The state each chip reports is the full label's, abbreviated or not.
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent('reg 3');
+  });
+
   it('walks the play phases, marking everything before the current one done', async () => {
     await openBoard({ game: { announce: true, playPhase: GameState.PLAY_PHASE.LASERS } });
 

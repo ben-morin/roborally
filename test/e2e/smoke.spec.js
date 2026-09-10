@@ -191,6 +191,12 @@ test('a new player signs up, creates a game and plays a register', async ({ page
       await expect(chosen).toHaveCount(i + 1);
     }
     await expect(page.locator('a.playBtn')).not.toHaveClass(/disabled/);
+
+    // A button label may never wrap: it is sized from the row's own width through a
+    // container query, which the vitest suite cannot see — it builds no stylesheet.
+    const power = page.getByRole('button', { name: /power down/i });
+    await expect(power).toHaveCSS('white-space', 'nowrap');
+    await expect(power).toHaveCSS('height', '40px');
   });
 
   await test.step('play the cards and let register 1 resolve', async () => {
@@ -202,6 +208,11 @@ test('a new player signs up, creates a game and plays a register', async ({ page
       /Revealing cards|Moving bots|Moving board elements|Shooting lasers|Checkpoints|Repairing bots/
     );
     await expect(page.locator('.announce-bar')).toBeVisible();
+    // Same container query, and the same blind spot: a wrapped chip doubles the row's
+    // height, so the 30px is what proves the label still fits on one line.
+    const chip = page.locator('.announce-bar li').first();
+    await expect(chip).toHaveCSS('white-space', 'nowrap');
+    await expect(chip).toHaveCSS('height', '30px');
 
     // The card being played is announced on the board with a CSS animation from
     // game.css (`.fadeInAndOut`, 1.75 s, once per register). A running animation on it
