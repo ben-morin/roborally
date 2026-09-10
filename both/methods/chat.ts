@@ -9,8 +9,8 @@ export const addMessage = createMethod({
   name: 'addMessage',
   // Sized against what a player can legitimately do: this one is typing. Meteor
   // rate-limits its own login and account methods and leaves the rest to the app, so the
-  // four methods a client can drive in a loop carry their own rule — the three that insert
-  // documents and the one that drives the phase machine.
+  // five methods a client can drive in a loop carry their own rule — the three that insert
+  // documents, the one that drives the phase machine and the one that sends mail.
   rateLimit: { limit: 5, interval: 5000 },
   validate: checkArgsWith(schemas.addMessage),
   async run({ message, gameId }: Doc<typeof schemas.addMessage>) {

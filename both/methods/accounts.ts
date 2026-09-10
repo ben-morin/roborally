@@ -27,6 +27,8 @@ export const isEmailAvailable = createMethod({
 export const resendVerificationEmail = createMethod({
   name: 'resendVerificationEmail',
   open: true,
+  // Anonymous and it sends mail, so an unlimited loop here floods a real inbox.
+  rateLimit: { limit: 2, interval: 60000 },
   validate: checkArgsWith(schemas.resendVerificationEmail),
   async run({ email }: Doc<typeof schemas.resendVerificationEmail>) {
     const user = await Meteor.users.findOneAsync({ 'emails.address': email });

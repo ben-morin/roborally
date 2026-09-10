@@ -4,8 +4,8 @@
 // silently unlimits it), and how the buckets are keyed.
 //
 // The rules used to live in one server-side table that this test imported and read back,
-// so it could not disagree with them. They are now a `rateLimit:` line on four
-// `createMethod` definitions in three files, so the numbers below are a literal instead:
+// so it could not disagree with them. They are now a `rateLimit:` line on five
+// `createMethod` definitions in four files, so the numbers below are a literal instead:
 // this test is what stops one drifting where nothing else would notice.
 import { describe, expect, it } from 'vitest';
 import '../helpers/server.js';
@@ -14,14 +14,17 @@ import { registeredMethods } from '../setup.js';
 
 // Sized against what a player can legitimately do. `playCards` is once per turn plus the
 // occasional retry after a reconnect; `createGame`/`joinGame` are deliberate clicks;
-// `addMessage` is typing. Meteor rate-limits its own login and account methods and leaves
-// the rest to the app, so these four — the three that insert documents and the one that
-// drives the phase machine — are the ones a client could otherwise drive in a loop.
+// `addMessage` is typing; `resendVerificationEmail` is one click by somebody whose mail
+// has not arrived. Meteor rate-limits its own login and account methods and leaves the
+// rest to the app, so these five — the three that insert documents, the one that drives
+// the phase machine and the one that sends mail — are the ones a client could otherwise
+// drive in a loop.
 const RATE_LIMITS = [
   { name: 'addMessage', requests: 5, intervalMs: 5000 },
   { name: 'createGame', requests: 3, intervalMs: 10000 },
   { name: 'joinGame', requests: 5, intervalMs: 10000 },
   { name: 'playCards', requests: 5, intervalMs: 5000 },
+  { name: 'resendVerificationEmail', requests: 2, intervalMs: 60000 },
 ];
 
 describe('method rate limits', () => {
@@ -41,7 +44,7 @@ describe('method rate limits', () => {
       registeredRateLimits()
         .map((r) => r.matcher.name)
         .sort()
-    ).toEqual(['addMessage', 'createGame', 'joinGame', 'playCards']);
+    ).toEqual(['addMessage', 'createGame', 'joinGame', 'playCards', 'resendVerificationEmail']);
   });
 
   it('limits methods that actually exist', () => {
@@ -55,9 +58,10 @@ describe('method rate limits', () => {
   // No two connections ever share a bucket. The limiter keys a bucket on the values of
   // every matcher field, and jam:method's rule matches on address, connection *and* user,
   // so the bucket is at least as fine as the per-connection rule this replaced. That
-  // fineness is the point: all four methods are reachable before their login check
-  // throws, and a bucket keyed on `userId` alone would file every logged-out caller into
-  // one shared bucket — a denial of service against sign-up rather than a rate limit.
+  // fineness is the point: every one of these is reachable while logged out — four before
+  // their login check throws and `resendVerificationEmail` by design — and a bucket keyed
+  // on `userId` alone would file every logged-out caller into one shared bucket, a denial
+  // of service against sign-up rather than a rate limit.
   // The price is that an anonymous flood still costs the attacker a new DDP connection
   // per bucket, which is the same price as before.
   it('buckets per connection, address and user', () => {
