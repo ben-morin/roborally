@@ -65,7 +65,15 @@ const EXPECTED = {
     ],
     // Everything a later `$set` adds. A game that never reaches these phases never grows
     // the keys, so none of them can be required.
-    optional: ['deckSize', 'segmentSnapshot', 'timer', 'winner', 'winnerUserId', 'stopped'],
+    optional: [
+      'deckSize',
+      'resumeAttempts',
+      'segmentSnapshot',
+      'timer',
+      'winner',
+      'winnerUserId',
+      'stopped',
+    ],
   },
   Players: {
     // Exactly what `joinGame` inserts, plus `_id`.

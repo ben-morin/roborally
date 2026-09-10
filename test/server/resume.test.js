@@ -7,7 +7,9 @@ import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { GameState } from '../../both/gamestate.ts';
 import { Chat } from '../../collections/chat.ts';
 import { markBooted } from '../../server/boot.ts';
+import { Games } from '../../collections/games.ts';
 import {
+  MAX_RESUME_ATTEMPTS,
   needsDriver,
   nudgeGameAsync,
   resumeStalledTurnsAsync,
@@ -141,6 +143,61 @@ describe('resumeStalledTurnsAsync', () => {
   });
 });
 
+// The cap on replay attempts. A failed attempt has already stamped `lastStepAt`, so
+// without a cap the sweep picks the same game up every minute for as long as a player
+// stays online — see MAX_RESUME_ATTEMPTS.
+describe('the replay attempt cap', () => {
+  const RETRY_LINE = 'The turn could not be resumed — the server will try again shortly.';
+  const CAPPED_LINE =
+    'The turn could not be resumed after 3 attempts. The game is parked; it will be ended when everyone leaves.';
+
+  const failingGame = async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    return await insertGame({ gamePhase: PLAY, lastStepAt: ago(STALL_MS * 2) });
+  };
+  const failEveryReplay = () =>
+    vi.spyOn(GameState, 'resumeAsync').mockRejectedValue(new Error('simulated replay failure'));
+  const attemptsOn = async (gameId) => (await Games.findOneAsync(gameId)).resumeAttempts;
+  const chatOn = async (gameId) => (await Chat.find({ gameId }).fetchAsync()).map((c) => c.message);
+  // The sweep hands over promises; the count is written inside them.
+  const sweepAndWait = async () => await Promise.all(await sweep());
+
+  it('counts a failed replay on the game', async () => {
+    const game = await failingGame();
+    failEveryReplay();
+
+    await sweepAndWait();
+    expect(await attemptsOn(game._id)).toBe(1);
+
+    await sweepAndWait();
+    expect(await attemptsOn(game._id)).toBe(2);
+  });
+
+  it('stops sweeping a game at the cap, and says so once', async () => {
+    const game = await failingGame();
+    const resume = failEveryReplay();
+
+    for (let i = 0; i < MAX_RESUME_ATTEMPTS + 2; i++) await sweepAndWait();
+
+    expect(resume).toHaveBeenCalledTimes(MAX_RESUME_ATTEMPTS);
+    expect(await attemptsOn(game._id)).toBe(MAX_RESUME_ATTEMPTS);
+    // The last attempt says the game is parked; the ones before it promise another try.
+    expect(await chatOn(game._id)).toEqual([RETRY_LINE, RETRY_LINE, CAPPED_LINE]);
+  });
+
+  it('forgets earlier failures once a replay gets through', async () => {
+    const game = await failingGame();
+    failEveryReplay();
+    await sweepAndWait();
+    expect(await attemptsOn(game._id)).toBe(1);
+
+    vi.spyOn(GameState, 'resumeAsync').mockResolvedValue();
+    await sweepAndWait();
+
+    expect(await attemptsOn(game._id)).toBeUndefined();
+  });
+});
+
 // The short circuit the sweep cannot offer: a player opening the board says "I am here"
 // before `lastStepAt` has aged STALL_MS and before the cron's next tick. It gives that up
 // only for a claim older than this process's boot, which no driver in this process can have
@@ -222,6 +279,15 @@ describe('nudgeGameAsync', () => {
 
     await expect(nudgeGameAsync(respawning._id, 'u1')).resolves.toBe(false);
     await expect(nudgeGameAsync(over._id, 'u1')).resolves.toBe(false);
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it('declines a game that has used up its replay attempts', async () => {
+    const resume = spyResume();
+    const game = await stalledGame({ resumeAttempts: MAX_RESUME_ATTEMPTS });
+    await insertPlayer(game._id, { userId: 'u1' });
+
+    await expect(nudgeGameAsync(game._id, 'u1')).resolves.toBe(false);
     expect(resume).not.toHaveBeenCalled();
   });
 

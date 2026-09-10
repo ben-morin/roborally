@@ -10,7 +10,8 @@
 // stub: CardLogic/GameLogic/GameState tests drive genuine read-mutate-updateAsync
 // round trips through Games/Players/Cards/Decks, the same way the app does. Only the
 // operators actually used by both/, collections/ and server/ are implemented (equality,
-// dotted paths, $gt/$gte/$lt/$lte/$ne/$exists, $set/$inc/$push on write, sort/skip/limit
+// dotted paths, $gt/$gte/$lt/$lte/$ne/$exists/$not, $set/$inc/$unset/$push on write,
+// sort/skip/limit
 // and an all-inclusion or all-exclusion `fields` on find, and a four-stage aggregate) —
 // anything wider throws loudly rather than silently mismatching.
 //
@@ -86,48 +87,58 @@ function ordered(v, bound) {
 
 function matchesSelector(doc, selector) {
   if (typeof selector === 'string') return doc._id === selector;
-  return Object.entries(selector).every(([key, cond]) => {
-    const values = getPathValues(doc, key);
-    // Positive operators match when SOME candidate satisfies them; the negative ones are
-    // the negation of that, which is how Mongo defines them over arrays.
-    const some = (predicate) => values.some(predicate);
-    // Dates compare by value, as in Mongo, and must be caught before the operator branch:
-    // a Date is an object with no own keys, so down there it would read as an empty set
-    // of operators and match every document. Every stored document is a structuredClone
-    // of what was inserted, so a caller can never hold the stored Date object itself —
-    // the guarded `timer: 0` write in both/cardlogic.ts pins `timerStartedAt` this way.
-    if (cond instanceof Date) {
-      return some((v) => v instanceof Date && v.getTime() === cond.getTime());
-    }
-    if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
-      return Object.entries(cond).every(([op, opVal]) => {
-        switch (op) {
-          case '$gt':
-            return some((v) => ordered(v, opVal) && v > opVal);
-          case '$gte':
-            return some((v) => ordered(v, opVal) && v >= opVal);
-          case '$lt':
-            return some((v) => ordered(v, opVal) && v < opVal);
-          case '$lte':
-            return some((v) => ordered(v, opVal) && v <= opVal);
-          case '$ne':
-            // $ne is the negation of $eq, so it inherits $eq's treatment of null:
-            // `{f: {$ne: 'x'}}` matches a document missing `f`, but `{f: {$ne: null}}`
-            // does *not* — "not null" also means "present". server/highscores.ts relies
-            // on the first (see its test) and client/views/chat/ChatPanel.tsx on the second.
-            return opVal === null ? !some((v) => v == null) : !some((v) => v === opVal);
-          case '$exists':
-            return some((v) => v !== undefined) === opVal;
-          default:
-            throw new Error(`FakeCollection: unsupported query operator "${op}"`);
-        }
-      });
-    }
-    // Mongo treats `{field: null}` as "null or missing", which is how
-    // client/views/game/GameList.tsx and CreateGameForm.tsx select the games that have no winner yet.
-    if (cond === null) return some((v) => v == null);
-    return some((v) => v === cond);
-  });
+  return Object.entries(selector).every(([key, cond]) =>
+    matchesCondition(getPathValues(doc, key), cond)
+  );
+}
+
+// One field's condition against every value the path reached. Split out of
+// matchesSelector so that `$not` can recurse into it.
+function matchesCondition(values, cond) {
+  // Positive operators match when SOME candidate satisfies them; the negative ones are
+  // the negation of that, which is how Mongo defines them over arrays.
+  const some = (predicate) => values.some(predicate);
+  // Dates compare by value, as in Mongo, and must be caught before the operator branch:
+  // a Date is an object with no own keys, so down there it would read as an empty set
+  // of operators and match every document. Every stored document is a structuredClone
+  // of what was inserted, so a caller can never hold the stored Date object itself —
+  // the guarded `timer: 0` write in both/cardlogic.ts pins `timerStartedAt` this way.
+  if (cond instanceof Date) {
+    return some((v) => v instanceof Date && v.getTime() === cond.getTime());
+  }
+  if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
+    return Object.entries(cond).every(([op, opVal]) => {
+      switch (op) {
+        case '$gt':
+          return some((v) => ordered(v, opVal) && v > opVal);
+        case '$gte':
+          return some((v) => ordered(v, opVal) && v >= opVal);
+        case '$lt':
+          return some((v) => ordered(v, opVal) && v < opVal);
+        case '$lte':
+          return some((v) => ordered(v, opVal) && v <= opVal);
+        case '$ne':
+          // $ne is the negation of $eq, so it inherits $eq's treatment of null:
+          // `{f: {$ne: 'x'}}` matches a document missing `f`, but `{f: {$ne: null}}`
+          // does *not* — "not null" also means "present". server/highscores.ts relies
+          // on the first (see its test) and client/views/chat/ChatPanel.tsx on the second.
+          return opVal === null ? !some((v) => v == null) : !some((v) => v === opVal);
+        case '$exists':
+          return some((v) => v !== undefined) === opVal;
+        case '$not':
+          // The negation of the inner condition, so it also matches a document missing
+          // the field — `{f: {$not: {$gte: 3}}}` matches one with no `f` at all. The
+          // uncapped-games selector in server/resume.ts relies on exactly that.
+          return !matchesCondition(values, opVal);
+        default:
+          throw new Error(`FakeCollection: unsupported query operator "${op}"`);
+      }
+    });
+  }
+  // Mongo treats `{field: null}` as "null or missing", which is how
+  // client/views/game/GameList.tsx and CreateGameForm.tsx select the games that have no winner yet.
+  if (cond === null) return some((v) => v == null);
+  return some((v) => v === cond);
 }
 
 // Mongo sort spec: { field: 1 | -1 }, applied left to right. Array.prototype.sort is
@@ -167,6 +178,10 @@ function applyModifier(doc, modifier) {
         for (const [path, value] of Object.entries(fields)) {
           setPath(doc, path, (getPath(doc, path) || 0) + value);
         }
+        break;
+      // Value ignored, as in Mongo. Nothing is created for a path that is not there.
+      case '$unset':
+        for (const path of Object.keys(fields)) unsetPath(doc, path);
         break;
       // Single-value form only. `$each` brings `$slice`/`$sort`/`$position` with it, and
       // a half-implemented one of those is exactly the silent mismatch this fake exists

@@ -19,7 +19,18 @@ import { bootedAtMs } from './boot.ts';
 // dead one. Exported for the tests.
 export const STALL_MS = 60_000;
 
+// How many failed replays a game gets before the sweep stops picking it up. Without a cap
+// a game whose replay cannot succeed is swept every minute for as long as a player stays
+// online — one identical chat line a minute, forever — because a failed attempt has
+// already touched `lastStepAt` on its way in. Three is enough to ride out a transient
+// failure and few enough that a permanent one gives up while the players are still
+// watching. Exported for the tests.
+export const MAX_RESUME_ATTEMPTS = 3;
+
 const RESUME_FAILED_CHAT = 'The turn could not be resumed — the server will try again shortly.';
+const RESUME_CAPPED_CHAT =
+  `The turn could not be resumed after ${MAX_RESUME_ATTEMPTS} attempts. The game is parked; ` +
+  'it will be ended when everyone leaves.';
 
 // Could this game, stalled, be waiting on the server rather than on a human? Decided from
 // the game document alone, so it is pure and cheap. PROGRAM passes: whether every living
@@ -49,7 +60,13 @@ export async function resumeStalledTurnsAsync({ now = new Date() }: { now?: Date
   // satisfies `$lt`, in Mongo as in the test fake, so such a game is never swept. Nothing
   // could restore it anyway: it has no snapshot.
   const stalled = await Games.find(
-    { started: true, lastStepAt: { $lt: cutoff } },
+    {
+      started: true,
+      lastStepAt: { $lt: cutoff },
+      // `$not` over an operator also matches a document missing the field, so a game that
+      // has never failed a replay is included. See MAX_RESUME_ATTEMPTS.
+      resumeAttempts: { $not: { $gte: MAX_RESUME_ATTEMPTS } },
+    },
     { fields: { gamePhase: 1, selectOptions: 1 } }
   ).fetchAsync();
   return stalled.filter(needsDriver).map((game) => resumeOne(game._id));
@@ -73,6 +90,10 @@ export async function nudgeGameAsync(gameId: string, userId: string | null) {
   const game = await Games.findOneAsync(gameId);
   if (!game || !needsDriver(game)) return false;
 
+  // A game that has used up its attempts is parked on purpose, so a reconnecting browser
+  // must not start the loop the cap exists to stop.
+  if ((game.resumeAttempts ?? 0) >= MAX_RESUME_ATTEMPTS) return false;
+
   // No claim at all means a game from before resumable turns, with no snapshot to restore.
   // The sweep skips these too — `$lt` never matches null — and resumeAsync would do nothing
   // but log the missing snapshot. `lastStepAt` is read through `getTime` so that a null
@@ -87,25 +108,59 @@ export async function nudgeGameAsync(gameId: string, userId: string | null) {
   return true;
 }
 
-// Fire-and-forget, so the catch is load-bearing: without it a failed replay is an
-// unhandled rejection. It cannot recover — but the game's `lastStepAt` was touched at the
-// start of the attempt, so once that is STALL_MS old again the next sweep tries once more.
+// Fire-and-forget, so neither branch may reject: without a handler a failed replay is an
+// unhandled rejection. A failure cannot recover — but the game's `lastStepAt` was touched
+// at the start of the attempt, so once that is STALL_MS old again the next sweep tries
+// once more, up to MAX_RESUME_ATTEMPTS.
+//
 // Nothing is logged on the way in: `needsDriver` passes every PROGRAM game, and resumeAsync
 // leaves the ones a human still owes cards for alone — without ever stamping `lastStepAt`, so
 // the sweep sees them again every minute for the rest of the game. resumeAsync logs once it
-// has actually claimed a game. The gameId is in the failure line because it is the only
-// trace such a game leaves.
+// has actually claimed a game.
+//
+// The two outcomes are the two arguments of one `then` rather than a `.then().catch()`
+// chain, so that a write failure in the success branch cannot announce a replay failure
+// that did not happen.
 function resumeOne(gameId: string) {
-  return GameState.resumeAsync(gameId).catch(async (err) => {
-    console.error(`resumeAsync failed for game ${gameId}`, err);
-    // Say so in the game chat: without this the turn simply stops and the players have
-    // no idea why. Guarded because the likeliest reason for getting here is that the
-    // game no longer exists.
-    try {
-      const game = await Games.findOneAsync(gameId);
-      await game?.chatAsync(RESUME_FAILED_CHAT);
-    } catch (announceErr) {
-      console.error(`could not announce resume failure for ${gameId}`, announceErr);
-    }
-  });
+  return GameState.resumeAsync(gameId).then(
+    () => clearResumeAttemptsAsync(gameId),
+    (err) => countResumeFailureAsync(gameId, err)
+  );
+}
+
+// A replay got through, so the failures before it no longer count: a game that stalls
+// again next week starts over. Selected on `$exists` so that the usual case — a first
+// attempt that works — writes nothing at all.
+async function clearResumeAttemptsAsync(gameId: string) {
+  try {
+    await Games.updateAsync(
+      { _id: gameId, resumeAttempts: { $exists: true } },
+      { $unset: { resumeAttempts: '' } }
+    );
+  } catch (clearErr) {
+    console.error(`could not clear resumeAttempts for ${gameId}`, clearErr);
+  }
+}
+
+// Count the failure, then say so in the game chat: without the chat line the turn simply
+// stops and the players have no idea why. The gameId is in the log line because it is the
+// only trace such a game leaves.
+//
+// Both writes are guarded together, because the likeliest reason for getting here is that
+// the game no longer exists. The count goes first so that a chat insert that throws still
+// leaves the attempt recorded — the count is the safety valve, the chat line is the
+// courtesy. It is `$inc` through a plain `updateAsync`, not `advanceAsync`: this is
+// bookkeeping about the driver rather than a step the game took, and bumping `step` would
+// invalidate a claim that is still valid.
+async function countResumeFailureAsync(gameId: string, err: unknown) {
+  console.error(`resumeAsync failed for game ${gameId}`, err);
+  try {
+    const game = await Games.findOneAsync(gameId);
+    if (!game) return;
+    const attempts = (game.resumeAttempts ?? 0) + 1;
+    await Games.updateAsync(gameId, { $inc: { resumeAttempts: 1 } });
+    await game.chatAsync(attempts >= MAX_RESUME_ATTEMPTS ? RESUME_CAPPED_CHAT : RESUME_FAILED_CHAT);
+  } catch (announceErr) {
+    console.error(`could not announce resume failure for ${gameId}`, announceErr);
+  }
 }

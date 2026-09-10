@@ -332,6 +332,9 @@ const schema = {
   // The programming timer: -1 off, 1 running, 0 expired. Absent until the first deal, so
   // unlike `timerStartedAt` above it is genuinely two-state.
   timer: Optional(Number),
+  // How many times a stalled-turn replay has failed for this game, counted by
+  // server/resume.ts and cleared by a replay that gets through. Absent means none.
+  resumeAttempts: Optional(Number),
   // A display name, or the 'Nobody' sentinel when a game ends with no winner.
   winner: Optional(String),
   winnerUserId: Optional(String),
