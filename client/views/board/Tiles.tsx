@@ -47,11 +47,12 @@ export function Tiles({ rows, showStart }: TilesProps) {
                   className="board-item"
                   src={item.path}
                   style={rotation(item.direction)}
+                  draggable={false}
                 />
               ))}
               {tile.finish ? (
                 <div>
-                  <img className="board-item" src="/finish.png" />
+                  <img className="board-item" src="/finish.png" draggable={false} />
                 </div>
               ) : null}
               {tile.checkpoint ? (
@@ -64,7 +65,7 @@ export function Tiles({ rows, showStart }: TilesProps) {
                 </div>
               ) : null}
               {showStart !== false && start > 0 && start <= showStart ? (
-                <img className="board-item" src="/start.png" />
+                <img className="board-item" src="/start.png" draggable={false} />
               ) : null}
             </span>
           );

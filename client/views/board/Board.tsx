@@ -526,6 +526,7 @@ export function Board() {
               <img
                 src={`/robots/marker_${player.robotId}.png`}
                 alt={`respawn location ( ${you(player)} )`}
+                draggable={false}
               />
             </div>
           ))}
@@ -544,8 +545,11 @@ export function Board() {
               src={`/robots/robot_${player.robotId}.png`}
               alt={you(player)}
               style={{ transform: `rotate(${(player.direction ?? 0) * 90}deg)` }}
+              draggable={false}
             />
-            {player.isPoweredDown() && <img src="/Power_Off.png" className="robot-off" alt="" />}
+            {player.isPoweredDown() && (
+              <img src="/Power_Off.png" className="robot-off" alt="" draggable={false} />
+            )}
           </div>
         ))}
         {shooters.map((player, i) => (

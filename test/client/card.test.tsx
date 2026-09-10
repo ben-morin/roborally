@@ -75,6 +75,7 @@ describe('Card', () => {
 
     expect(container.firstChild).toHaveClass('played', 'locked');
     expect(container.querySelector('img.locked')).toHaveAttribute('src', '/damage-token.png');
+    expect(container.querySelector('img.locked')).toHaveAttribute('draggable', 'false');
     expect(
       screen.getByLabelText('Register 5, Step forward, priority 490, locked')
     ).toBeInTheDocument();

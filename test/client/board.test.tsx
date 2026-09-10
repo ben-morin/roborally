@@ -111,6 +111,16 @@ describe('the page', () => {
     const tiles = game.board();
     expect(board().querySelectorAll('span.tile')).toHaveLength(tiles.width * tiles.height);
     expect(board().querySelector('img[src="/start.png"]')).toBeNull();
+
+    // Nothing on the board is meant to be dragged, and an `<img>` is draggable by
+    // default — dragging one lifts a ghost image out of the window and looks like a bug.
+    // React renders the attribute as the string 'false'. The filter is so that a failure
+    // names the offending image rather than reporting a count.
+    const images = [...board().querySelectorAll('img')];
+    expect(images.length).toBeGreaterThan(0);
+    expect(
+      images.filter((img) => img.getAttribute('draggable') !== 'false').map((img) => img.src)
+    ).toEqual([]);
   });
 
   it('draws the scrapyard strip under the tiles, beneath the robots', async () => {

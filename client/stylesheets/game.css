@@ -52,6 +52,13 @@
   #board,
   .board-thumbnail {
     position: relative;
+    /* The tiles' items are absolutely positioned, so a drag inside the board resolves in
+       document order rather than by what the mouse touched — measured 2026-09-10: a
+       corner-to-corner drag on `#board` highlighted the checkpoint numbers and then ran
+       on through the whole side panel and the chat. The chat and the player names stay
+       selectable; only the board and the cards opt out. */
+    -webkit-user-select: none;
+    user-select: none;
 
     span.tile {
       position: relative;

@@ -64,6 +64,8 @@ describe('PlayerStatus', () => {
     const { container } = await renderRow({ lives: 2, damage: 3 });
 
     expect(container.querySelector('img')).toHaveAttribute('src', '/robots/robot_2.png');
+    // An `<img>` drags by default, which lifts a ghost image out of the window.
+    expect(container.querySelector('img')).toHaveAttribute('draggable', 'false');
     expect(screen.getByRole('img', { name: '2 of 3 lives' })).toBeInTheDocument();
     expect(container.querySelectorAll('[data-icon="heart"]')).toHaveLength(2);
     expect(container.querySelectorAll('[data-icon="heart-outline"]')).toHaveLength(1);
@@ -100,12 +102,12 @@ describe('PlayerStatus', () => {
     early.unmount();
 
     const nearly = await renderRow({ visited_checkpoints: checkpointCnt - 1 });
-    expect(screen.getByAltText('the finish')).toBeInTheDocument();
+    expect(screen.getByAltText('the finish')).toHaveAttribute('draggable', 'false');
     nearly.unmount();
 
     await renderRow({ visited_checkpoints: checkpointCnt });
     expect(screen.getByText('WINNER!')).toBeInTheDocument();
-    expect(screen.getByAltText('Trophy')).toBeInTheDocument();
+    expect(screen.getByAltText('Trophy')).toHaveAttribute('draggable', 'false');
   });
 
   it('shows the submitted pill during programming only', async () => {

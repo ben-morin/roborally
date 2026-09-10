@@ -40,7 +40,7 @@ function NextCheckpoint({ player, checkpointCnt }: { player: Player; checkpointC
     return (
       <>
         <span>WINNER!</span>
-        <img className="h-[35px] w-[35px]" src="/trophy.png" alt="Trophy" />
+        <img className="h-[35px] w-[35px]" src="/trophy.png" alt="Trophy" draggable={false} />
       </>
     );
   }
@@ -49,7 +49,7 @@ function NextCheckpoint({ player, checkpointCnt }: { player: Player; checkpointC
     <>
       <span>next</span>
       {headingForFinish ? (
-        <img className="h-[35px] w-[35px]" src="/finish.png" alt="the finish" />
+        <img className="h-[35px] w-[35px]" src="/finish.png" alt="the finish" draggable={false} />
       ) : (
         <span className={CHECKPOINT}>
           {Math.min(checkpointCnt, player.visited_checkpoints + 1)}
@@ -71,7 +71,12 @@ export function PlayerHeader({ player, own, checkpointCnt }: PlayerHeaderProps) 
     // the damage and next-checkpoint readout under them.
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center justify-center gap-2.5">
-        <img className="h-7 w-7 shrink-0" src={`/robots/robot_${player.robotId}.png`} alt="" />
+        <img
+          className="h-7 w-7 shrink-0"
+          src={`/robots/robot_${player.robotId}.png`}
+          alt=""
+          draggable={false}
+        />
         <span className="text-sm font-semibold">{own ? 'Your robot' : player.name}</span>
         <Lives lives={player.lives} />
       </div>

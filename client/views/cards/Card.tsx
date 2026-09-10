@@ -82,7 +82,9 @@ export function Card({ card, selected = false, timeLeft = 0, onClick }: CardProp
           <span className="priority">{card.priority}</span>
         </div>
       )}
-      {card.locked && <img className="locked" src="/damage-token.png" width="50%" alt="" />}
+      {card.locked && (
+        <img className="locked" src="/damage-token.png" width="50%" alt="" draggable={false} />
+      )}
     </div>
   );
 }

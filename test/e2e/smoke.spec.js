@@ -140,6 +140,14 @@ test('a new player signs up, creates a game and plays a register', async ({ page
     // gamecard.css.
     await expect(page.locator('.gamecard').first()).toHaveCSS('aspect-ratio', '99 / 153');
     await expect(page.locator('.gamecard').first()).toHaveCSS('cursor', 'pointer');
+
+    // Neither the board nor a card may be selected by a drag. The board's items are
+    // absolutely positioned, so a drag inside it resolves in document order and used to
+    // run on through the side panel and the chat; a slipped click while programming used
+    // to highlight the priority digits. Asserted here because the vitest suite never
+    // builds a bundle and so sees no stylesheet at all.
+    await expect(page.locator('#board')).toHaveCSS('user-select', 'none');
+    await expect(page.locator('.gamecard').first()).toHaveCSS('user-select', 'none');
   });
 
   await test.step('a malformed method call is refused with a 400', async () => {
