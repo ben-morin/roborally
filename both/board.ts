@@ -131,7 +131,9 @@ export class Board {
 
   getTile(x: number, y: number) {
     if (!this.onBoard(x, y)) {
-      console.warn(`Invalid board tile (${x},${y})`);
+      // The designed answer for an off-board lookup, not a failure: `canMove` asks about
+      // the tile past the edge, and a robot parked below the board has no tile at all.
+      console.log(`No tile at (${x},${y}) — off the board, using limbo`);
       return new Tile(Tile.LIMBO);
     }
     return this.tiles[y][x];

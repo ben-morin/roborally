@@ -112,13 +112,13 @@ describe('onBoard / getTile', () => {
     expect(board.onBoard(0, 16)).toBe(false);
   });
 
-  it('returns a fresh LIMBO tile (and warns) for out-of-bounds getTile', () => {
+  it('returns a fresh LIMBO tile (and logs) for out-of-bounds getTile', () => {
     const board = new Board('b');
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     const tile = board.getTile(-1, -1);
     expect(tile.type).toBe(Tile.LIMBO);
-    expect(warn).toHaveBeenCalledWith('Invalid board tile (-1,-1)');
-    warn.mockRestore();
+    expect(log).toHaveBeenCalledWith('No tile at (-1,-1) — off the board, using limbo');
+    log.mockRestore();
   });
 });
 
