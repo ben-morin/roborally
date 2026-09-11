@@ -841,7 +841,6 @@ describe('togglePowerDown', () => {
   it.each([
     ['ON', GameLogic.ON, GameLogic.DOWN],
     ['DOWN', GameLogic.DOWN, GameLogic.ON],
-    ['OFF', GameLogic.OFF, GameLogic.ON],
   ])('cycles %s to the next state and persists it', async (_label, from, to) => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
@@ -854,6 +853,89 @@ describe('togglePowerDown', () => {
 
     await expect(call('togglePowerDown', { gameId })).resolves.toBe(to);
     expect((await Players.findOneAsync(playerId)).powerState).toBe(to);
+  });
+
+  // The deal skips a robot that is still down, so the stay-down choice is made with no
+  // cards on screen. Cancelling is what pays out the hand.
+  it('cycles OFF to ON and deals the hand the deal phase held back', async () => {
+    const user = await loginAs();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM, deckSize: 84 });
+    const player = await insertPlayer(game._id, {
+      userId: user._id,
+      powerState: GameLogic.OFF,
+      damage: 2,
+    });
+    await insertCards(player._id, game._id, { handCards: [] });
+    await Decks.insertAsync({
+      gameId: game._id,
+      cards: Array.from({ length: 84 }, (_, i) => i),
+      optionCards: [],
+      discardedOptionCards: [],
+    });
+
+    await expect(call('togglePowerDown', { gameId: game._id })).resolves.toBe(GameLogic.ON);
+
+    expect((await Players.findOneAsync(player._id)).powerState).toBe(GameLogic.ON);
+    // Nine cards less one per damage token, exactly as a normal deal would give.
+    expect((await Cards.findOneAsync({ playerId: player._id })).handCards).toHaveLength(7);
+    expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 7);
+  });
+
+  // The whole down-then-up round trip: damage taken while down locks a register out of
+  // the deck, because the robot has no hand to lock a card from, and the deal that follows
+  // the cancel is short by one card per damage token.
+  it('deals only the cards the damage taken while down leaves, and keeps the locked register', async () => {
+    const user = await loginAs();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM, deckSize: 84 });
+    const player = await insertPlayer(game._id, {
+      userId: user._id,
+      powerState: GameLogic.OFF,
+      damage: 0,
+    });
+    await insertCards(player._id, game._id, { handCards: [] });
+    await Decks.insertAsync({
+      gameId: game._id,
+      cards: Array.from({ length: 84 }, (_, i) => i),
+      optionCards: [],
+      discardedOptionCards: [],
+    });
+
+    await (await Players.findOneAsync(player._id)).addDamageAsync(5);
+
+    // 5 slots + 5 damage - a 9-card hand = one locked register, the last one. It is paid
+    // for off the front of the deck; `dealCardsAsync` takes from the back.
+    const afterDamage = await Players.findOneAsync(player._id);
+    expect(afterDamage.damage).toBe(5);
+    expect(afterDamage.lockedCnt()).toBe(1);
+    expect((await Cards.findOneAsync({ playerId: player._id })).chosenCards).toEqual([
+      -1, -1, -1, -1, 0,
+    ]);
+
+    await expect(call('togglePowerDown', { gameId: game._id })).resolves.toBe(GameLogic.ON);
+
+    const cards = await Cards.findOneAsync({ playerId: player._id });
+    expect(cards.handCards).toHaveLength(4); // 9 - 5 damage
+    // The register the damage locked is still loaded, and the other four are open.
+    expect(cards.chosenCards).toEqual([-1, -1, -1, -1, 0]);
+    expect((await Players.findOneAsync(player._id)).damage).toBe(5);
+    expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(84 - 1 - 4);
+  });
+
+  it('deals nothing when a powered-up robot announces a power down', async () => {
+    const user = await loginAs();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM, deckSize: 84 });
+    const player = await insertPlayer(game._id, { userId: user._id, powerState: GameLogic.ON });
+    await insertCards(player._id, game._id, { handCards: [] });
+    await Decks.insertAsync({
+      gameId: game._id,
+      cards: Array.from({ length: 84 }, (_, i) => i),
+      optionCards: [],
+      discardedOptionCards: [],
+    });
+
+    await expect(call('togglePowerDown', { gameId: game._id })).resolves.toBe(GameLogic.DOWN);
+
+    expect((await Cards.findOneAsync({ playerId: player._id })).handCards).toEqual([]);
   });
 
   it('refuses a caller who holds no robot in that game', async () => {

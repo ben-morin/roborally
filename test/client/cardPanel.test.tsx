@@ -142,12 +142,14 @@ describe('the heading', () => {
       expect(heading()).toHaveTextContent('Powered down');
     });
 
-    it('asks a powered-down player who may opt back in to pick cards', async () => {
+    // Still "Powered down" while the player may opt back in: the robot is down until
+    // Cancel is pressed, and there are no cards to pick until then.
+    it('says "Powered down" for a player who may still opt back in', async () => {
       await seat({ player: { powerState: GameLogic.OFF, optionalInstantPowerDown: true } });
 
       renderAt(<CardPanel />);
 
-      expect(heading()).toHaveTextContent('Pick your cards');
+      expect(heading()).toHaveTextContent('Powered down');
     });
 
     it('says "Players thinking" to a spectator', async () => {
@@ -267,14 +269,16 @@ describe('the hand and the registers', () => {
     expect(selectedSlot()).toBe(1);
   });
 
-  it('replaces the registers with a notice while the robot is powered down', async () => {
+  // The stay-down choice has to be made blind, so neither the hand nor the registers are
+  // on screen: the server deals nothing until the player cancels the power down.
+  it('replaces the hand and the registers with a notice while the robot is powered down', async () => {
     await seat({ player: { powerState: GameLogic.OFF } });
 
     renderAt(<CardPanel />);
 
     expect(registers()).toHaveLength(0);
+    expect(hand()).toHaveLength(0);
     expect(screen.getByText('Your robot is powered down')).toBeInTheDocument();
-    expect(hand()).toHaveLength(9);
   });
 
   it('shows the option cards the player holds', async () => {
@@ -650,21 +654,6 @@ describe('card clicks', () => {
 
     expect(selectedSlot()).toBe(3);
     expect(call).not.toHaveBeenCalled();
-  });
-
-  it('cancels an announced power down when a card is picked', async () => {
-    const call = vi.spyOn(Meteor, 'callAsync').mockResolvedValue(undefined);
-    const { game } = await seat({ player: { powerState: GameLogic.OFF } });
-
-    renderAt(<CardPanel />);
-    fireEvent.click(hand()[1]);
-
-    expect(call).toHaveBeenCalledWith('selectCard', {
-      gameId: game._id,
-      card: TURN_RIGHT,
-      index: 0,
-    });
-    expect(call).toHaveBeenCalledWith('togglePowerDown', { gameId: game._id });
   });
 
   // The `card` template served every player's small hand as well as the caller's own, so

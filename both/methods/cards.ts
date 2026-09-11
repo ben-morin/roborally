@@ -122,6 +122,13 @@ export const togglePowerDown = createMethod({
       throw new Meteor.Error(409, 'Power down can only be changed while programming.');
     }
 
-    return await player.togglePowerDownAsync();
+    // A robot still powered down holds no hand — the deal skipped it so the stay-down
+    // choice is made blind. Powering up is what earns this turn's cards.
+    const wasPoweredDown = player.isPoweredDown();
+    const powerState = await player.togglePowerDownAsync();
+    if (wasPoweredDown && powerState === GameLogic.ON) {
+      await CardLogic.dealCardsAsync(game, player);
+    }
+    return powerState;
   },
 });

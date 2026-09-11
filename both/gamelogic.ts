@@ -207,6 +207,10 @@ async function executeLasers(players: Player[]) {
 
 async function executeRepairs(players: Player[]) {
   for (const player of players) {
+    // Repairs land before the power-up decision, so a robot still powered down gets
+    // neither. Its damage is not zeroed here either: the reset belongs to the deal, and
+    // only if the player chooses to stay down.
+    if (player.isPoweredDown()) continue;
     const tile = await player.tileAsync();
     // Rules.pdf p.8 ("Repairs & Upgrades"): every repair space discards 1 Damage
     // token, and a wrench/hammer (option) space also draws an Option card. Checkpoint

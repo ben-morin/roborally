@@ -70,7 +70,7 @@ function phaseLabel(game: Game, player: Player | undefined, userId: string | nul
     case GameState.PHASE.PROGRAM:
       if (!player) return 'Players thinking';
       if (player.lives <= 0) return 'No archives';
-      if (player.isPoweredDown() && !player.optionalInstantPowerDown) return 'Powered down';
+      if (player.isPoweredDown()) return 'Powered down';
       return 'Pick your cards';
     case GameState.PHASE.PLAY:
       switch (game.playPhase) {
@@ -223,11 +223,6 @@ export function CardPanel() {
     selectCard({ gameId: player.gameId, card: card.cardId, index: slotIndex }).catch((error) =>
       modalAlert(error.reason)
     );
-
-    // Any action but "play cards" cancels an announced power down.
-    if (player.isPoweredDown()) {
-      togglePowerDown({ gameId: player.gameId }).catch((error) => modalAlert(error.reason));
-    }
   };
 
   const onRegisterClick = (card: UICard) => {
@@ -283,45 +278,53 @@ export function CardPanel() {
         // `player-robot`, `hand` and `playing` are contract: the browser journey programs
         // its five cards through them.
         <div className="player-robot">
-          <p className={EYEBROW}>Your hand</p>
-          <div className={`hand ${GRID}`}>
-            {addUIData(hand, true, false, false, deckSize, chosenIds).map((card, index) => (
-              // Keyed by card, so the deal replaces the placeholder nodes rather than
-              // cross-fading each one into a card through the stylesheet's transition.
-              <Card
-                key={card.class ? card.cardId : `lost-${index}`}
-                card={card}
-                // A slot lost to damage has no card and, as in the template, no handler.
-                onClick={card.class ? () => onHandClick(card) : undefined}
-              />
-            ))}
-          </div>
+          {/* No hand and no registers while the robot is still down: the server deals
+              nothing until the player cancels, so the choice is made blind. */}
+          {!player.isPoweredDown() && (
+            <>
+              <p className={EYEBROW}>Your hand</p>
+              <div className={`hand ${GRID}`}>
+                {addUIData(hand, true, false, false, deckSize, chosenIds).map((card, index) => (
+                  // Keyed by card, so the deal replaces the placeholder nodes rather than
+                  // cross-fading each one into a card through the stylesheet's transition.
+                  <Card
+                    key={card.class ? card.cardId : `lost-${index}`}
+                    card={card}
+                    // A slot lost to damage has no card and, as in the template, no handler.
+                    onClick={card.class ? () => onHandClick(card) : undefined}
+                  />
+                ))}
+              </div>
+            </>
+          )}
           <div className="mt-4">
             <PlayerHeader player={player} own checkpointCnt={checkpointCnt} />
           </div>
-          <p className={`${EYEBROW} mt-4`}>Registers</p>
           {player.isPoweredDown() ? (
-            <div className="mt-2">
+            <div className="mt-4">
               <p className="mb-0 text-base">Your robot is powered down</p>
               <p className="mb-0 text-xs text-muted">
-                Click the play cards button to stay powered down, any other action will cancel the
-                power down.
+                Click Play cards to stay powered down for this turn. Click Cancel to power up and
+                take a hand.
               </p>
             </div>
           ) : (
-            <div className={`playing ${GRID}`}>
-              {addUIData(chosen, false, player.lockedCnt(), true, deckSize).map((card) => (
-                // Keyed by slot and content, as the template's per-item nodes were: a slot
-                // that fills or empties is a new node, not a transition between two looks.
-                <Card
-                  key={`${card.slot}-${card.cardId}`}
-                  card={card}
-                  selected={card.slot === slotIndex}
-                  timeLeft={timeLeft}
-                  onClick={() => onRegisterClick(card)}
-                />
-              ))}
-            </div>
+            <>
+              <p className={`${EYEBROW} mt-4`}>Registers</p>
+              <div className={`playing ${GRID}`}>
+                {addUIData(chosen, false, player.lockedCnt(), true, deckSize).map((card) => (
+                  // Keyed by slot and content, as the template's per-item nodes were: a slot
+                  // that fills or empties is a new node, not a transition between two looks.
+                  <Card
+                    key={`${card.slot}-${card.cardId}`}
+                    card={card}
+                    selected={card.slot === slotIndex}
+                    timeLeft={timeLeft}
+                    onClick={() => onRegisterClick(card)}
+                  />
+                ))}
+              </div>
+            </>
           )}
           <OptionCards optionCards={player.optionCards} />
           <div className="play-buttons @container mt-4 flex justify-center gap-3">

@@ -157,11 +157,19 @@ async function playDealPhase(game: Game) {
       if (!player.optionalInstantPowerDown) {
         player.submitted = true;
         player.damage = 0;
-        dealCards = false;
         // Covers announced power-downs too — until now no power-down ever reached
         // the chat (togglePowerDown only console.logs), only the panel badge.
         await player.chatAsync('is powered down this turn');
       }
+    }
+
+    // A robot that ends the deal powered down holds no hand, whichever way it got there:
+    // it stayed down, it was destroyed after announcing and is re-entering, or it is down
+    // for the turn outright. Where a choice is still owed, it is made blind — a hand on
+    // screen would turn it into a read on the cards rather than on the damage — and
+    // `togglePowerDown` deals only once the player powers up.
+    if (player.powerState === GameLogic.OFF) {
+      dealCards = false;
     }
 
     await player.saveAsync();
@@ -420,6 +428,10 @@ async function playRepairs(game: Game) {
 }
 
 async function checkCheckpoints(player: Player) {
+  // Rules.pdf p.9 ("Powering Down"): a powered-down robot is inert for the whole turn, so
+  // it neither touches a flag nor moves its archive. Both live behind the same guard here
+  // because both only ever happen on a checkpoint or repair space.
+  if (player.isPoweredDown()) return;
   const tile = await player.tileAsync();
 
   if (tile.checkpoint || tile.repair) {

@@ -628,6 +628,32 @@ describe('executeRepairs', () => {
     expect((await Players.findOneAsync(player._id)).damage).toBe(4); // -1 once, not -2
   });
 
+  // Rules.pdf p.9: repairs land before the power-up decision, so a robot still powered
+  // down gets neither the heal nor the option card.
+  it('a powered-down robot on an option tile is neither healed nor given a card', async () => {
+    const board = stubBoard();
+    board.getTile(1, 1).option = true;
+    board.getTile(1, 1).repair = true;
+    void board;
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, {
+      position: { x: 1, y: 1 },
+      damage: 5,
+      powerState: GameLogic.OFF,
+      optionCards: {},
+    });
+    await insertDeck(game._id, { optionCards: ['rear-firing_laser'] });
+
+    await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
+
+    const doc = await Players.findOneAsync(player._id);
+    expect(doc.damage).toBe(5);
+    expect(doc.optionCards['rear-firing_laser']).toBeUndefined();
+    expect((await Decks.findOneAsync({ gameId: game._id })).optionCards).toEqual([
+      'rear-firing_laser',
+    ]);
+  });
+
   it('an option tile draws a card and heals 1, taking priority over its own `.repair` flag', async () => {
     const board = stubBoard();
     board.getTile(1, 1).option = true;

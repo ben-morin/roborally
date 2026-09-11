@@ -135,6 +135,66 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     expect(messages).toContain('bot is powered down this turn');
   });
 
+  // Rules.pdf p.9: a robot that is already down may stay down for another turn. The
+  // choice has to be made blind, so the deal holds the hand back — `togglePowerDown`
+  // pays it out if the player cancels.
+  it('a player who is already powered down is dealt no cards and is left to decide', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const player = await insertPlayer(game._id, {
+      damage: 4,
+      powerState: GameLogic.OFF,
+      optionalInstantPowerDown: false,
+    });
+    await insertCards(player._id, game._id);
+    await insertDeck(game._id, { cards: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+    guardRecursion('nextGamePhaseAsync');
+
+    const p = GameState.nextGamePhaseAsync(game._id);
+    await vi.runAllTimersAsync();
+    await p;
+
+    const playerDoc = await Players.findOneAsync(player._id);
+    expect(playerDoc.powerState).toBe(GameLogic.OFF);
+    expect(playerDoc.optionalInstantPowerDown).toBe(true);
+    // Not auto-submitted: the player still owes a decision, and the damage taken while
+    // down is only cleared if they choose to stay down.
+    expect(playerDoc.submitted).toBe(false);
+    expect(playerDoc.damage).toBe(4);
+    expect((await Cards.findOneAsync({ playerId: player._id })).handCards).toEqual([]);
+    expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(9);
+  });
+
+  // Destroyed after announcing a power down: `checkRespawnsAndUpdateDb` sets
+  // `optionalInstantPowerDown`, so the robot re-enters play owing the same choice rather
+  // than being powered down outright. It must be dealt nothing either — the hand is what
+  // `togglePowerDown` pays out, and dealing here would pay it twice and lose the first
+  // hand out of the deck.
+  it('a player destroyed after announcing a power down re-enters owing the choice, with no cards', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const player = await insertPlayer(game._id, {
+      damage: 2,
+      powerState: GameLogic.DOWN,
+      optionalInstantPowerDown: true,
+    });
+    await insertCards(player._id, game._id);
+    await insertDeck(game._id, { cards: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+    guardRecursion('nextGamePhaseAsync');
+
+    const p = GameState.nextGamePhaseAsync(game._id);
+    await vi.runAllTimersAsync();
+    await p;
+
+    const playerDoc = await Players.findOneAsync(player._id);
+    expect(playerDoc.powerState).toBe(GameLogic.OFF);
+    expect(playerDoc.submitted).toBe(false);
+    // The archive's 2 damage stays: only choosing to stay down clears it, at submit.
+    expect(playerDoc.damage).toBe(2);
+    expect((await Cards.findOneAsync({ playerId: player._id })).handCards).toEqual([]);
+    expect((await Decks.findOneAsync({ gameId: game._id })).cards).toHaveLength(9);
+  });
+
   it('auto-advances past PROGRAM when every living player ends the deal phase already submitted', async () => {
     stubBoard();
     const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
@@ -302,6 +362,35 @@ describe('checkIfWeHaveAWinner (via CHECKPOINTS)', () => {
     // only showed up as a doubled 'Building Highscores' in the server log.
     expect(highscores).toHaveBeenCalledTimes(1);
     setBuildHighscores(async () => {});
+  });
+
+  // Rules.pdf p.9: a powered-down robot is inert for the whole turn. Checkpoints are
+  // touched at the end of every register, while the robot is still down, so it neither
+  // scores the flag nor moves its archive onto it.
+  it('a powered-down robot on a checkpoint neither scores it nor moves its archive', async () => {
+    const board = stubBoard();
+    board.checkpoints = [{ x: 0, y: 0, number: 1 }];
+    board.getTile(0, 0).addCheckpoint(1);
+    const game = await insertGame({
+      playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
+      playPhaseCount: 5,
+    });
+    const player = await insertPlayer(game._id, {
+      position: { x: 0, y: 0 },
+      start: { x: 3, y: 3 },
+      visited_checkpoints: 0,
+      powerState: GameLogic.OFF,
+    });
+    guardRecursion('nextPlayPhaseAsync');
+
+    const p = GameState.nextPlayPhaseAsync(game._id);
+    await vi.runAllTimersAsync();
+    await p;
+
+    const doc = await Players.findOneAsync(player._id);
+    expect(doc.visited_checkpoints).toBe(0);
+    expect(doc.start).toEqual({ x: 3, y: 3 });
+    expect((await Games.findOneAsync(game._id)).gamePhase).not.toBe(GameState.PHASE.ENDED);
   });
 
   it('declares "Nobody" the winner when every player has run out of lives', async () => {
