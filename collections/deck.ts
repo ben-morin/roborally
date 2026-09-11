@@ -10,8 +10,11 @@ const schema = {
   // The draw pile: 84 card ids for up to 8 players, 126 otherwise. Cards are taken out
   // when dealt and pushed back when discarded, so this is the whole deck minus the hands.
   cards: [Number],
-  optionCards: [Number],
-  discardedOptionCards: [Number],
+  // The option piles hold card *names*, not positions in `_option_cards`: the catalogue is
+  // a dictionary precisely so that adding or moving an entry cannot re-point what a game
+  // already in flight has stored.
+  optionCards: [String],
+  discardedOptionCards: [String],
 };
 
 export type DeckDoc = Doc<typeof schema>;

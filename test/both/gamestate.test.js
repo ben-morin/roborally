@@ -98,7 +98,7 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     expect(playerDoc.damage).toBe(0);
     expect(playerDoc.optionCards.circuit_breaker).toBeUndefined();
     const deckDoc = await Decks.findOneAsync({ gameId: game._id });
-    expect(deckDoc.discardedOptionCards).toContain(CardLogic.getOptionId('circuit_breaker'));
+    expect(deckDoc.discardedOptionCards).toContain('circuit_breaker');
     // All three facts land in the same deal pass, far too fast to follow from the UI,
     // so each must leave a chat line.
     const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);

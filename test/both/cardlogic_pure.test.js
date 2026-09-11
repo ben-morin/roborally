@@ -141,16 +141,13 @@ describe('priority', () => {
 });
 
 describe('option deck', () => {
-  it('getOptionName/getOptionId round-trip, and getOptionDesc looks the id up again', () => {
-    const total = 8; // number of implemented options in `_option_deck`
-    for (let id = 0; id < total; id++) {
-      const name = CardLogic.getOptionName(id);
-      expect(CardLogic.getOptionId(name)).toBe(id);
+  it('describes every card in the catalogue and keys them by name', () => {
+    const names = Object.keys(CardLogic._option_cards);
+    expect(names).toHaveLength(8);
+    for (const name of names) {
+      expect(CardLogic.isOptionCard(name)).toBe(true);
       expect(CardLogic.getOptionDesc(name)).toBeTypeOf('string');
     }
-    expect(() => CardLogic.getOptionId('not-a-real-option')).toThrow(
-      'Unknown option card: not-a-real-option'
-    );
   });
 
   it('getOptionDesc throws for a name that is not in the option deck', () => {

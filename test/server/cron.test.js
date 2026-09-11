@@ -11,6 +11,7 @@ import { resetFakeCollections, runStartup, setSettings } from '../setup.js';
 import { cronSchedule, cronStarted, registeredCronJobs, runCronJob } from '../stubs/synced-cron.js';
 import { insertCards, insertDeck, insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { stubBoard } from '../helpers/board.js';
+import { CardLogic } from '../../both/cardlogic.ts';
 import { GameLogic } from '../../both/gamelogic.ts';
 import { GameState } from '../../both/gamestate.ts';
 import { Cards } from '../../collections/cards.ts';
@@ -81,7 +82,7 @@ describe('registration', () => {
 describe('startup backfill', () => {
   // A game without `step` refuses every claim its turn chain makes, so games already in
   // flight when this ships have to be seeded before anything can drive them.
-  // An option name taken out of `_option_deck` stays in the row of every player holding
+  // An option name taken out of the catalogue stays in the row of every player holding
   // it, where the card panel and the discard path would both throw on it.
   it('drops option cards the deck no longer has, and puts none of them back', async () => {
     const game = await insertGame();
@@ -98,6 +99,54 @@ describe('startup backfill', () => {
     const deck = await Decks.findOneAsync({ gameId: game._id });
     expect(deck.discardedOptionCards).toEqual([]);
     expect(deck.optionCards).toEqual([]);
+  });
+
+  // Decks written before the piles held names carry positions in the catalogue, which any
+  // edit to it re-pointed. Both piles are rebuilt from the hands, which were always names.
+  it('rebuilds option piles a previous build wrote as catalogue positions', async () => {
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, { optionCards: { extra_memory: true } });
+    await insertDeck(game._id, { optionCards: [2, 5], discardedOptionCards: [7] });
+
+    await runStartup();
+
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect([...deck.optionCards].sort()).toEqual(
+      Object.keys(CardLogic._option_cards)
+        .filter((name) => name !== 'extra_memory')
+        .sort()
+    );
+    expect(deck.discardedOptionCards).toEqual([]);
+    // The hand is the source it rebuilt from, so it is left as it was.
+    expect((await Players.findOneAsync(player._id)).optionCards).toEqual({ extra_memory: true });
+  });
+
+  it('rebuilds when a card is in a hand and a pile at once', async () => {
+    const game = await insertGame();
+    await insertPlayer(game._id, { optionCards: { ramming_gear: true } });
+    await insertDeck(game._id, { optionCards: ['ramming_gear'], discardedOptionCards: [] });
+
+    await runStartup();
+
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect(deck.optionCards).not.toContain('ramming_gear');
+    expect(deck.optionCards).toHaveLength(Object.keys(CardLogic._option_cards).length - 1);
+  });
+
+  it('leaves a deck alone when every option card is accounted for exactly once', async () => {
+    const game = await insertGame();
+    await insertPlayer(game._id, { optionCards: { ramming_gear: true } });
+    const rest = Object.keys(CardLogic._option_cards).filter((name) => name !== 'ramming_gear');
+    await insertDeck(game._id, {
+      optionCards: rest.slice(1),
+      discardedOptionCards: rest.slice(0, 1),
+    });
+
+    await runStartup();
+
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect(deck.optionCards).toEqual(rest.slice(1));
+    expect(deck.discardedOptionCards).toEqual(rest.slice(0, 1));
   });
 
   it('seeds step on games that predate it and leaves the others alone', async () => {

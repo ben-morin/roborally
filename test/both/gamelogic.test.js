@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
 import { GameLogic } from '../../both/gamelogic.ts';
-import { CardLogic } from '../../both/cardlogic.ts';
 import { Board } from '../../both/board.ts';
 import { Tile } from '../../both/tile.ts';
 import { BoardBox } from '../../both/board_box.ts';
@@ -326,7 +325,7 @@ describe('playCard: falling off the board / into a void', () => {
 
     expect((await Players.findOneAsync(player._id)).optionCards).toEqual({});
     const deckDoc = await Decks.findOneAsync({ gameId: game._id });
-    expect(deckDoc.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
+    expect(deckDoc.discardedOptionCards).toEqual(['extra_memory']);
     const messages = (await Chat.find({ gameId: game._id }).fetchAsync()).map((c) => c.message);
     expect(messages).toContain('bot discarded option card Extra Memory');
     vi.useRealTimers();
@@ -640,9 +639,7 @@ describe('executeRepairs', () => {
       damage: 5,
       optionCards: {},
     });
-    // Looked up by name: a hard-coded id moves whenever `_option_deck` is reordered.
-    const rearLaser = CardLogic.getOptionId('rear-firing_laser');
-    await insertDeck(game._id, { optionCards: [rearLaser] });
+    await insertDeck(game._id, { optionCards: ['rear-firing_laser'] });
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 
@@ -662,8 +659,7 @@ describe('executeRepairs', () => {
     void board;
     const game = await insertGame();
     const player = await insertPlayer(game._id, { position: { x: 1, y: 1 }, damage: 0 });
-    const rearLaser = CardLogic.getOptionId('rear-firing_laser');
-    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [rearLaser] });
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: ['rear-firing_laser'] });
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 

@@ -325,7 +325,7 @@ describe('leaveGame', () => {
     await call('leaveGame', { gameId: gameId });
 
     const deck = await Decks.findOneAsync({ gameId });
-    expect(deck.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
+    expect(deck.discardedOptionCards).toEqual(['extra_memory']);
     expect(await messages(gameId)).toContain('ben discarded option card Extra Memory');
     expect(await Players.find({ gameId, userId: user._id }).countAsync()).toBe(0);
   });

@@ -168,34 +168,44 @@ export class CardLogic {
     9, // step 3
   ];
 
-  static _option_deck: readonly [name: string, description: string][] = [
-      // Abort Switch: Replaces a register card with a random one from the deck, and does the same for all remaining registers.
-      ['ablative_coat', 'Absorbs the next 30% damage your robot receives.'],
-      // Brakes: Allows your robot to move zero spaces when executing a Move 1 card.
-      ['circuit_breaker', 'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down'],
-      // Conditional: Triggers an action based on specific board states or events.
-      ['double-barreled_laser', 'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.'],
-      ['extra_memory', 'You receive one extra Program card each turn.'],
-      // Fire Control: Modifies weapon firing capabilities.
-      // Flywheel: Extra cards for your robot's movement in a future turn.
-      // Fourth Gear: Move 4 instead of 3
-      // Gyroscopic Stabilizer: Prevents unwanted rotations.
-      ['high-power_laser', "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser."],
-      // Mechanical Arm: Touch a checkpoint from a square away
-      // Mini Howitzer: fires and pushes a robot 5 uses
-      // Power-Down Shield: Protects while powered down.
-      // Pressor Beam: pushes instead of laser fire
-      // Radio Control: Controls another robot's actions.
-      ['ramming_gear', 'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.'],
-      ['rear-firing_laser', 'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser'],
-      // Recompile: Replaces hand once per turn in exchange for a point of damage
-      // Reverse Gear: Backup 2 instead of 1
-      // Scrambler: Replace a next card in targets hand
-      // Shield: Protects against damage during a turn
-      ['superior_archive', "When reentering play after being destroyed, your robot doesn't receive the normal 20% damage"],
-      // Tractor Beam: Pulls a targeted robot toward you
-      // Turret: choose which direction laser comes out
-  ];
+  // The option cards a game deals, keyed by name. A dictionary rather than a list
+  // because nothing may depend on the order: the decks store these names, and a card
+  // added in the middle of a list used to re-point every position after it.
+  // Commented lines are options the rules have and this app does not implement yet.
+  static _option_cards: Readonly<Record<string, string>> = {
+    // Abort Switch: Replaces a register card with a random one from the deck, and does the same for all remaining registers.
+    ablative_coat: 'Absorbs the next 30% damage your robot receives.',
+    // Brakes: Allows your robot to move zero spaces when executing a Move 1 card.
+    circuit_breaker:
+      'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down',
+    // Conditional: Triggers an action based on specific board states or events.
+    'double-barreled_laser':
+      'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.',
+    extra_memory: 'You receive one extra Program card each turn.',
+    // Fire Control: Modifies weapon firing capabilities.
+    // Flywheel: Extra cards for your robot's movement in a future turn.
+    // Fourth Gear: Move 4 instead of 3
+    // Gyroscopic Stabilizer: Prevents unwanted rotations.
+    'high-power_laser':
+      "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser.",
+    // Mechanical Arm: Touch a checkpoint from a square away
+    // Mini Howitzer: fires and pushes a robot 5 uses
+    // Power-Down Shield: Protects while powered down.
+    // Pressor Beam: pushes instead of laser fire
+    // Radio Control: Controls another robot's actions.
+    ramming_gear:
+      'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.',
+    'rear-firing_laser':
+      'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser',
+    // Recompile: Replaces hand once per turn in exchange for a point of damage
+    // Reverse Gear: Backup 2 instead of 1
+    // Scrambler: Replace a next card in targets hand
+    // Shield: Protects against damage during a turn
+    superior_archive:
+      "When reentering play after being destroyed, your robot doesn't receive the normal 20% damage",
+    // Tractor Beam: Pulls a targeted robot toward you
+    // Turret: choose which direction laser comes out
+  };
 
   static async discardCardsAsync(game: Game, player: Player) {
     const deck = await game.getDeckAsync();
@@ -349,37 +359,27 @@ export class CardLogic {
     }
   }
 
-  static getOptionName(index: number) {
-    return this._option_deck[index][0];
-  }
-
   static getOptionTitle(name: string) {
     return name
       .replace(/_/g, ' ')
       .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase());
   }
 
-  static getOptionId(name: string) {
-    for (let id = 0; id < this._option_deck.length; id++) {
-      const option = this._option_deck[id];
-      if (option[0] === name) {
-        return id;
-      }
-    }
-    // Every caller passes a name that came out of `getOptionName`, so an unknown one is a
-    // bug rather than a miss to hand back.
-    throw new Error(`Unknown option card: ${name}`);
-  }
-
-  // Whether the option deck still holds a card of this name. Player documents outlive the
-  // deck: a name dropped from `_option_deck` stays in the rows of every game already in
-  // flight, and both the card panel and the discard path read those names back.
+  // Whether the catalogue still has a card of this name. Player and deck documents outlive
+  // it: a name dropped from `_option_cards` stays in the rows of every game already in
+  // flight, and the card panel, the discard and the draw all read those names back.
+  // `hasOwn`, not `in`: the catalogue is a plain object, so `in` would answer for
+  // `toString` too.
   static isOptionCard(name: string) {
-    return this._option_deck.some(([optionName]) => optionName === name);
+    return Object.hasOwn(this._option_cards, name);
   }
 
   static getOptionDesc(name: string) {
-    return this._option_deck[this.getOptionId(name)][1];
+    const description = this._option_cards[name];
+    // Every caller passes a name that came off a hand or a deck, so an unknown one is a
+    // bug rather than a miss to hand back. `isOptionCard` is the question to ask first.
+    if (description === undefined) throw new Error(`Unknown option card: ${name}`);
+    return description;
   }
 
   // The size of the deck a game with this many players deals from. Stored on the game at

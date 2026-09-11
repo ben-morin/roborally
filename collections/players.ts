@@ -246,8 +246,7 @@ export class Player {
     }
     if (optionCards.length) {
       // Guarded by the `optionCards.length` check on the line above.
-      const optionId = optionCards.pop()!;
-      const name = CardLogic.getOptionName(optionId);
+      const name = optionCards.pop()!;
       this.optionCards[name] = true;
       await Decks.updateAsync({ gameId }, { $set: { optionCards, discardedOptionCards } });
       // Announce the draw: it happens inside the repairs phase with no other visual,
@@ -259,9 +258,8 @@ export class Player {
     const game = await this.gameAsync();
     const gameId = game._id;
     delete this.optionCards[name];
-    // A name the option deck no longer has cannot be discarded — it has no id — so drop it
-    // from the player and leave the pile alone. Throwing here would take down the turn
-    // this runs inside, and the stalled-turn sweep would replay it into the same throw.
+    // A name the catalogue no longer has must not go back into the pile — it would only be
+    // dealt again as a card nothing can describe — so drop it and leave the pile alone.
     if (!CardLogic.isOptionCard(name)) {
       console.error(`Dropping unknown option card ${name} held by ${this.name}`);
       return;
@@ -269,7 +267,7 @@ export class Player {
     // A card can only be discarded if it was drawn, so the deck it came from is there.
     const deckDoc = (await Decks.findOneAsync({ gameId }))!;
     const discarded = deckDoc.discardedOptionCards;
-    discarded.push(CardLogic.getOptionId(name));
+    discarded.push(name);
     await Decks.updateAsync({ gameId }, { $set: { discardedOptionCards: discarded } });
     // Announce the discard for the same reason as the draw: both circuit_breaker
     // (deal phase) and ablative_coat (mid-laser-fire) discard with no visual cue.

@@ -21,6 +21,8 @@ import { SyncedCron } from 'meteor/quave:synced-cron';
 import { autoSubmitIfTimedOut, CardLogic, forceSubmitStragglerAsync } from '../both/cardlogic.ts';
 import { GameLogic } from '../both/gamelogic.ts';
 import { GameState } from '../both/gamestate.ts';
+import { shuffle } from '../both/shuffle.ts';
+import { Decks } from '../collections/deck.ts';
 import { Games, type SegmentSnapshot } from '../collections/games.ts';
 import { Players, type Player } from '../collections/players.ts';
 import { markBooted, bootedAtMs } from './boot.ts';
@@ -254,6 +256,8 @@ Meteor.startup(async () => {
   await seedSnapshotNullKeys();
 
   await dropUnknownOptionCardsAsync();
+  // After the drop, so every name a hand still holds has an id to look up.
+  await rebuildOptionPilesAsync();
 
   // A game whose turn died with the previous process is picked up here rather than at the
   // first cron tick — with the same stall threshold, which is what keeps a booting
@@ -330,6 +334,35 @@ async function dropUnknownOptionCardsAsync() {
     await Players.updateAsync(player._id, { $set: { optionCards } });
     const dropped = held.filter((name) => !CardLogic.isOptionCard(name));
     console.log(`Dropped unknown option card(s) ${dropped.join(', ')} from player ${player._id}`);
+  }
+}
+
+// The option piles hold card names, as the hands do, but a game in flight can still be
+// carrying what an older build wrote: positions in the catalogue, which any edit to it
+// re-pointed. A healthy deck spreads the catalogue across the two piles and the hands
+// exactly once, so a stored entry that is not a known name, or one that appears twice, is
+// the signal to rebuild the piles from the hands.
+async function rebuildOptionPilesAsync() {
+  const names = Object.keys(CardLogic._option_cards);
+  for (const game of await Games.find({ started: true, winner: { $exists: false } }).fetchAsync()) {
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    if (!deck) continue;
+
+    const players = await Players.find({ gameId: game._id }).fetchAsync();
+    const held = players.flatMap((player) => Object.keys(player.optionCards ?? {}));
+    const all = [...deck.optionCards, ...deck.discardedOptionCards, ...held];
+    if (!all.some((name, index) => !CardLogic.isOptionCard(name) || all.indexOf(name) !== index)) {
+      continue;
+    }
+
+    // Everything not in a hand goes back to the draw pile: which pile a card sat in is not
+    // recoverable, and the discard pile only ever refills the draw pile anyway.
+    const optionCards = shuffle(names.filter((name) => !held.includes(name)));
+    await Decks.updateAsync(
+      { gameId: game._id },
+      { $set: { optionCards, discardedOptionCards: [] } }
+    );
+    console.log(`Rebuilt the option piles of game ${game._id}`);
   }
 }
 

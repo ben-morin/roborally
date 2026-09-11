@@ -221,7 +221,7 @@ export class Game {
     return newDeck({
       gameId: this._id,
       cards: indices(deckSize),
-      optionCards: shuffle(indices(CardLogic._option_deck.length)),
+      optionCards: shuffle(Object.keys(CardLogic._option_cards)),
       discardedOptionCards: [],
     });
   }
