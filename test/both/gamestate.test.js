@@ -211,6 +211,103 @@ describe('nextGamePhaseAsync: IDLE -> DEAL', () => {
     // nobody left to wait on and advanced again on its own.
     expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
+
+  // An eliminated robot keeps `submitted: false` for the rest of the game, so counting it
+  // as "still programming" left a game whose every living robot was powered down waiting
+  // for a player who can never answer.
+  it('an eliminated robot does not hold the program phase open', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const down = await insertPlayer(game._id, { name: 'down', powerState: GameLogic.DOWN });
+    const dead = await insertPlayer(game._id, { name: 'dead', lives: 0 });
+    await insertCards(down._id, game._id);
+    await insertCards(dead._id, game._id);
+    await insertDeck(game._id, { cards: [1, 2, 3] });
+    const spy = guardRecursion('nextGamePhaseAsync');
+
+    const p = GameState.nextGamePhaseAsync(game._id);
+    await vi.runAllTimersAsync();
+    await p;
+
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// The timer is normally armed by the second-to-last submit, which never comes when only
+// one robot can program: the one player left could then hold the game open forever.
+describe('the programming timer starts with the deal when only one robot can program', () => {
+  const deal = async (game) => {
+    const p = GameState.nextGamePhaseAsync(game._id);
+    // Enough for the 250 ms phase delay, and far short of the 30 s timer this arms.
+    await vi.advanceTimersByTimeAsync(1000);
+    await p;
+    return Games.findOneAsync(game._id);
+  };
+
+  it('arms the timer when every other robot is powered down', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const active = await insertPlayer(game._id, { name: 'active' });
+    const down = await insertPlayer(game._id, { name: 'down', powerState: GameLogic.DOWN });
+    await insertCards(active._id, game._id);
+    await insertCards(down._id, game._id);
+    await insertDeck(game._id, { cards: Array.from({ length: 30 }, (_, i) => i + 1) });
+
+    const gameDoc = await deal(game);
+
+    expect(gameDoc.gamePhase).toBe(GameState.PHASE.PROGRAM);
+    expect(gameDoc.timer).toBe(1);
+    expect(gameDoc.timerStartedAt).toBeInstanceOf(Date);
+  });
+
+  // A robot out of the game can only ever be half the reason: leave one living robot and
+  // the game has already ended as last player standing, so the seat that tips this game
+  // to a single programmer is the powered-down one and the dead robot is simply not waited
+  // for. Counting it would have left the clock unarmed.
+  it('arms the timer with a robot out of the game beside a powered-down one', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const active = await insertPlayer(game._id, { name: 'active' });
+    const down = await insertPlayer(game._id, { name: 'down', powerState: GameLogic.DOWN });
+    const dead = await insertPlayer(game._id, { name: 'dead', lives: 0 });
+    await insertCards(active._id, game._id);
+    await insertCards(down._id, game._id);
+    await insertCards(dead._id, game._id);
+    await insertDeck(game._id, { cards: Array.from({ length: 30 }, (_, i) => i + 1) });
+
+    const gameDoc = await deal(game);
+
+    expect(gameDoc.timer).toBe(1);
+  });
+
+  it('leaves the timer alone while two robots are still programming', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const one = await insertPlayer(game._id, { name: 'one' });
+    const two = await insertPlayer(game._id, { name: 'two' });
+    await insertCards(one._id, game._id);
+    await insertCards(two._id, game._id);
+    await insertDeck(game._id, { cards: Array.from({ length: 30 }, (_, i) => i + 1) });
+
+    const gameDoc = await deal(game);
+
+    expect(gameDoc.timer).toBe(-1);
+    expect(gameDoc.timerStartedAt).toBeNull();
+  });
+
+  // A solo game has nobody to wait for, so it keeps its untimed programming.
+  it('leaves the timer alone in a one-player game', async () => {
+    stubBoard();
+    const game = await insertGame({ gamePhase: GameState.PHASE.IDLE });
+    const solo = await insertPlayer(game._id, { name: 'solo' });
+    await insertCards(solo._id, game._id);
+    await insertDeck(game._id, { cards: Array.from({ length: 30 }, (_, i) => i + 1) });
+
+    const gameDoc = await deal(game);
+
+    expect(gameDoc.timer).toBe(-1);
+    expect(gameDoc.timerStartedAt).toBeNull();
+  });
 });
 
 describe('nextGamePhaseAsync: PROGRAM -> PLAY', () => {

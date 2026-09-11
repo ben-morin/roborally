@@ -372,6 +372,72 @@ describe('leaveGame', () => {
     expect(await Highscores.find().countAsync()).toBe(0);
   });
 
+  // Leaving is the third way the set of players who still owe an answer can shrink, next
+  // to the deal and a submit. Nothing else is coming for the players left behind: the
+  // submit that would have started the clock or driven the turn on walked out with them.
+  it('starts the programming clock when the leaver was the last but one still to answer', async () => {
+    const user = await loginAs();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    await insertPlayer(game._id, { userId: user._id, name: 'ben' });
+    await insertPlayer(game._id, { userId: 'done', name: 'done', submitted: true });
+    await insertPlayer(game._id, { userId: 'waiting', name: 'waiting' });
+
+    await call('leaveGame', { gameId: game._id });
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timer).toBe(1);
+    expect(gameDoc.timerStartedAt).toBeInstanceOf(Date);
+  });
+
+  it('drives the turn on when the leaver was the last one still to answer', async () => {
+    const user = await loginAs();
+    const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    await insertPlayer(game._id, { userId: user._id, name: 'ben' });
+    await insertPlayer(game._id, { userId: 'a', name: 'a', submitted: true });
+    await insertPlayer(game._id, { userId: 'b', name: 'b', submitted: true });
+
+    await call('leaveGame', { gameId: game._id });
+
+    expect(nextPhase).toHaveBeenCalledWith(game._id);
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timer).toBe(-1);
+  });
+
+  it('leaves the clock alone while two players still owe an answer', async () => {
+    const user = await loginAs();
+    const game = await insertGame({ gamePhase: GameState.PHASE.PROGRAM });
+    await insertPlayer(game._id, { userId: user._id, name: 'ben' });
+    await insertPlayer(game._id, { userId: 'x', name: 'x' });
+    await insertPlayer(game._id, { userId: 'y', name: 'y' });
+
+    await call('leaveGame', { gameId: game._id });
+
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timer).toBe(-1);
+    expect(gameDoc.timerStartedAt).toBeNull();
+  });
+
+  it('does not restart a running clock when an already-submitted player leaves', async () => {
+    const user = await loginAs();
+    const armedAt = new Date(Date.now() - 20_000);
+    const game = await insertGame({
+      gamePhase: GameState.PHASE.PROGRAM,
+      timer: 1,
+      timerStartedAt: armedAt,
+    });
+    await insertPlayer(game._id, { userId: user._id, name: 'ben', submitted: true });
+    await insertPlayer(game._id, { userId: 'done', name: 'done', submitted: true });
+    await insertPlayer(game._id, { userId: 'waiting', name: 'waiting' });
+
+    await call('leaveGame', { gameId: game._id });
+
+    // Still one player owed, so the rule matches — but the clock they are already racing
+    // must keep running, not hand them another 30 s because somebody else quit.
+    const gameDoc = await Games.findOneAsync(game._id);
+    expect(gameDoc.timerStartedAt).toEqual(armedAt);
+  });
+
   it('leaves an unstarted game without touching the deck or ending it', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({ boardId: 0, started: false });

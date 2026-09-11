@@ -1,7 +1,7 @@
 import './config.ts';
 import { createMethod } from 'meteor/jam:method';
 import { BoardBox } from '../board_box.ts';
-import { CardLogic } from '../cardlogic.ts';
+import { CardLogic, startTimerIfLastOwingAsync } from '../cardlogic.ts';
 import { GameLogic } from '../gamelogic.ts';
 import { GameState, buildHighscoresAsync } from '../gamestate.ts';
 import { getUsername } from '../permissions.ts';
@@ -231,6 +231,21 @@ export const leaveGame = createMethod({
             stopped: new Date().getTime(),
           },
         });
+      } else if (game.gamePhase === GameState.PHASE.PROGRAM) {
+        // The leaver was one of the players the others were waiting on, so the same call
+        // their submit would have made has to be made here — nothing else will make it.
+        // Re-read for a current `step`: the claims below are conditional on it.
+        const live = (await Games.findOneAsync(game._id))!;
+        if ((await startTimerIfLastOwingAsync(live)) === 0) {
+          // Nobody left to hear from. Drive the turn on exactly as the last submit would,
+          // but without awaiting it: the rest of the turn is half a minute of animation
+          // and this method answers the browser of the player walking out.
+          if (await live.advanceAsync({ $set: { timer: -1, timerStartedAt: null } })) {
+            void GameState.nextGamePhaseAsync(game._id).catch((err) =>
+              console.error(`could not drive game ${game._id} on after a leave`, err)
+            );
+          }
+        }
       }
     }
     await game.chatAsync(`${author} left the game`);

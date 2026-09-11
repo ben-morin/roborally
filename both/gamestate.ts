@@ -1,7 +1,7 @@
 import { Games, type Game, type GameDoc, type SegmentSnapshot } from '../collections/games.ts';
 import { Players, type Player } from '../collections/players.ts';
 import { Board } from './board.ts';
-import { CardLogic } from './cardlogic.ts';
+import { CardLogic, startTimerIfLastOwingAsync } from './cardlogic.ts';
 import { GameLogic } from './gamelogic.ts';
 import { shuffle } from './shuffle.ts';
 import { Tile } from './tile.ts';
@@ -200,11 +200,10 @@ async function playDealPhase(game: Game) {
     $inc: { programRound: 1 },
   });
   if (!claimed) return;
-  const notPoweredDownCnt = await Players.find({
-    gameId: game._id,
-    submitted: false,
-  }).countAsync();
-  if (notPoweredDownCnt === 0) {
+  // The deal itself can leave one player, or nobody, still owing an answer: a robot that
+  // announced power-down last turn is submitted here without being asked, and eliminated
+  // robots never answer at all.
+  if ((await startTimerIfLastOwingAsync(game)) === 0) {
     await game.nextGamePhaseAsync();
   }
 }

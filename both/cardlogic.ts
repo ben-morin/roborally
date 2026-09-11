@@ -45,6 +45,69 @@ export async function autoSubmitIfTimedOut(gameId: string, expectedStart: Date) 
   await forceSubmitStragglerAsync(gameId);
 }
 
+// The one rule for when the programming clock starts, called from everywhere the set of
+// players who still owe an answer can change: the deal, a submit, and a player leaving
+// mid-programming. "Owes an answer" is cards, or a powered-down robot confirming it is
+// staying down; an eliminated robot never answers, so it is never waited for.
+//
+// Exactly one player left to hear from starts the 30 s clock. Their own submit is what
+// would otherwise start it, and it is never coming. A solo game is the one exception:
+// there is nobody to wait for, so its programming stays untimed.
+//
+// A clock already running is left alone, which only the leave path can reach: a player who
+// had already submitted walking out does not change who is owed, and re-arming there would
+// hand the last programmer a fresh 30 s every time somebody else quit.
+//
+// Resolves to how many players still owe, so the caller can drive the turn on when that
+// is none.
+export async function startTimerIfLastOwingAsync(game: Game) {
+  const owing = await Players.find({
+    gameId: game._id,
+    lives: { $gt: 0 },
+    submitted: false,
+  }).countAsync();
+  if (owing === 1 && game.timer !== 1 && (await game.playerCntAsync()) > 1) {
+    await startProgramTimerAsync(game);
+  }
+  return owing;
+}
+
+// Arm the 30 s programming timer and schedule the force-submit that ends it. Two callers,
+// both meaning "one player is the only one still owing cards": the submit that leaves one
+// player programming, and a deal that opens the program phase with only one player able to
+// program. A lost claim means another driver owns the game, so this one stops.
+export async function startProgramTimerAsync(game: Game) {
+  // capture timerStart so the scheduled callback can verify it is still acting on the
+  // same timer instance when it fires
+  const timerStart = new Date();
+  if (!(await game.advanceAsync({ $set: { timer: 1, timerStartedAt: timerStart } }))) return;
+  const gameId = game._id;
+  Meteor.setTimeout(
+    Meteor.bindEnvironment(() =>
+      // Fire-and-forget, so the catch is load-bearing: without it a rejection here
+      // becomes an unhandled promise rejection. It cannot recover, though — if this
+      // throws, the last player is never force-submitted and the game sits in the
+      // program phase indefinitely. The gameId is in the message because this log
+      // line is the only trace such a game leaves.
+      autoSubmitIfTimedOut(gameId, timerStart).catch(async (err) => {
+        console.error(`autoSubmitIfTimedOut failed for game ${gameId}`, err);
+        // Say so in the game chat: without this the turn simply stops and the
+        // players have no idea why. Guarded because the most likely reason for
+        // getting here is that the game no longer exists.
+        try {
+          const game = await Games.findOneAsync(gameId);
+          await game?.chatAsync(
+            'The programming timer failed — please submit your cards to continue.'
+          );
+        } catch (announceErr) {
+          console.error(`could not announce timer failure for ${gameId}`, announceErr);
+        }
+      })
+    ),
+    GameLogic.TIMER * 1000
+  );
+}
+
 // The tail of the timeout: submit whatever the one player who has not answered has on
 // the table. On its own so the cron sweep can run it for a game whose process died inside
 // the 2.5 s grace above — `timer: 0`, `timerStartedAt` cleared, and with the straggler's
@@ -307,56 +370,17 @@ export class CardLogic {
       });
     }
 
-    const playerCnt = await Players.find({
-      gameId: player.gameId,
-      lives: { $gt: 0 },
-    }).countAsync();
-    const readyPlayerCnt = await Players.find({
-      gameId: player.gameId,
-      submitted: true,
-      lives: { $gt: 0 },
-    }).countAsync();
-    // Read as late as possible: both timer writes below are claims, and the `step` this
-    // read carries is what they are conditional on. Two submits for the same straggler
-    // — the client's timer-0 playCards and the server's own auto-submit — both count
-    // everyone ready, but only one of them wins the claim and drives the turn. A claim
-    // lost to another player's concurrent submit leaves the game to that submit.
+    // Read as late as possible: both writes below are claims, and the `step` this read
+    // carries is what they are conditional on. Two submits for the same straggler — the
+    // client's timer-0 playCards and the server's own auto-submit — both see the same
+    // count, but only one of them wins the claim and drives the turn. A claim lost to
+    // another player's concurrent submit leaves the game to that submit.
     // A player always belongs to a game, the same invariant collections/players.ts asserts
-    // on; the guarded read in the catch below is for a game that has since been removed.
+    // on.
     const game = (await Games.findOneAsync(player.gameId))!;
-    if (readyPlayerCnt === playerCnt) {
-      if (!(await game.advanceAsync({ $set: { timer: -1, timerStartedAt: null } }))) return;
-      return await GameState.nextGamePhaseAsync(player.gameId);
-    } else if (readyPlayerCnt === playerCnt - 1) {
-      // start timer — capture timerStart so the scheduled callback can verify
-      // it is still acting on the same timer instance when it fires
-      const timerStart = new Date();
-      if (!(await game.advanceAsync({ $set: { timer: 1, timerStartedAt: timerStart } }))) return;
-      return Meteor.setTimeout(
-        Meteor.bindEnvironment(() =>
-          // Fire-and-forget, so the catch is load-bearing: without it a rejection here
-          // becomes an unhandled promise rejection. It cannot recover, though — if this
-          // throws, the last player is never force-submitted and the game sits in the
-          // program phase indefinitely. The gameId is in the message because this log
-          // line is the only trace such a game leaves.
-          autoSubmitIfTimedOut(player.gameId, timerStart).catch(async (err) => {
-            console.error(`autoSubmitIfTimedOut failed for game ${player.gameId}`, err);
-            // Say so in the game chat: without this the turn simply stops and the
-            // players have no idea why. Guarded because the most likely reason for
-            // getting here is that the game no longer exists.
-            try {
-              const game = await Games.findOneAsync(player.gameId);
-              await game?.chatAsync(
-                'The programming timer failed — please submit your cards to continue.'
-              );
-            } catch (announceErr) {
-              console.error(`could not announce timer failure for ${player.gameId}`, announceErr);
-            }
-          })
-        ),
-        GameLogic.TIMER * 1000
-      );
-    }
+    if ((await startTimerIfLastOwingAsync(game)) > 0) return;
+    if (!(await game.advanceAsync({ $set: { timer: -1, timerStartedAt: null } }))) return;
+    return await GameState.nextGamePhaseAsync(player.gameId);
   }
 
   static getOptionTitle(name: string) {
