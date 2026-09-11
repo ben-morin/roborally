@@ -55,6 +55,9 @@ const hand = () => document.querySelectorAll('.hand .gamecard');
 const registers = () => document.querySelectorAll('.playing .gamecard');
 const selectedSlot = () => [...registers()].findIndex((el) => el.classList.contains('selected'));
 const playButton = () => screen.getByRole('link', { name: 'Play cards' });
+// The same button while the robot is powered down: it confirms the robot stays down
+// rather than playing anything, so it is worded and labelled for that.
+const stayDownButton = () => screen.getByRole('link', { name: 'Continue power down' });
 const powerButton = () => screen.getByRole('button', { name: /power down/i });
 const timerPill = () => screen.queryByLabelText(/seconds left/);
 const countdownState = () => document.body.firstElementChild!.firstElementChild;
@@ -337,7 +340,40 @@ describe('the buttons', () => {
 
     renderAt(<CardPanel />);
 
-    expect(playButton()).not.toHaveClass('disabled');
+    expect(stayDownButton()).not.toHaveClass('disabled');
+  });
+
+  // Nothing is played while the robot is down, so neither button says so: Cancel wakes it
+  // up, Continue leaves it down for the turn. Both read as a verb plus the power symbol,
+  // the same shape as Announce and Withdraw.
+  it('words both buttons for the stay-down choice, symbols and all', async () => {
+    await seat({ player: { powerState: GameLogic.OFF } });
+
+    renderAt(<CardPanel />);
+
+    const stay = stayDownButton();
+    expect(stay).toHaveTextContent('Continue');
+    expect(stay.querySelector('[data-icon="power"]')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Play cards' })).not.toBeInTheDocument();
+
+    const cancel = powerButton();
+    expect(cancel).toHaveTextContent('Cancel');
+    expect(cancel.querySelector('[data-icon="power"]')).toBeInTheDocument();
+    // Cancel is named first because Cancel is the button on the left.
+    expect(
+      screen.getByText(/Click Cancel to power up and take a hand\. Click Continue to stay/)
+    ).toBeInTheDocument();
+  });
+
+  // Cancelling the power down deals a hand, and with it the ordinary programming wording.
+  it('goes back to the normal programming wording once the robot is powered up', async () => {
+    await seat({ player: { powerState: GameLogic.ON } });
+
+    renderAt(<CardPanel />);
+
+    expect(playButton()).toHaveTextContent('Play cards');
+    expect(playButton().querySelector('[data-icon="power"]')).not.toBeInTheDocument();
+    expect(powerButton()).toHaveTextContent('Announce');
   });
 
   it('submits the program, tagged with the current programming round', async () => {

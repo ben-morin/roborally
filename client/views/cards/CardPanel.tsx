@@ -253,6 +253,13 @@ export function CardPanel() {
   };
 
   const power = powerButton(player?.powerState ?? GameLogic.ON);
+  // A powered-down robot submits nothing — the button confirms it is staying down — so it
+  // says so, and it says so the same way every other power button here does: a verb, with
+  // the symbol standing in for the words "power down". The moment the player cancels and is
+  // dealt a hand this is the ordinary programming button again.
+  const stayingDown = player?.isPoweredDown() ?? false;
+  const submitVerb = stayingDown ? 'Continue' : 'Play cards';
+  const submitLabel = stayingDown ? 'Continue power down' : 'Play cards';
   const canSubmit = player !== undefined && (player.chosenCardsCnt === 5 || player.isPoweredDown());
   const onPlayClick = (event: MouseEvent) => {
     event.preventDefault();
@@ -304,8 +311,8 @@ export function CardPanel() {
             <div className="mt-4">
               <p className="mb-0 text-base">Your robot is powered down</p>
               <p className="mb-0 text-xs text-muted">
-                Click Play cards to stay powered down for this turn. Click Cancel to power up and
-                take a hand.
+                Click Cancel to power up and take a hand. Click Continue to stay powered down for
+                this turn.
               </p>
             </div>
           ) : (
@@ -343,9 +350,11 @@ export function CardPanel() {
               href="#"
               className={`${BTN} ${canSubmit ? PRIMARY : PRIMARY_OFF} playBtn`}
               aria-disabled={!canSubmit}
+              aria-label={submitLabel}
               onClick={onPlayClick}
             >
-              Play cards
+              {submitVerb}
+              {stayingDown && <Power className={BTN_ICON} />}
             </a>
           </div>
         </div>
