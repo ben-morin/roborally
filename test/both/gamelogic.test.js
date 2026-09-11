@@ -640,7 +640,9 @@ describe('executeRepairs', () => {
       damage: 5,
       optionCards: {},
     });
-    await insertDeck(game._id, { optionCards: [2] }); // getOptionName(2) = 'rear-firing_laser'
+    // Looked up by name: a hard-coded id moves whenever `_option_deck` is reordered.
+    const rearLaser = CardLogic.getOptionId('rear-firing_laser');
+    await insertDeck(game._id, { optionCards: [rearLaser] });
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 
@@ -660,7 +662,8 @@ describe('executeRepairs', () => {
     void board;
     const game = await insertGame();
     const player = await insertPlayer(game._id, { position: { x: 1, y: 1 }, damage: 0 });
-    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [2] });
+    const rearLaser = CardLogic.getOptionId('rear-firing_laser');
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [rearLaser] });
 
     await GameLogic.executeRepairs([await Players.findOneAsync(player._id)]);
 

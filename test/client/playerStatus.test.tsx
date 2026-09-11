@@ -51,6 +51,21 @@ async function renderRow(overrides: Record<string, unknown> = {}, own = false) {
 const pill = () => document.querySelector('.rounded-full.uppercase');
 
 describe('PlayerStatus', () => {
+  it('keeps the robot with the name so only the hearts can wrap away', async () => {
+    // A long name used to push the robot and the hearts out of the row. The header wraps
+    // now, and this is the grouping that decides where: the robot and the name are one
+    // flex item, the hearts the other, so the line can only break between them.
+    await renderRow({ name: 'e2e-1789067806666' });
+
+    const robot = document.querySelector('img[src*="robot_"]')!;
+    const name = screen.getByText('e2e-1789067806666');
+    const hearts = screen.getByRole('img', { name: '3 of 3 lives' });
+
+    expect(robot.parentElement).toBe(name.parentElement);
+    expect(hearts.parentElement).not.toBe(name.parentElement);
+    expect(hearts.parentElement).toBe(name.parentElement!.parentElement);
+  });
+
   it('names the caller "Your robot" and everyone else by name', async () => {
     const { unmount } = await renderRow({}, true);
     expect(screen.getByText('Your robot')).toBeInTheDocument();
@@ -160,6 +175,18 @@ describe('PlayerStatus', () => {
     expect(screen.getByText('Option cards')).toBeInTheDocument();
     const chip = screen.getByText(CardLogic.getOptionTitle('extra_memory'));
     expect(chip).toHaveAttribute('title', CardLogic.getOptionDesc('extra_memory'));
+    // The chips sit centred under the centred heading. jsdom lays nothing out, so this
+    // only pins the rule; the look was checked in the browser.
+    expect(chip.parentElement).toHaveClass('justify-center');
+  });
+
+  it('draws no chip for an option the deck no longer has', async () => {
+    // The server strips these at boot; a client already holding the row must not render
+    // one either, because the description lookup throws on an unknown name.
+    await renderRow({ optionCards: { extra_memory: true, dual_processor: true } });
+
+    expect(screen.getByText('Extra Memory')).toBeInTheDocument();
+    expect(screen.queryByText('Dual Processor')).not.toBeInTheDocument();
   });
 
   it('draws five empty slots for a register nothing has gone into yet', async () => {

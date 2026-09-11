@@ -169,56 +169,32 @@ export class CardLogic {
   ];
 
   static _option_deck: readonly [name: string, description: string][] = [
-    [
-      'superior_archive',
-      "When reentering play after beeing destroyed, your robot doesn't receive the normal 20% damage",
-    ],
-    [
-      'circuit_breaker',
-      'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down',
-    ],
-    [
-      'rear-firing_laser',
-      'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser',
-    ],
-    ['extra_memory', 'You receive one extra Program card each turn.'],
-    [
-      'high-power_laser',
-      "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser.",
-    ],
-    [
-      'double-barreled_laser',
-      'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.',
-    ],
-    [
-      'ramming_gear',
-      'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.',
-    ],
-    //    [ 'mechanical_arm', "Your robot can touch a flag or repair site from 1 space away (diagonally or orthogonally),
-    //    as long as there isn't a wall."]
-    ['ablative_coat', 'Absorbs the next 30% damage your robot receives.'],
-    //###### choose to use
-    // 'recompile'
-    //[ 'power-down_shield', ""
-    // 'abort_switch'
-    //##### additional move options
-    // 'fourth_gear'
-    // 'reverse_gear'
-    // 'crab_legs'
-    // 'brakes'
-    //####### register options
-    // 'dual_processor'
-    // 'conditional_program'
-    // 'flywheel'
-    //####### alternative laser
-    // 'mini_howitzer'
-    // 'fire_control'
-    // 'radio_control'
-    // [ 'scrambler',    "Whenever you could fire your main laser at a robot, you may instead fire the Scrambler. This replaces the target's robots's next programmed card with the top Program card from the deck. You can't use this Option on the fifth register phase."]
-    // [ 'tractor_beam', "Whenever you could fire your main laser at a robot that isn't in an adjacent space, you may instead fire the Tractor Beam. This moves the target robot 1 space toward your robot."]
-    // [ 'pressor_beam', "Whenever you could fire your main laser at a robot, you may instead fire the Pressor Beam. This moves the target robot 1 space away from your robot."]
-    //#### activate before submit
-    // 'gyroscopic_stabilizer'
+      // Abort Switch: Replaces a register card with a random one from the deck, and does the same for all remaining registers.
+      ['ablative_coat', 'Absorbs the next 30% damage your robot receives.'],
+      // Brakes: Allows your robot to move zero spaces when executing a Move 1 card.
+      ['circuit_breaker', 'If you have 30% or more damage at the end of your turn, your robot will begin the next turn powered down'],
+      // Conditional: Triggers an action based on specific board states or events.
+      ['double-barreled_laser', 'Whenever your robot fires its main laser, it fires two shots instead of one. You may use this Option with Fire Control and/or High-Power Laser.'],
+      ['extra_memory', 'You receive one extra Program card each turn.'],
+      // Fire Control: Modifies weapon firing capabilities.
+      // Flywheel: Extra cards for your robot's movement in a future turn.
+      // Fourth Gear: Move 4 instead of 3
+      // Gyroscopic Stabilizer: Prevents unwanted rotations.
+      ['high-power_laser', "Your robot's main laser can shoot through one wall or robot to get to a target robot. If you shoot through a robot, that robot also receives full damage. You may use this Option with Fire Control and/or Double-Barreled Laser."],
+      // Mechanical Arm: Touch a checkpoint from a square away
+      // Mini Howitzer: fires and pushes a robot 5 uses
+      // Power-Down Shield: Protects while powered down.
+      // Pressor Beam: pushes instead of laser fire
+      // Radio Control: Controls another robot's actions.
+      ['ramming_gear', 'Whenever your robot pushes or bumps into another robot, that robot receives 10% damage.'],
+      ['rear-firing_laser', 'Your robot has a rear-firing laser in addition to its main laser. This laser follows all the same rules as the main laser'],
+      // Recompile: Replaces hand once per turn in exchange for a point of damage
+      // Reverse Gear: Backup 2 instead of 1
+      // Scrambler: Replace a next card in targets hand
+      // Shield: Protects against damage during a turn
+      ['superior_archive', "When reentering play after being destroyed, your robot doesn't receive the normal 20% damage"],
+      // Tractor Beam: Pulls a targeted robot toward you
+      // Turret: choose which direction laser comes out
   ];
 
   static async discardCardsAsync(game: Game, player: Player) {
@@ -393,6 +369,13 @@ export class CardLogic {
     // Every caller passes a name that came out of `getOptionName`, so an unknown one is a
     // bug rather than a miss to hand back.
     throw new Error(`Unknown option card: ${name}`);
+  }
+
+  // Whether the option deck still holds a card of this name. Player documents outlive the
+  // deck: a name dropped from `_option_deck` stays in the rows of every game already in
+  // flight, and both the card panel and the discard path read those names back.
+  static isOptionCard(name: string) {
+    return this._option_deck.some(([optionName]) => optionName === name);
   }
 
   static getOptionDesc(name: string) {

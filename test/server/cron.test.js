@@ -81,6 +81,25 @@ describe('registration', () => {
 describe('startup backfill', () => {
   // A game without `step` refuses every claim its turn chain makes, so games already in
   // flight when this ships have to be seeded before anything can drive them.
+  // An option name taken out of `_option_deck` stays in the row of every player holding
+  // it, where the card panel and the discard path would both throw on it.
+  it('drops option cards the deck no longer has, and puts none of them back', async () => {
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, {
+      optionCards: { extra_memory: true, dual_processor: true },
+    });
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [] });
+
+    await runStartup();
+
+    const doc = await Players.findOneAsync(player._id);
+    expect(doc.optionCards).toEqual({ extra_memory: true });
+    // Dropped, not discarded: an option the deck no longer knows has no id to file it under.
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect(deck.discardedOptionCards).toEqual([]);
+    expect(deck.optionCards).toEqual([]);
+  });
+
   it('seeds step on games that predate it and leaves the others alone', async () => {
     await Games.insertAsync({ name: 'old', started: true });
     await Games.insertAsync({ name: 'mid-turn', started: true, step: 7, lastStepAt: new Date(1) });

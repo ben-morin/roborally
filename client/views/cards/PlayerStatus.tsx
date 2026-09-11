@@ -70,14 +70,22 @@ export function PlayerHeader({ player, own, checkpointCnt }: PlayerHeaderProps) 
     // Two centred lines, so a long name is never cut short: robot, name and hearts, then
     // the damage and next-checkpoint readout under them.
     <div className="flex flex-col items-center gap-1">
-      <div className="flex items-center justify-center gap-2.5">
-        <img
-          className="h-7 w-7 shrink-0"
-          src={`/robots/robot_${player.robotId}.png`}
-          alt=""
-          draggable={false}
-        />
-        <span className="text-sm font-semibold">{own ? 'Your robot' : player.name}</span>
+      {/* The hearts drop to a line of their own when the robot and the name have taken the
+          width. Robot and name are one flex item so the wrap can only fall between the name
+          and the hearts, never between the robot and the name; `wrap-anywhere` is what lets
+          the name itself break, since a long one is a single unbreakable run of digits. */}
+      <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <img
+            className="h-7 w-7 shrink-0"
+            src={`/robots/robot_${player.robotId}.png`}
+            alt=""
+            draggable={false}
+          />
+          <span className="text-sm font-semibold wrap-anywhere">
+            {own ? 'Your robot' : player.name}
+          </span>
+        </span>
         <Lives lives={player.lives} />
       </div>
       <span className={META}>
@@ -90,12 +98,15 @@ export function PlayerHeader({ player, own, checkpointCnt }: PlayerHeaderProps) 
 }
 
 export function OptionCards({ optionCards }: { optionCards: object }) {
-  const names = Object.keys(optionCards);
+  // A name the option deck no longer has is not drawn at all. The server strips those from
+  // the player's row at boot; this covers the copy a client is already holding, and keeps
+  // the description lookup below — which throws on an unknown name — off it.
+  const names = Object.keys(optionCards).filter((name) => CardLogic.isOptionCard(name));
   if (names.length === 0) return null;
   return (
     <div className="option-cards mt-3">
       <p className={`${EYEBROW} mb-1.5`}>Option cards</p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap justify-center gap-1.5">
         {names.map((name) => (
           <span key={name} className={CHIP} title={CardLogic.getOptionDesc(name)}>
             {CardLogic.getOptionTitle(name)}

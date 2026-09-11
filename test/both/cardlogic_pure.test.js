@@ -157,6 +157,12 @@ describe('option deck', () => {
     expect(() => CardLogic.getOptionDesc('nope')).toThrow('Unknown option card: nope');
   });
 
+  it('isOptionCard answers for a name instead of throwing, so callers can ask first', () => {
+    expect(CardLogic.isOptionCard('extra_memory')).toBe(true);
+    expect(CardLogic.isOptionCard('dual_processor')).toBe(false);
+    expect(CardLogic.isOptionCard('')).toBe(false);
+  });
+
   it('getOptionTitle replaces underscores with spaces and title-cases each word', () => {
     // Was `.replace('/_/g', ' ')` — a *string* search for the literal text "/_/g" that
     // never matched, so titles kept their underscores ("Extra_memory"). Fixed to a real

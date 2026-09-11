@@ -259,6 +259,13 @@ export class Player {
     const game = await this.gameAsync();
     const gameId = game._id;
     delete this.optionCards[name];
+    // A name the option deck no longer has cannot be discarded — it has no id — so drop it
+    // from the player and leave the pile alone. Throwing here would take down the turn
+    // this runs inside, and the stalled-turn sweep would replay it into the same throw.
+    if (!CardLogic.isOptionCard(name)) {
+      console.error(`Dropping unknown option card ${name} held by ${this.name}`);
+      return;
+    }
     // A card can only be discarded if it was drawn, so the deck it came from is there.
     const deckDoc = (await Decks.findOneAsync({ gameId }))!;
     const discarded = deckDoc.discardedOptionCards;

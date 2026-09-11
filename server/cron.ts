@@ -253,6 +253,8 @@ Meteor.startup(async () => {
   await seedNullKeys(Players, 'player', ['ablativeCoat']);
   await seedSnapshotNullKeys();
 
+  await dropUnknownOptionCardsAsync();
+
   // A game whose turn died with the previous process is picked up here rather than at the
   // first cron tick — with the same stall threshold, which is what keeps a booting
   // instance off a game a still-running one is driving during a rolling deploy.
@@ -311,6 +313,25 @@ Meteor.startup(async () => {
   console.info('Meteor.startup: cron');
   SyncedCron.start();
 });
+
+// Option names outlive the deck they came from: one taken out of `_option_deck` stays in
+// the row of every player already holding it, where the card panel's description lookup
+// and the discard path would both throw on it. The card is dropped, not discarded — an
+// option the deck no longer knows has no id, so there is nowhere to put it back.
+async function dropUnknownOptionCardsAsync() {
+  for (const player of await Players.find().fetchAsync()) {
+    // A row that predates the field has no map at all, as the seeds above also find.
+    const cards = player.optionCards ?? {};
+    const held = Object.keys(cards);
+    const known = held.filter((name) => CardLogic.isOptionCard(name));
+    if (known.length === held.length) continue;
+
+    const optionCards = Object.fromEntries(known.map((name) => [name, cards[name]]));
+    await Players.updateAsync(player._id, { $set: { optionCards } });
+    const dropped = held.filter((name) => !CardLogic.isOptionCard(name));
+    console.log(`Dropped unknown option card(s) ${dropped.join(', ')} from player ${player._id}`);
+  }
+}
 
 async function delay(ms: number) {
   return new Promise((resolve) => Meteor.setTimeout(resolve, ms));

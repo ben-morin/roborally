@@ -3,10 +3,38 @@
 // run out in a real game, so the guard has no other cover.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetFakeCollections } from '../setup.js';
+import { CardLogic } from '../../both/cardlogic.ts';
 import { GameLogic } from '../../both/gamelogic.ts';
+import { Decks } from '../../collections/deck.ts';
 import { insertGame, insertPlayer, insertCards, insertDeck } from '../helpers/fixtures.js';
 
 beforeEach(() => resetFakeCollections());
+
+describe('discardOptionCardAsync', () => {
+  it('drops a card whose name has left the option deck, leaving the pile alone', async () => {
+    const game = await insertGame();
+    // A name no longer in `_option_deck`, as a game already in flight would still hold.
+    const player = await insertPlayer(game._id, { optionCards: { dual_processor: true } });
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [] });
+
+    await player.discardOptionCardAsync('dual_processor');
+
+    expect(player.optionCards).toEqual({});
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect(deck.discardedOptionCards).toEqual([]);
+  });
+
+  it('discards a card the deck still has by its id', async () => {
+    const game = await insertGame();
+    const player = await insertPlayer(game._id, { optionCards: { extra_memory: true } });
+    await insertDeck(game._id, { optionCards: [], discardedOptionCards: [] });
+
+    await player.discardOptionCardAsync('extra_memory');
+
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect(deck.discardedOptionCards).toEqual([CardLogic.getOptionId('extra_memory')]);
+  });
+});
 
 describe('addDamageAsync', () => {
   it('throws when a newly locked slot has no card left to draw', async () => {
