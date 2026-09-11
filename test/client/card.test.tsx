@@ -67,6 +67,28 @@ describe('Card', () => {
     expect(screen.getByLabelText('Turn right, priority 70, in a register')).toBeInTheDocument();
   });
 
+  // The printed digits shrink with the card, so the number is also on the native tooltip —
+  // the same one the option-card pills use. Only a face-up card has one.
+  it('names the priority in a tooltip, and only where there is a priority', () => {
+    const [card] = addUIData([TURN_RIGHT], true, 0, false, 8);
+    const [covered, lost] = addUIData([CardLogic.COVERED, CardLogic.DAMAGE], true, 0, false, 8);
+    const [slot] = addUIData([E], false, 0, true, 8);
+
+    const { container } = render(
+      <>
+        <Card card={card} />
+        <Card card={covered} />
+        <Card card={lost} />
+        <Card card={slot} />
+      </>
+    );
+
+    expect(container.children[0]).toHaveAttribute('title', 'Priority: 70');
+    expect(container.children[1]).not.toHaveAttribute('title');
+    expect(container.children[2]).not.toHaveAttribute('title');
+    expect(container.children[3]).not.toHaveAttribute('title');
+  });
+
   it('lays the damage token over a locked register', () => {
     // lockedCnt 1: the fifth slot is locked.
     const row = addUIData([E, E, E, E, STEP_FORWARD], false, 1, true, 8);

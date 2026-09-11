@@ -75,6 +75,9 @@ export function Card({ card, selected = false, timeLeft = 0, onClick }: CardProp
     <div
       className={`gamecard ${card.type ?? ''} ${card.class ?? ''} ${FOCUS}`.replace(/\s+/g, ' ')}
       aria-label={`${register}${name}${detail ? `, ${detail}` : ''}`}
+      // The printed digits shrink with the card; the native tooltip is the same one the
+      // option-card pills use, delay and all.
+      title={card.priority === undefined ? undefined : `Priority: ${card.priority}`}
       {...interactive}
     >
       {card.priority !== undefined && (

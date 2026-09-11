@@ -5,31 +5,23 @@
 // measured number, the tile size, and drives the animations imperatively (D10).
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router';
 import { useFind, useTracker } from 'meteor/react-meteor-data';
 import { BoardBox } from '../../../both/board_box.ts';
 import { CardLogic } from '../../../both/cardlogic.ts';
 import { GameLogic } from '../../../both/gamelogic.ts';
 import { GameState } from '../../../both/gamestate.ts';
-import {
-  leaveGame,
-  selectRespawnDirection,
-  selectRespawnPosition,
-} from '../../../both/methods/games.ts';
+import { selectRespawnDirection, selectRespawnPosition } from '../../../both/methods/games.ts';
 import { Games } from '../../../collections/games.ts';
 import type { Game } from '../../../collections/games.ts';
 import { Players } from '../../../collections/players.ts';
 import type { Player, PlayerDoc } from '../../../collections/players.ts';
-import { modalAlert, modalConfirm } from '../../helper/modalDialogs.ts';
-import { paths } from '../routes.ts';
+import { modalAlert } from '../../helper/modalDialogs.ts';
 import { useRouteParam } from '../useRouteParam.ts';
 import { ArrowRightCircle } from '../icons/ArrowRightCircle.tsx';
 import { CheckCircle } from '../icons/CheckCircle.tsx';
 import { Circle } from '../icons/Circle.tsx';
 import { Tiles } from './Tiles.tsx';
 
-const DANGER =
-  'inline-flex h-10 cursor-pointer items-center justify-center rounded-control border-0 bg-danger px-4 text-sm font-semibold text-white no-underline hover:bg-[color-mix(in_srgb,var(--color-danger)_88%,white)] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const CHIP =
   'flex h-[30px] items-center justify-center gap-[0.45em] rounded-card font-semibold tracking-[.04em] whitespace-nowrap uppercase';
 // The label may not wrap, so the font is sized from the strip's own width (`@container`
@@ -350,7 +342,6 @@ function RespawnOption({
 
 export function Board() {
   const gameId = useRouteParam('_id');
-  const navigate = useNavigate();
   const game = useTracker(() => (gameId ? Games.findOne(gameId) : undefined), [gameId]);
   const userId = useTracker(() => Meteor.userId());
   // Unfiltered by game on purpose, as the helper this replaces was: the `players`
@@ -449,27 +440,6 @@ export function Board() {
     );
   }
 
-  const goToLobby = () => navigate(paths.gameList());
-
-  // The template's `.cancel` handler, kept whole though the button only shows once the
-  // game has ended: leaving a live game forfeits it and asks first.
-  const onClose = async () => {
-    if (game.gamePhase !== GameState.PHASE.ENDED) {
-      if (
-        await modalConfirm(
-          'If you leave, you will forfeit the game, are you sure you want to give up?'
-        )
-      ) {
-        leaveGame({ gameId: game._id }).then(goToLobby, (error) => {
-          modalAlert(error.reason);
-          goToLobby();
-        });
-      }
-    } else {
-      goToLobby();
-    }
-  };
-
   const boardWidth = board.width * tileSize;
   const shortChipLabels = boardWidth < SHORT_CHIP_WIDTH;
   const playerCnt = players.length;
@@ -517,11 +487,6 @@ export function Board() {
           <h3 className="mt-0 mb-0 text-2xl">Game over</h3>
           <hr className="star-well mt-3 mb-7" />
           <p className="text-base">{game.winner} has won the game!</p>
-          <div className="mt-7">
-            <button type="button" className={DANGER} onClick={onClose}>
-              Close game
-            </button>
-          </div>
         </div>
       ) : (
         game.announce && (

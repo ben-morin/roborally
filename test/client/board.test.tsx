@@ -27,7 +27,7 @@ import { Games } from '../../collections/games.ts';
 import { Players } from '../../collections/players.ts';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { loginAs, resetFakeCollections } from '../setup.js';
-import { navigations_, renderAt, resetRouter, setRoute } from '../helpers/router.tsx';
+import { renderAt, resetRouter, setRoute } from '../helpers/router.tsx';
 
 const TURN_RIGHT = 6;
 // The default board is 12 tiles wide, so a 600px board is 50px tiles.
@@ -706,12 +706,12 @@ describe('game over', () => {
     expect(robot()).toBeInTheDocument();
   });
 
-  it('closes back to the game list', async () => {
+  // Closing is the chat panel's exit button, the one control that handles leaving and
+  // closing for every screen; the board carried a second one for a finished game.
+  it('offers no close button of its own', async () => {
     await openBoard({ game: { gamePhase: GameState.PHASE.ENDED, winner: 'them' } });
     renderAt(<Board />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Close game' }));
-
-    expect(navigations_()).toEqual(['/']);
+    expect(screen.queryByRole('button', { name: 'Close game' })).not.toBeInTheDocument();
   });
 });
