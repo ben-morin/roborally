@@ -146,8 +146,10 @@ export function CardPanel() {
       const selector = { gameId, userId: { $ne: userId } } as unknown as Mongo.Selector<PlayerDoc>;
       return Players.find(selector);
     }, [gameId, userId]) ?? [];
-  // The `cards` publication sends the reader's own document, so this is their hand.
-  const cardDoc = useTracker(() => Cards.findOne());
+  // The `cards` publication sends the reader's own document for this game, so this is
+  // their hand. Filtered by game anyway: a stale document from a previous game would
+  // otherwise render as this one's hand.
+  const cardDoc = useTracker(() => (gameId ? Cards.findOne({ gameId }) : undefined), [gameId]);
   const playerCnt = useTracker(() => (gameId ? Players.find({ gameId }).count() : 0), [gameId]);
   // The game carries the deck it started with; the live count is only the fallback for a
   // game that started before that field existed.

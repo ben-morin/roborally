@@ -49,6 +49,7 @@ services:
       - MONGO_URL=mongodb://mongo:27017/roborally
       - ROOT_URL=http://localhost:3000
 #      - MAIL_URL=smtp://user:password@mailhost:port
+#      - DEBUG_LOG=true
       - >
         METEOR_SETTINGS={
           "ALLOWED_EMAILS": [],

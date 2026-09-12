@@ -246,6 +246,22 @@ describe('the hand and the registers', () => {
     expect([...cards].slice(2).every((el) => el.classList.contains('damage'))).toBe(true);
   });
 
+  // The publication only ever sends this game's document, but the read is filtered on the
+  // game anyway: an older game's emptied hand, inserted first so an unfiltered findOne
+  // would pick it up, must not render as nine lost slots.
+  it("reads this game's card document, not a stale one from another game", async () => {
+    const older = (await insertGame())!;
+    await insertCards('older-seat', older._id, { userId: 'me', handCards: [] });
+    await seat();
+
+    renderAt(<CardPanel />);
+
+    const cards = hand();
+    expect(cards).toHaveLength(9);
+    expect([...cards].every((el) => el.classList.contains('available'))).toBe(true);
+    expect(document.querySelector('.hand .damage')).toBeNull();
+  });
+
   it('greys out a hand card already sitting in the register', async () => {
     await seat({
       cards: { handCards: [TURN_RIGHT, STEP_FORWARD], chosenCards: [STEP_FORWARD, E, E, E, E] },
