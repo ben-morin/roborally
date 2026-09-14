@@ -143,25 +143,17 @@ describe('createGame', () => {
     expect(await messages(gameId)).toEqual(['Game created', 'ben joined the game']);
   });
 
-  it("uses the game's name as a board name when it matches the catalog", async () => {
+  it('opens on the default board even when the name matches another board', async () => {
     await loginAs();
 
-    const gameId = await call('createGame', { name: 'risky_exchange' });
+    for (const name of ['risky_exchange', 'dev_test', 'not a board']) {
+      const gameId = await call('createGame', { name });
 
-    const game = await Games.findOneAsync(gameId);
-    expect(game.boardName).toBe('risky_exchange');
-    expect(game.min_player).toBe(BoardBox.getBoard('risky_exchange').min_player);
-    expect(game.max_player).toBe(BoardBox.getBoard('risky_exchange').max_player);
-  });
-
-  it('falls back to the default board when the name matches nothing', async () => {
-    await loginAs();
-
-    const gameId = await call('createGame', { name: 'not a board' });
-
-    const game = await Games.findOneAsync(gameId);
-    expect(game.boardName).toBe('default');
-    expect(game.max_player).toBe(BoardBox.getBoard('default').max_player);
+      const game = await Games.findOneAsync(gameId);
+      expect(game.boardName, name).toBe('default');
+      expect(game.min_player).toBe(BoardBox.getBoard('default').min_player);
+      expect(game.max_player).toBe(BoardBox.getBoard('default').max_player);
+    }
   });
 });
 
@@ -521,6 +513,34 @@ describe('selectBoard', () => {
       error: 404,
     });
     expect((await Games.findOneAsync(gameId)).boardName).toBe('default');
+  });
+
+  it('refuses a hidden board', async () => {
+    const owner = await loginAs();
+    const gameId = await Games.insertAsync({ boardName: 'default', userId: owner._id });
+
+    await expect(
+      call('selectBoard', { boardName: 'moving_targets', gameId: gameId })
+    ).rejects.toMatchObject({ error: 404 });
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('default');
+  });
+
+  it('accepts a dev board in development and refuses it in production', async () => {
+    const owner = await loginAs();
+    const gameId = await Games.insertAsync({ boardName: 'default', userId: owner._id });
+
+    await call('selectBoard', { boardName: 'dev_test', gameId: gameId });
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('dev_test');
+
+    Meteor.isDevelopment = false;
+    try {
+      await expect(
+        call('selectBoard', { boardName: 'test', gameId: gameId })
+      ).rejects.toMatchObject({ error: 404 });
+    } finally {
+      Meteor.isDevelopment = true;
+    }
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('dev_test');
   });
 
   it('refuses an unknown game id', async () => {

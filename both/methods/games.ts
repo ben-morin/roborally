@@ -100,10 +100,9 @@ export const createGame = createMethod({
     }
     const author = getUsername(user);
 
-    // A game's display name has always doubled as its board lookup; one that matches no
-    // board gets the default, as it always did.
-    const boardName = BoardBox.hasBoard(postAttributes.name) ? postAttributes.name : 'default';
-    const board = BoardBox.getBoard(boardName);
+    // Every game opens on `default`; the owner picks another board from board select. The
+    // name used to double as a board lookup, which was the only way onto a dev board.
+    const board = BoardBox.getBoard('default');
     const game = {
       name: postAttributes.name,
       userId: user._id,
@@ -115,7 +114,7 @@ export const createGame = createMethod({
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
       playPhaseCount: 0,
       programRound: 0,
-      boardName,
+      boardName: board.name,
       min_player: board.min_player,
       max_player: board.max_player,
       waitingForRespawn: [],
@@ -291,7 +290,8 @@ export const selectBoard = createMethod({
     }
     if (game.started) throw new Meteor.Error(409, 'Game already started.');
 
-    if (!BoardBox.hasBoard(boardName)) {
+    // Unknown, hidden and (outside development) dev boards all read the same to a client.
+    if (!BoardBox.isSelectable(boardName)) {
       throw new Meteor.Error(404, `Board ${boardName} not found!`);
     }
 

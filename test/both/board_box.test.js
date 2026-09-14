@@ -58,19 +58,44 @@ describe('BoardBox groups', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('show no hidden group, no hidden board and no empty group', () => {
+  it('show the dev group in development, no hidden board and no empty group', () => {
     const visible = BoardBox.visibleGroups();
-    expect(visible.map((group) => group.id)).toEqual(['beginner', 'expert', 'custom']);
+    expect(visible.map((group) => group.id)).toEqual(['beginner', 'expert', 'custom', 'dev']);
     for (const group of visible) {
       expect(group.boards.length, group.id).toBeGreaterThan(0);
       for (const name of group.boards) {
         expect(BoardBox.getBoard(name).hidden, `"${name}" in ${group.id}`).toBe(false);
       }
     }
-    // Hidden is not gone: the group still owns the board, and the name still selects it.
+    // Hidden is not gone: the group still owns the board.
     expect(BoardBox.groupOf('moving_targets')?.id).toBe('expert');
-    expect(BoardBox.groupOf('dev_test')?.hidden).toBe(true);
+    expect(BoardBox.groupOf('dev_test')?.devOnly).toBe(true);
     expect(BoardBox.groupOf('not-a-real-board')).toBeUndefined();
+  });
+
+  it('drop the dev group outside development', () => {
+    Meteor.isDevelopment = false;
+    try {
+      const visible = BoardBox.visibleGroups();
+      expect(visible.map((group) => group.id)).toEqual(['beginner', 'expert', 'custom']);
+    } finally {
+      Meteor.isDevelopment = true;
+    }
+  });
+
+  it('let selectBoard pick exactly what board select shows', () => {
+    expect(BoardBox.isSelectable('default')).toBe(true);
+    expect(BoardBox.isSelectable('dev_test')).toBe(true);
+    // Hidden boards and unknown names are never selectable.
+    expect(BoardBox.isSelectable('moving_targets')).toBe(false);
+    expect(BoardBox.isSelectable('not-a-real-board')).toBe(false);
+    Meteor.isDevelopment = false;
+    try {
+      expect(BoardBox.isSelectable('dev_test')).toBe(false);
+      expect(BoardBox.isSelectable('default')).toBe(true);
+    } finally {
+      Meteor.isDevelopment = true;
+    }
   });
 });
 
@@ -105,9 +130,9 @@ describe('BoardBox catalog', () => {
     expect(BoardBox.hasBoard('toString')).toBe(false);
   });
 
-  it('serves the hidden boards by name like any other', () => {
+  it('serves the dev boards by name like any other', () => {
     expect(BoardBox.hasBoard('test')).toBe(true);
-    expect(BoardBox.groupOf('test')?.hidden).toBe(true);
+    expect(BoardBox.groupOf('test')?.devOnly).toBe(true);
     const devTestBoard = BoardBox.getBoard('dev_test');
     expect(devTestBoard.name).toBe('dev_test');
     // dev_test's 3 core starts (A, B, C) plus 5 filler slots

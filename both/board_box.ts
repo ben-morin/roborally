@@ -1,11 +1,11 @@
 import { Board } from './board.ts';
 
-// A tab on board select. `hidden` keeps the whole group off the page; a board hides itself
-// through `Board.hidden`. Both can still be selected by name.
+// A tab on board select. `devOnly` keeps the whole group off the page and out of reach of
+// `selectBoard` except under `meteor run`; a single board hides itself through `Board.hidden`.
 export interface BoardGroup {
   id: string;
   label: string;
-  hidden?: boolean;
+  devOnly?: boolean;
   boards: readonly string[];
 }
 
@@ -62,7 +62,7 @@ export class BoardBox {
     {
       id: 'dev',
       label: 'Dev boards',
-      hidden: true,
+      devOnly: true,
       boards: ['test', 'dev_test'],
     },
   ];
@@ -96,7 +96,6 @@ export class BoardBox {
     },
     test() {
       const board = new Board('test', 1, 4, 4, 5);
-      board.hidden = true;
       board.addRallyArea('test');
       board.addStartArea('test', 0, 4);
       board.addCheckpoint(3, 0);
@@ -109,7 +108,6 @@ export class BoardBox {
       // pushes C, then B, then A off the board — exercises the chained
       // push-off-edge animation path.
       const board = new Board('dev_test', 1, 8, 12, 12);
-      board.hidden = true;
       board.length = 'short';
       board.addStartArea('dev_test', 0, 3);
       board.addCheckpoint(0, 0);
@@ -453,13 +451,20 @@ export class BoardBox {
     return this.GROUPS.find((group) => group.boards.includes(name));
   }
 
-  // What board select renders: no hidden group, no hidden board, no group left empty.
+  // What board select renders: no dev group outside development, no hidden board, no group
+  // left empty. `Meteor.isDevelopment` is read per call, not at load, so a test can flip it.
   static visibleGroups(): BoardGroup[] {
-    return this.GROUPS.filter((group) => !group.hidden)
+    return this.GROUPS.filter((group) => !group.devOnly || Meteor.isDevelopment)
       .map((group) => ({
         ...group,
         boards: group.boards.filter((name) => !this.getBoard(name).hidden),
       }))
       .filter((group) => group.boards.length > 0);
+  }
+
+  // What `selectBoard` accepts: exactly what board select shows, so a board that is off the
+  // page cannot be reached by name either.
+  static isSelectable(name: string) {
+    return this.visibleGroups().some((group) => group.boards.includes(name));
   }
 }
