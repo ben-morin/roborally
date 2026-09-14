@@ -276,7 +276,7 @@ export class Game {
 // `AnyOf(X, Null)` means the key is there and its value may be null. `Optional(X)` means
 // the key may be missing. Nothing here says `Optional(AnyOf(X, Null))`: five fields used
 // to, which gave them three states — absent, null, or a value — where every reader means
-// two. `createGame` seeds them null and the startup backfill in server/cron.ts fills them
+// two. `createGame` seeds them null and the startup backfill in server/backfill.ts fills them
 // in on games that predate that, so "absent" is no longer reachable.
 //
 // `winnerUserId` is the one deliberate exception: it is absent when there is no winner and

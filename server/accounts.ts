@@ -12,7 +12,7 @@
 // whole documents. See the projection on `onlineUsers` in server/publications.ts — this
 // file is what makes that projection sufficient, by putting a display name somewhere
 // safe to publish.
-import { displayNameFromEmail, getUsername } from '../both/permissions.ts';
+import { displayNameFromEmail } from '../both/permissions.ts';
 
 // accounts-base's `setupUsersCollection` installs an allow rule that lets a logged-in
 // client update the `profile` field of its own document. Nothing in this app writes to
@@ -23,10 +23,10 @@ import { displayNameFromEmail, getUsername } from '../both/permissions.ts';
 // matching allow rule is refused.
 Meteor.users.deny({ update: () => true });
 
-Meteor.startup(async () => {
-  // Registered here rather than at module scope so it sits beside the backfill it feeds:
-  // both exist to guarantee every user document has a `profile.name`. Meteor permits a
-  // single registration and startup runs once.
+Meteor.startup(() => {
+  // Every user document gets a `profile.name` here; accounts from before this hook get
+  // theirs from the startup backfill in server/backfill.ts. Registered inside startup
+  // because Meteor permits a single registration and startup runs once.
   Accounts.onCreateUser((options, user) => {
     // `options.profile` is whatever the sign-up form sent, i.e. client-controlled, and
     // this is the one field the publication exposes to other players — so it is derived
@@ -36,19 +36,4 @@ Meteor.startup(async () => {
     user.profile = { name: address ? displayNameFromEmail(address) : user._id };
     return user;
   });
-
-  // Accounts created before display names were stored server-side have no `profile.name`,
-  // and the publication no longer sends anything a name could be derived from — they
-  // would show up as blank pills. Only `emails` is read, so ask for only that.
-  const legacy = await Meteor.users
-    .find({ 'profile.name': { $exists: false } }, { fields: { emails: 1 } })
-    .fetchAsync();
-
-  for (const user of legacy) {
-    await Meteor.users.updateAsync(user._id, { $set: { 'profile.name': getUsername(user) } });
-  }
-
-  if (legacy.length) {
-    console.log(`Backfilled profile.name for ${legacy.length} user(s)`);
-  }
 });

@@ -81,31 +81,3 @@ async function addToHighscores(arr: RankingRow[], type: string) {
     });
   }
 }
-
-// Games that finished before `winnerUserId` existed carry only the winner's display name.
-// Resolve it from that game's own players, which is unambiguous unless two of them shared
-// a name — the very collision this change is about — so skip those rather than guess.
-// Anyone who left the game is unresolvable too: leaveGame deletes the Players document.
-async function backfillWinnerUserIds() {
-  const finished = await Games.find({
-    winner: { $exists: true, $ne: 'Nobody' },
-    winnerUserId: { $exists: false },
-  }).fetchAsync();
-
-  let resolved = 0;
-  for (const game of finished) {
-    const candidates = await Players.find({ gameId: game._id, name: game.winner }).fetchAsync();
-    if (candidates.length !== 1 || !candidates[0].userId) continue;
-    await Games.updateAsync(game._id, { $set: { winnerUserId: candidates[0].userId } });
-    resolved++;
-  }
-
-  if (finished.length) {
-    console.log(`Backfilled winnerUserId for ${resolved} of ${finished.length} finished game(s)`);
-  }
-}
-
-Meteor.startup(async () => {
-  await backfillWinnerUserIds();
-  await buildHighscores();
-});

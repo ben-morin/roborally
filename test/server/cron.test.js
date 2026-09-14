@@ -20,7 +20,7 @@ import { Decks } from '../../collections/deck.ts';
 import { Games } from '../../collections/games.ts';
 import { Highscores } from '../../collections/highscores.ts';
 import { Players } from '../../collections/players.ts';
-import { LEGACY_BOARD_ORDER } from '../../server/cron.ts';
+import { LEGACY_BOARD_ORDER } from '../../server/backfill.ts';
 import { STALL_MS } from '../../server/resume.ts';
 import { BoardBox } from '../../both/board_box.ts';
 

@@ -17,7 +17,7 @@ export function displayNameFromEmail(address: string) {
 // Works on a full server-side user document and on the projected one the `onlineUsers`
 // publication sends, which carries `profile.name` but no `emails`. The email branch is
 // the fallback for accounts created before display names were stored; the startup
-// backfill in server/accounts.ts retires it for existing users.
+// backfill in server/backfill.ts retires it for existing users.
 export function getUsername(user: Meteor.User) {
   if (user.profile?.name) {
     return user.profile.name;

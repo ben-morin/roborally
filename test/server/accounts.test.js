@@ -1,8 +1,9 @@
 // Two files configure Accounts inside Meteor.startup, and everything they do is
 // security-relevant: server/cron.ts has the email allowlist that decides who may
 // register and the verification gate that decides who may log in; server/accounts.ts has
-// the `onCreateUser` hook and the backfill that put a publishable display name on every
-// user document, plus the deny rule that stops a client rewriting it. None of it is
+// the `onCreateUser` hook that puts a publishable display name on every new user document,
+// plus the deny rule that stops a client rewriting it (server/backfill.ts names the
+// accounts from before the hook). None of it is
 // reachable without running the startup block, so the harness captures the callbacks
 // Accounts is handed.
 import { beforeEach, describe, expect, it } from 'vitest';

@@ -305,7 +305,7 @@ const schema = {
   // The five register slots: a card id, or one of the CardLogic sentinels -1..-4.
   cards: [Number],
   // Hits soaked by an ablative coat, 0..2 — then null when the card is spent, which is
-  // also what `joinGame` seeds and what the startup backfill in server/cron.ts fills in
+  // also what `joinGame` seeds and what the startup backfill in server/backfill.ts fills in
   // on players who predate the key. `AnyOf(X, Null)` rather than `Optional(AnyOf(X,
   // Null))`: the third state, absent, meant nothing to any reader.
   ablativeCoat: AnyOf(Number, Null),
