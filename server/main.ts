@@ -277,7 +277,7 @@ Meteor.startup(async () => {
     return true;
   });
 
-  console.info('Meteor.startup: cron');
+  console.info('Meteor.startup: main');
   SyncedCron.start();
 });
 

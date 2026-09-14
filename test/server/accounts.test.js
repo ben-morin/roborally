@@ -1,5 +1,5 @@
 // Two files configure Accounts inside Meteor.startup, and everything they do is
-// security-relevant: server/cron.ts has the email allowlist that decides who may
+// security-relevant: server/main.ts has the email allowlist that decides who may
 // register and the verification gate that decides who may log in; server/accounts.ts has
 // the `onCreateUser` hook that puts a publishable display name on every new user document,
 // plus the deny rule that stops a client rewriting it (server/backfill.ts names the

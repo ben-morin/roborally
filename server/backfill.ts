@@ -1,5 +1,5 @@
 // Every one-time repair to documents already in the database, run once from
-// `Meteor.startup` in server/cron.ts before the cron jobs start and before a client can
+// `Meteor.startup` in server/main.ts before the cron jobs start and before a client can
 // reach a method. Each one is idempotent: it selects on the very field it fills in, so a
 // second boot finds nothing to do. A repair that is no longer needed can be deleted here
 // without touching the entry point.

@@ -1,6 +1,6 @@
 // Everything that keeps a user document from being readable or writable by a client that
 // has no business with it. The login-gating half of the Accounts configuration — the
-// registration allowlist and the email-verification gate — lives in server/cron.ts's
+// registration allowlist and the email-verification gate — lives in server/main.ts's
 // `Meteor.startup` block, because it is settings-driven; this file is about the shape and
 // ownership of the documents themselves.
 //

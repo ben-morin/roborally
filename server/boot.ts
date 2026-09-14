@@ -1,4 +1,4 @@
-// When this process came up, stamped once from `Meteor.startup` in server/cron.ts before
+// When this process came up, stamped once from `Meteor.startup` in server/main.ts before
 // the cron scheduler starts. It lives here rather than on the entry point because two
 // unrelated things read it and neither should have to import the entry point:
 //

@@ -1,4 +1,4 @@
-// The scheduled jobs in server/cron.ts hold real cleanup and recovery logic that is
+// The scheduled jobs in server/main.ts hold real cleanup and recovery logic that is
 // otherwise unreachable without waiting out a schedule. The stub for
 // `meteor/quave:synced-cron` records each job by name so these can invoke the body directly.
 //
@@ -32,7 +32,7 @@ const RESUME = 'Recover stalled turns';
 
 const RESUME_CHAT = 'Server restarted — replaying this turn from the start';
 // What `Clean up abandoned games` sits out after boot when nothing overrides it — see
-// server/cron.ts, where `Meteor.settings.BOOT_GRACE_SEC` can shorten it.
+// server/main.ts, where `Meteor.settings.BOOT_GRACE_SEC` can shorten it.
 const BOOT_GRACE_MS = 5 * 60 * 1000;
 
 // `name` is the display name the account resolves to, which in production always matches
