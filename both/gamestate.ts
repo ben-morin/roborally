@@ -428,9 +428,9 @@ async function playRepairs(game: Game) {
 
 async function checkCheckpoints(player: Player) {
   // Rules.pdf p.9 ("Powering Down"): a powered-down robot is inert for the whole turn, so
-  // it neither touches a flag nor moves its archive. Both live behind the same guard here
-  // because both only ever happen on a checkpoint or repair space.
-  if (player.isPoweredDown()) return;
+  // it neither touches a flag nor moves its archive. A dead robot is parked off the board
+  // by now, but the guard says so instead of trusting the park to have landed first.
+  if (!player.isActive()) return;
   const tile = await player.tileAsync();
 
   if (tile.checkpoint || tile.repair) {
