@@ -120,7 +120,7 @@ describe.each([0, 90, 180, 270])('Area.course.test placed at orientation %i', (o
 describe('Area rotation applied to a full catalog board', () => {
   it('oddest_sea stacks a 180°-rotated vault on top of an unrotated maelstrom (regression for addArea offset reset between calls)', async () => {
     const { BoardBox } = await import('../../both/board_box.ts');
-    const board = BoardBox.getBoard(BoardBox.getBoardId('oddest_sea'));
+    const board = BoardBox.getBoard('oddest_sea');
     expect(board.height).toBe(28);
     // vault's own void(2,3) rotated 180 in a 12x12 area -> (11-2, 11-3) = (9, 8),
     // placed at y_offset 0 (addRallyArea('vault', 0, 0, 180)).
@@ -131,7 +131,7 @@ describe('Area rotation applied to a full catalog board', () => {
 
   it('around_the_world composes a 180°-rotated island with a 90°-rotated spin_zone (regression for orientation not leaking between addRallyArea calls)', async () => {
     const { BoardBox } = await import('../../both/board_box.ts');
-    const board = BoardBox.getBoard(BoardBox.getBoardId('around_the_world'));
+    const board = BoardBox.getBoard('around_the_world');
     // island's repair(0, 11) rotated 180 at y_offset 0 -> (11-0, 11-11) = (11, 0).
     expect(board.getTile(11, 0).repair).toBe(true);
     // spin_zone's repair(2, 3) rotated 90 at y_offset 12 -> col=11-3=8, row=2+12=14.

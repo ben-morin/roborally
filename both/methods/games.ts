@@ -52,7 +52,7 @@ export async function joinGameAsync(gameId: string, user: Meteor.User | null) {
     }
     // The dev-test board is meant for exercising elimination flows quickly,
     // so seat players with a single life instead of the standard three.
-    const startingLives = game.boardId === BoardBox.dev_test_board_id ? 1 : 3;
+    const startingLives = game.boardName === 'dev_test' ? 1 : 3;
     playerId = await Players.insertAsync({
       gameId,
       userId: user!._id,
@@ -100,10 +100,10 @@ export const createGame = createMethod({
     }
     const author = getUsername(user);
 
-    // Read before the literal so the two player counts can be part of it: assigning keys
-    // to it afterwards is what a typed object cannot do. `postAttributes.name` is what the
-    // literal's `name` holds and `getBoardId` is pure, so this is the same value as before.
-    const board_id = BoardBox.getBoardId(postAttributes.name);
+    // A game's display name has always doubled as its board lookup; one that matches no
+    // board gets the default, as it always did.
+    const boardName = BoardBox.hasBoard(postAttributes.name) ? postAttributes.name : 'default';
+    const board = BoardBox.getBoard(boardName);
     const game = {
       name: postAttributes.name,
       userId: user._id,
@@ -115,11 +115,9 @@ export const createGame = createMethod({
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
       playPhaseCount: 0,
       programRound: 0,
-      boardId: 0,
-      // `board_id` is -1 for a name that is not a board's, and `getBoard` answers with the
-      // default board for that — the counts have always come from whatever it hands back.
-      min_player: BoardBox.getBoard(board_id).min_player,
-      max_player: BoardBox.getBoard(board_id).max_player,
+      boardName,
+      min_player: board.min_player,
+      max_player: board.max_player,
       waitingForRespawn: [],
       announce: false,
       cardsToPlay: [],
@@ -135,8 +133,6 @@ export const createGame = createMethod({
       selectOptions: null,
       announceCard: null,
     };
-    if (board_id >= 0) game.boardId = board_id;
-
     const gameId = await Games.insertAsync(game);
 
     await Chat.insertAsync({
@@ -295,11 +291,11 @@ export const selectBoard = createMethod({
     }
     if (game.started) throw new Meteor.Error(409, 'Game already started.');
 
-    const board_id = BoardBox.getBoardId(boardName);
-    if (board_id < 0) throw new Meteor.Error(404, `Board ${boardName} not found!`);
+    if (!BoardBox.hasBoard(boardName)) {
+      throw new Meteor.Error(404, `Board ${boardName} not found!`);
+    }
 
-    const min = BoardBox.getBoard(board_id).min_player;
-    const max = BoardBox.getBoard(board_id).max_player;
+    const { min_player: min, max_player: max } = BoardBox.getBoard(boardName);
     // A maximum only: a game under the minimum is just a lobby still filling up. Both
     // numbers are in the message because the owner's fix is to get people to leave.
     const seated = await Players.find({ gameId }).countAsync();
@@ -307,7 +303,7 @@ export const selectBoard = createMethod({
       throw new Meteor.Error(403, `${seated} players are seated; that board seats ${max}.`);
     }
     await Games.updateAsync(game._id, {
-      $set: { boardId: board_id, min_player: min, max_player: max },
+      $set: { boardName, min_player: min, max_player: max },
     });
 
     const author = getUsername(user);
@@ -321,6 +317,10 @@ export const startGame = createMethod({
   async run({ gameId }: Doc<typeof schemas.startGame>) {
     const game = await Games.findOneAsync(gameId);
     if (!game) throw new Meteor.Error(404, 'Game id not found!');
+    // A board the catalog lost: the lobby shows the pit, and the owner picks another.
+    if (!BoardBox.hasBoard(game.boardName)) {
+      throw new Meteor.Error(409, 'Board not available');
+    }
 
     const players = await Players.find({ gameId }).fetchAsync();
     if (players.length < Math.max(1, game.min_player)) {

@@ -3,6 +3,7 @@
 import type { MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useSubscribe, useTracker } from 'meteor/react-meteor-data';
+import { BoardBox } from '../../../both/board_box.ts';
 import { Games } from '../../../collections/games.ts';
 import { PREVIEW_TILE_SIZE, Thumbnail } from '../board/Thumbnail.tsx';
 import { paths } from '../routes.ts';
@@ -22,7 +23,8 @@ export function SelectedBoard() {
   const game = useTracker(() => (gameId ? Games.findOne(gameId) : undefined), [gameId]);
   const userId = useTracker(() => Meteor.userId());
 
-  const board = game?.board();
+  // Through the client's getter, not `game.board()`: a name the catalog lost still draws.
+  const board = game ? BoardBox.getBoardOrPlaceholder(game.boardName) : undefined;
 
   function onSelect(event: MouseEvent) {
     event.preventDefault();

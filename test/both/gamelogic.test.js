@@ -12,7 +12,7 @@ import { Decks } from '../../collections/deck.ts';
 import { Chat } from '../../collections/chat.ts';
 
 // GameLogic always reaches the board through `player.boardAsync() -> game.board() ->
-// BoardBox.getBoard(boardId)`. Stubbing BoardBox.getBoard lets every test build an
+// BoardBox.getBoard(boardName)`. Stubbing BoardBox.getBoard lets every test build an
 // exact, minimal board with `new Board(...)` + direct tile mutation, independent of
 // the real catalog — mocking the thin collection touchpoints is the seam for
 // exercising GameLogic.

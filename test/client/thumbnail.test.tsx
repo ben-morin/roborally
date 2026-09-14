@@ -14,7 +14,7 @@ beforeEach(async () => {
 });
 afterEach(cleanup);
 
-const defaultBoard = () => BoardBox.getBoard(0);
+const defaultBoard = () => BoardBox.getBoard('default');
 
 describe('Thumbnail', () => {
   it('names the board on the element the click handler reads', () => {

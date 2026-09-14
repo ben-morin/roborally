@@ -8,6 +8,7 @@
 // with options on the table are a human's move and are never swept, however long the
 // human takes. What can stall is a deal or a play segment, a respawn whose options were
 // never written, or a program phase where everyone has submitted and nobody drove on.
+import { BoardBox } from '../both/board_box.ts';
 import { GameState } from '../both/gamestate.ts';
 import { Games, type GameDoc } from '../collections/games.ts';
 import { Players } from '../collections/players.ts';
@@ -67,9 +68,31 @@ export async function resumeStalledTurnsAsync({ now = new Date() }: { now?: Date
       // has never failed a replay is included. See MAX_RESUME_ATTEMPTS.
       resumeAttempts: { $not: { $gte: MAX_RESUME_ATTEMPTS } },
     },
-    { fields: { gamePhase: 1, selectOptions: 1 } }
+    { fields: { gamePhase: 1, selectOptions: 1, boardName: 1 } }
   ).fetchAsync();
-  return stalled.filter(needsDriver).map((game) => resumeOne(game._id));
+  return stalled
+    .filter(needsDriver)
+    .map((game) =>
+      BoardBox.hasBoard(game.boardName) ? resumeOne(game._id) : endGameOnGoneBoardAsync(game._id)
+    );
+}
+
+// A board taken out of the catalog has nowhere for a robot to land or move, so a started
+// game on one ends now — "Nobody" won — instead of being replayed. Under the claim, like
+// every turn-chain write, so a driver still inside the turn cannot write it back; a lost
+// claim leaves the game for the next tick. The name stays on the game: the client draws
+// the pit and says why, which is more honest than a swap to another board.
+export async function endGameOnGoneBoardAsync(gameId: string) {
+  const game = await Games.findOneAsync(gameId);
+  if (!game) return false;
+  const ended = await game.advanceAsync({
+    $set: { gamePhase: GameState.PHASE.ENDED, winner: 'Nobody', stopped: Date.now() },
+  });
+  if (ended) {
+    await game.chatAsync(`Board ${game.boardName} is no longer available; the game has ended`);
+    console.log(`Ended game ${gameId}: board ${game.boardName} is not in the catalog`);
+  }
+  return ended;
 }
 
 // The board's own re-entry, called when a player subscribes to a game's players — which is
@@ -89,6 +112,12 @@ export async function nudgeGameAsync(gameId: string, userId: string | null) {
   if (!userId) return false;
   const game = await Games.findOneAsync(gameId);
   if (!game || !needsDriver(game)) return false;
+
+  // Nothing to resume onto: end it, and say no replay was started.
+  if (!BoardBox.hasBoard(game.boardName)) {
+    await endGameOnGoneBoardAsync(gameId);
+    return false;
+  }
 
   // A game that has used up its attempts is parked on purpose, so a reconnecting browser
   // must not start the loop the cap exists to stop.

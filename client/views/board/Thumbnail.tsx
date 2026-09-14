@@ -36,10 +36,16 @@ export function Thumbnail({ board, width, height, extraClass = '' }: ThumbnailPr
       >
         <Tiles rows={board.tiles} showStart={board.max_player} />
       </div>
-      <span className="players">
-        Players: {board.min_player} - {board.max_player}
-      </span>
-      <span className="length">Length: {board.length}</span>
+      {board.missing ? (
+        <span className="players">Not in the catalog</span>
+      ) : (
+        <>
+          <span className="players">
+            Players: {board.min_player} - {board.max_player}
+          </span>
+          <span className="length">Length: {board.length}</span>
+        </>
+      )}
     </>
   );
 }

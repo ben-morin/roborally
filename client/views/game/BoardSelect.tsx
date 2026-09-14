@@ -1,18 +1,16 @@
-// The board catalog, split into three categories, with the game's current board ringed.
+// The board catalog, one tab per visible group, with the game's current board ringed.
 // Replaces the `boardselect` template, whose three pill tabs are component state here.
 import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useSubscribe, useTracker } from 'meteor/react-meteor-data';
-import { BoardBox } from '../../../both/board_box.ts';
+import { BoardBox, type BoardGroup } from '../../../both/board_box.ts';
 import { selectBoard } from '../../../both/methods/games.ts';
 import { Games } from '../../../collections/games.ts';
 import { PREVIEW_TILE_SIZE, Thumbnail } from '../board/Thumbnail.tsx';
 import { modalAlert } from '../../helper/modalDialogs.ts';
 import { paths } from '../routes.ts';
 import { useRouteParam } from '../useRouteParam.ts';
-
-type Category = 'beginner' | 'expert' | 'custom';
 
 // The selected and idle halves below carry the whole of their own colour for the same reason a
 // component splits a variant: two utilities for one property are ordered by the generated
@@ -32,36 +30,11 @@ const CHOICE =
 const CHOICE_SELECTED = 'border-teal [&_h4]:text-teal';
 const CHOICE_IDLE = 'border-transparent hover:bg-raised';
 
-/** The catalog's three ranges, in tab order. */
-function categories() {
-  return [
-    {
-      id: 'beginner' as const,
-      label: 'Beginner courses',
-      from: 0,
-      to: BoardBox.BEGINNER_COURSE_CNT,
-    },
-    {
-      id: 'expert' as const,
-      label: 'Expert courses',
-      from: BoardBox.BEGINNER_COURSE_CNT,
-      to: BoardBox.CUSTOM_COURSE_IDX,
-    },
-    {
-      id: 'custom' as const,
-      label: 'Custom courses',
-      from: BoardBox.CUSTOM_COURSE_IDX,
-      to: BoardBox.CATALOG.length,
-    },
-  ];
-}
-
-/** Which tab holds a board — the same two thresholds the Blaze helpers used. */
-function categoryOf(boardId: number | undefined): Category {
-  if (boardId === undefined) return 'beginner';
-  if (boardId >= BoardBox.CUSTOM_COURSE_IDX) return 'custom';
-  if (boardId >= BoardBox.BEGINNER_COURSE_CNT) return 'expert';
-  return 'beginner';
+// Which tab holds the game's board. A board whose group is not shown — a game on a dev
+// board — opens the first tab rather than one that is not there.
+function tabOf(boardName: string | undefined, tabs: BoardGroup[]) {
+  const group = boardName === undefined ? undefined : BoardBox.groupOf(boardName);
+  return tabs.find((tab) => tab.id === group?.id)?.id ?? tabs[0].id;
 }
 
 export function BoardSelect() {
@@ -72,10 +45,9 @@ export function BoardSelect() {
 
   // Null until the reader picks a tab, so the game decides which one opens — the game
   // document arrives after the first render, and the Blaze helper re-ran when it did.
-  const [picked, setPicked] = useState<Category | null>(null);
-  const active = picked ?? categoryOf(game?.boardId);
-
-  const tabs = categories();
+  const [picked, setPicked] = useState<string | null>(null);
+  const tabs = BoardBox.visibleGroups();
+  const active = picked ?? tabOf(game?.boardName, tabs);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   function onTabKeys(event: KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -96,13 +68,8 @@ export function BoardSelect() {
   }
 
   const shown = tabs.find((tab) => tab.id === active) ?? tabs[0];
-  const boards = [];
   // No game means nothing to select against, exactly as the Blaze helper's empty list did.
-  if (game) {
-    for (let i = shown.from; i < shown.to; i++) {
-      boards.push({ index: i, board: BoardBox.getBoard(i) });
-    }
-  }
+  const boards = game ? shown.boards.map((name) => BoardBox.getBoard(name)) : [];
 
   return (
     <>
@@ -136,15 +103,15 @@ export function BoardSelect() {
         aria-labelledby={`tab-${active}`}
         className={`${GRID} mt-5`}
       >
-        {boards.map(({ index, board }) => (
+        {boards.map((board) => (
           // A div rather than a button because the choice holds a heading; the role and
           // the key handler are what the Blaze version's bare click target never had.
           <div
             key={board.name}
             role="button"
             tabIndex={0}
-            aria-current={index === game?.boardId ? 'true' : undefined}
-            className={`${CHOICE} ${index === game?.boardId ? CHOICE_SELECTED : CHOICE_IDLE}`}
+            aria-current={board.name === game?.boardName ? 'true' : undefined}
+            className={`${CHOICE} ${board.name === game?.boardName ? CHOICE_SELECTED : CHOICE_IDLE}`}
             onClick={() => onChoose(board.name)}
             onKeyDown={(event) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;

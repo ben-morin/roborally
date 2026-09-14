@@ -154,10 +154,11 @@ export function CardPanel() {
   // The game carries the deck it started with; the live count is only the fallback for a
   // game that started before that field existed.
   const deckSize = game?.deckSize ?? CardLogic.deckSizeFor(playerCnt);
-  const boardId = game?.boardId;
+  const boardName = game?.boardName;
   const checkpointCnt = useMemo(
-    () => (boardId === undefined ? 0 : BoardBox.getBoard(boardId).checkpoints.length),
-    [boardId]
+    () =>
+      boardName === undefined ? 0 : BoardBox.getBoardOrPlaceholder(boardName).checkpoints.length,
+    [boardName]
   );
 
   // The register slot the next hand click fills; null until the player picks one, so

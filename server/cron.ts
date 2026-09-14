@@ -23,11 +23,12 @@ import { GameLogic } from '../both/gamelogic.ts';
 import { GameState } from '../both/gamestate.ts';
 import { shuffle } from '../both/shuffle.ts';
 import { Decks } from '../collections/deck.ts';
-import { Games, type SegmentSnapshot } from '../collections/games.ts';
+import { BoardBox } from '../both/board_box.ts';
+import { Games, type GameDoc, type SegmentSnapshot } from '../collections/games.ts';
 import { Players, type Player } from '../collections/players.ts';
 import { markBooted, bootedAtMs } from './boot.ts';
 import { buildHighscores } from './highscores.ts';
-import { resumeStalledTurnsAsync } from './resume.ts';
+import { endGameOnGoneBoardAsync, resumeStalledTurnsAsync } from './resume.ts';
 import './accounts.ts';
 import './publications.ts';
 
@@ -239,6 +240,9 @@ Meteor.startup(async () => {
     console.log(`Backfilled deckSize ${deckSize} on game ${game._id}`);
   }
 
+  // Games hold their board as `boardId`, a position in a list; the name is becoming the key.
+  await backfillBoardNamesAsync();
+
   // Five fields on the game and one on the player used to be `Optional(AnyOf(X, Null))`
   // and are now required keys that may be null. A document written before that has the
   // key missing, and a whole document is checked against the whole schema: the first
@@ -335,6 +339,80 @@ async function dropUnknownOptionCardsAsync() {
     const dropped = held.filter((name) => !CardLogic.isOptionCard(name));
     console.log(`Dropped unknown option card(s) ${dropped.join(', ')} from player ${player._id}`);
   }
+}
+
+// `boardId` is the board's position in a list, and a board inserted anywhere but the end
+// used to re-point every game after it. This is that list as it stood when the name became
+// the key, frozen on purpose: the live catalog's order is display order now and can
+// change freely. Nothing but the backfill below and its tests read it.
+export const LEGACY_BOARD_ORDER: readonly string[] = [
+  'default',
+  'risky_exchange',
+  'checkmate',
+  'dizzy_dash',
+  'island_hop',
+  'chop_shop_challenge',
+  'twister',
+  'bloodbath_chess',
+  'around_the_world',
+  'death_trap',
+  'pilgrimage',
+  'vault_assault',
+  'whirlwind_tour',
+  'lost_bearings',
+  'robot_stew',
+  'oddest_sea',
+  'against_the_grain',
+  'island_king',
+  'tricksy',
+  'set_to_kill',
+  'factory_rejects',
+  'option_world',
+  'tight_collar',
+  'ball_lightning',
+  'flag_fry',
+  'crowd_chess',
+  'custom_made',
+  'quarter_pounder',
+  // The two slots past the catalog: `test_board_id` and `dev_test_board_id`.
+  'test',
+  'dev_test',
+];
+
+// One update per game, because the name depends on the game's own id. An id off the end of
+// the list, or none at all, read as board 0 back then, so it becomes `default` here too.
+export async function backfillBoardNamesAsync() {
+  for (const game of await Games.find({ boardName: { $exists: false } }).fetchAsync()) {
+    // `boardId` left the schema once every game had a name, so only a document written
+    // before that still carries it and the type no longer knows the key.
+    const { boardId } = game as GameDoc & { boardId?: number };
+    const boardName = LEGACY_BOARD_ORDER[boardId ?? -1] ?? 'default';
+    await Games.updateAsync(game._id, { $set: { boardName } });
+    console.log(`Backfilled boardName ${boardName} on game ${game._id}`);
+  }
+
+  // A board taken out of the catalog has nowhere for a robot to land or move. A started game
+  // on one ends here, ahead of the stalled-turn sweep that would otherwise replay it; an
+  // unstarted one is left for its owner, whose lobby shows why and whose board select still
+  // works. The name stays either way: the client draws the pit for it.
+  for (const game of await Games.find({}).fetchAsync()) {
+    if (BoardBox.hasBoard(game.boardName)) continue;
+    if (!game.started) {
+      console.log(
+        `Game ${game._id} sits on board ${game.boardName}, not in the catalog; left for its owner`
+      );
+    } else if (game.winner === undefined) {
+      await endGameOnGoneBoardAsync(game._id);
+    }
+  }
+
+  const dropped = await Games.updateAsync(
+    // Neither half can be checked against the document: the key is not in the schema.
+    { boardId: { $exists: true } } as Mongo.Selector<GameDoc>,
+    { $unset: { boardId: '' } } as Mongo.Modifier<GameDoc>,
+    { multi: true }
+  );
+  if (dropped > 0) console.log(`Dropped boardId from ${dropped} game(s)`);
 }
 
 // The option piles hold card names, as the hands do, but a game in flight can still be

@@ -1,45 +1,74 @@
 import { Board } from './board.ts';
 
+// A tab on board select. `hidden` keeps the whole group off the page; a board hides itself
+// through `Board.hidden`. Both can still be selected by name.
+export interface BoardGroup {
+  id: string;
+  label: string;
+  hidden?: boolean;
+  boards: readonly string[];
+}
+
 export class BoardBox {
-  static CATALOG = [
-    'default',
-    // beginner courses
-    'risky_exchange',
-    'checkmate',
-    'dizzy_dash',
-    'island_hop',
-    'chop_shop_challenge',
-    'twister',
-    'bloodbath_chess',
-    'around_the_world',
-    'death_trap',
-    'pilgrimage',
-    // expert courses
-    'vault_assault',
-    'whirlwind_tour',
-    'lost_bearings',
-    'robot_stew',
-    'oddest_sea',
-    'against_the_grain',
-    'island_king',
-    // with special rules
-    'tricksy', //moving_targets',
-    'set_to_kill',
-    'factory_rejects',
-    'option_world',
-    'tight_collar',
-    'ball_lightning',
-    'flag_fry',
-    'crowd_chess',
-    'custom_made',
-    'quarter_pounder',
+  // The groups are the one ordered thing left, and their order is display order only: a
+  // game stores its board by name, so a board can be added, moved or hidden here without
+  // touching any game.
+  static GROUPS: readonly BoardGroup[] = [
+    {
+      id: 'beginner',
+      label: 'Beginner courses',
+      boards: [
+        'default',
+        'risky_exchange',
+        'checkmate',
+        'dizzy_dash',
+        'island_hop',
+        'chop_shop_challenge',
+        'twister',
+        'bloodbath_chess',
+        'around_the_world',
+        'death_trap',
+        'pilgrimage',
+      ],
+    },
+    {
+      id: 'expert',
+      label: 'Expert courses',
+      // The course manual gives the last eight of these special rules; none are implemented.
+      boards: [
+        'vault_assault',
+        'whirlwind_tour',
+        'moving_targets',
+        'lost_bearings',
+        'robot_stew',
+        'oddest_sea',
+        'against_the_grain',
+        'island_king',
+        'tricksy',
+        'set_to_kill',
+        'factory_rejects',
+        'option_world',
+        'tight_collar',
+        'ball_lightning',
+        'flag_fry',
+        'crowd_chess',
+      ],
+    },
+    {
+      id: 'custom',
+      label: 'Custom courses',
+      boards: ['custom_made', 'quarter_pounder'],
+    },
+    {
+      id: 'dev',
+      label: 'Dev boards',
+      hidden: true,
+      boards: ['test', 'dev_test'],
+    },
   ];
 
-  static BEGINNER_COURSE_CNT = 11;
-  static CUSTOM_COURSE_IDX = 26;
-  static cache: Board[] = [];
-  static test_board_id = this.CATALOG.length;
-  static dev_test_board_id = this.CATALOG.length + 1;
+  static cache: Record<string, Board> = {};
+  static placeholders: Record<string, Board> = {};
 
   // Board recipes, kept lazy on purpose: `new Board()` must not run until getBoard()
   // asks for one, so this module body never touches the imported Board binding.
@@ -67,6 +96,7 @@ export class BoardBox {
     },
     test() {
       const board = new Board('test', 1, 4, 4, 5);
+      board.hidden = true;
       board.addRallyArea('test');
       board.addStartArea('test', 0, 4);
       board.addCheckpoint(3, 0);
@@ -79,6 +109,7 @@ export class BoardBox {
       // pushes C, then B, then A off the board — exercises the chained
       // push-off-edge animation path.
       const board = new Board('dev_test', 1, 8, 12, 12);
+      board.hidden = true;
       board.length = 'short';
       board.addStartArea('dev_test', 0, 3);
       board.addCheckpoint(0, 0);
@@ -97,6 +128,7 @@ export class BoardBox {
     },
     moving_targets() {
       const board = new Board('moving_targets', 2, 8);
+      board.hidden = true;
       board.length = 'medium';
       board.addRallyArea('maelstrom');
       board.addStartArea('simple');
@@ -201,7 +233,7 @@ export class BoardBox {
       return board;
     },
     island_king() {
-      const board = new Board('island_king', 2, 8);
+      const board = new Board('island_king', 5, 8);
       board.length = 'short';
       board.addRallyArea('island', 0, 0, 180);
       board.addStartArea('simple');
@@ -370,42 +402,64 @@ export class BoardBox {
     },
   };
 
-  static getBoard(boardId: number | null | undefined) {
-    if (boardId == null || boardId < 0 || boardId >= this.CATALOG.length) {
-      if (boardId === this.test_board_id) {
-        return this.getTestBoard();
-      } else if (boardId === this.dev_test_board_id) {
-        return this.getDevTestBoard();
-      } else {
-        boardId = 0;
+  // `hasOwn`, not `in`: the recipes are a plain object, so `in` would answer for `toString` too.
+  static hasBoard(name: string) {
+    return Object.hasOwn(this.boards, name);
+  }
+
+  static getBoard(name: string) {
+    // Every caller passes a name off a game document or a group, so an unknown one is a bug
+    // rather than a miss to fall back from. `hasBoard` is the question to ask first. This
+    // is the server's getter; the client renders through getBoardOrPlaceholder.
+    if (!this.hasBoard(name)) throw new Error(`Unknown board: ${name}`);
+    if (this.cache[name] === undefined) {
+      console.log(`Load ${name} board`);
+      this.cache[name] = this.boards[name]();
+    }
+    return this.cache[name];
+  }
+
+  // What the client draws for a name it cannot build: a 12×16 board that is one pit, hazard
+  // rim outside, solid black inside. Board.tsx puts the caption over it.
+  static placeholder(name: string) {
+    if (this.placeholders[name] === undefined) {
+      const board = new Board(name, 1, 8);
+      board.title = 'Board not available';
+      board.hidden = true;
+      board.missing = true;
+      for (let y = 0; y < board.height; y++) {
+        for (let x = 0; x < board.width; x++) board.setVoid(x, y);
       }
+      // The four-sided piece keeps rim corners for the diagonal floors a plus-shaped pit
+      // has; a pit with no floor anywhere has none, so the inside is the solid tile.
+      for (let y = 1; y < board.height - 1; y++) {
+        for (let x = 1; x < board.width - 1; x++) {
+          const tile = board.tile(x, y);
+          tile.void_type = '-full';
+          tile.direction = 0;
+        }
+      }
+      this.placeholders[name] = board;
     }
-    if (this.cache[boardId] == null) {
-      const board_name = this.CATALOG[boardId];
-      console.log(`Load ${board_name} board`);
-      this.cache[boardId] = this.boards[board_name]();
-    }
-
-    return this.cache[boardId];
+    return this.placeholders[name];
   }
 
-  static getBoardId(name: string) {
-    if (name === 'test-mode') {
-      return this.test_board_id;
-    } else if (name === 'dev-test') {
-      return this.dev_test_board_id;
-    } else {
-      return this.CATALOG.indexOf(name);
-    }
+  // The client's getter: never a throw mid-render.
+  static getBoardOrPlaceholder(name: string) {
+    return this.hasBoard(name) ? this.getBoard(name) : this.placeholder(name);
   }
 
-  static getTestBoard() {
-    this.cache[this.test_board_id] ??= this.boards.test();
-    return this.cache[this.test_board_id];
+  static groupOf(name: string) {
+    return this.GROUPS.find((group) => group.boards.includes(name));
   }
 
-  static getDevTestBoard() {
-    this.cache[this.dev_test_board_id] ??= this.boards.dev_test();
-    return this.cache[this.dev_test_board_id];
+  // What board select renders: no hidden group, no hidden board, no group left empty.
+  static visibleGroups(): BoardGroup[] {
+    return this.GROUPS.filter((group) => !group.hidden)
+      .map((group) => ({
+        ...group,
+        boards: group.boards.filter((name) => !this.getBoard(name).hidden),
+      }))
+      .filter((group) => group.boards.length > 0);
   }
 }

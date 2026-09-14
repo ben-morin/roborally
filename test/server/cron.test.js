@@ -20,7 +20,9 @@ import { Decks } from '../../collections/deck.ts';
 import { Games } from '../../collections/games.ts';
 import { Highscores } from '../../collections/highscores.ts';
 import { Players } from '../../collections/players.ts';
+import { LEGACY_BOARD_ORDER } from '../../server/cron.ts';
 import { STALL_MS } from '../../server/resume.ts';
+import { BoardBox } from '../../both/board_box.ts';
 
 const UNSTARTED = 'Clean up unstarted games';
 const ABANDONED = 'Clean up abandoned games';
@@ -147,6 +149,114 @@ describe('startup backfill', () => {
     const deck = await Decks.findOneAsync({ gameId: game._id });
     expect(deck.optionCards).toEqual(rest.slice(1));
     expect(deck.discardedOptionCards).toEqual(rest.slice(0, 1));
+  });
+
+  // Games hold their board as a position in the catalog, and a board inserted anywhere
+  // but the end used to re-point every game after it. The backfill writes the name through a
+  // frozen copy of that order, so the live catalog is free to change once the name is read.
+  it('froze a known board under every old position, the two test boards last', () => {
+    expect(LEGACY_BOARD_ORDER).toHaveLength(30);
+    expect(new Set(LEGACY_BOARD_ORDER).size).toBe(30);
+    for (const name of LEGACY_BOARD_ORDER) expect(BoardBox.hasBoard(name), name).toBe(true);
+    expect(LEGACY_BOARD_ORDER.slice(28)).toEqual(['test', 'dev_test']);
+  });
+
+  it.each([
+    [0, 'default'],
+    [17, 'island_king'],
+    [27, 'quarter_pounder'],
+    [28, 'test'],
+    [29, 'dev_test'],
+    // Off the end of the list read as board 0, so it is `default` here too.
+    [99, 'default'],
+  ])('backfills boardId %i as boardName %s', async (boardId, boardName) => {
+    // Straight into the collection: the fixture writes a `boardName`, and a game that has one
+    // is exactly what the backfill leaves alone.
+    const gameId = await Games.insertAsync({ name: 'old', started: true, boardId });
+
+    await runStartup();
+
+    expect((await Games.findOneAsync(gameId)).boardName).toBe(boardName);
+  });
+
+  it('leaves a game that already has a board name alone, whatever its boardId says', async () => {
+    const game = await insertGame({ boardId: 3, boardName: 'pilgrimage' });
+
+    await runStartup();
+
+    expect((await Games.findOneAsync(game._id)).boardName).toBe('pilgrimage');
+  });
+
+  it('drops boardId once the name is on the game', async () => {
+    const withBoth = await insertGame({ boardId: 7, boardName: 'bloodbath_chess' });
+    const legacyOnly = await Games.insertAsync({ name: 'old', started: true, boardId: 2 });
+
+    await runStartup();
+
+    expect(await Games.findOneAsync(withBoth._id)).toMatchObject({ boardName: 'bloodbath_chess' });
+    expect(await Games.findOneAsync(withBoth._id)).not.toHaveProperty('boardId');
+    expect(await Games.findOneAsync(legacyOnly)).toMatchObject({ boardName: 'checkmate' });
+    expect(await Games.findOneAsync(legacyOnly)).not.toHaveProperty('boardId');
+  });
+
+  // A board deleted from the catalog has nowhere for a robot to land or move, so a started
+  // game on it ends at boot — before the stalled-turn sweep, which would replay its snapshot
+  // onto whatever board it could find.
+  it('ends a started game whose board the catalog no longer has, and never replays it', async () => {
+    const gone = await insertGame({
+      boardName: 'gone_board',
+      gamePhase: GameState.PHASE.PLAY,
+      step: 4,
+      lastStepAt: new Date(1),
+      segmentSnapshot: {
+        segment: 'play',
+        players: [{ _id: 'p1', name: 'ann', position: { x: 9, y: 9 } }],
+        cards: [],
+        deck: null,
+      },
+    });
+    const player = await insertPlayer(gone._id, {
+      _id: 'p1',
+      name: 'ann',
+      position: { x: 1, y: 1 },
+    });
+    const unstarted = await insertGame({ boardName: 'gone_board', started: false });
+    const known = await insertGame({ boardName: 'checkmate' });
+    const resume = vi.spyOn(GameState, 'resumeAsync').mockResolvedValue();
+    const log = vi.spyOn(console, 'log');
+
+    await runStartup();
+
+    const ended = await Games.findOneAsync(gone._id);
+    expect(ended).toMatchObject({
+      gamePhase: GameState.PHASE.ENDED,
+      winner: 'Nobody',
+      boardName: 'gone_board',
+      step: 5,
+    });
+    expect(ended.stopped).toBeTypeOf('number');
+    expect((await Chat.find({ gameId: gone._id }).fetchAsync()).map((c) => c.message)).toEqual([
+      'Board gone_board is no longer available; the game has ended',
+    ]);
+    // No replay: the snapshot's robot position never came back.
+    expect(resume).not.toHaveBeenCalledWith(gone._id);
+    expect((await Players.findOneAsync(player._id)).position).toEqual({ x: 1, y: 1 });
+    // The unstarted one is the owner's to fix; the known one is not touched at all.
+    expect(await Games.findOneAsync(unstarted._id)).toMatchObject({
+      boardName: 'gone_board',
+      started: false,
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
+    expect(await Games.findOneAsync(known._id)).toMatchObject({
+      boardName: 'checkmate',
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
+    const lines = log.mock.calls.map((call) => call.join(' '));
+    expect(lines).toContain(`Ended game ${gone._id}: board gone_board is not in the catalog`);
+    expect(lines).toContain(
+      `Game ${unstarted._id} sits on board gone_board, not in the catalog; left for its owner`
+    );
+    expect(lines.some((line) => line.startsWith('Dropped boardId'))).toBe(false);
   });
 
   it('seeds step on games that predate it and leaves the others alone', async () => {

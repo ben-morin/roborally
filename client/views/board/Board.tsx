@@ -22,6 +22,12 @@ import { CheckCircle } from '../icons/CheckCircle.tsx';
 import { Circle } from '../icons/Circle.tsx';
 import { Tiles } from './Tiles.tsx';
 
+// The caption over a placeholder board; `board-missing` is what the test reads.
+const MISSING =
+  'board-missing pointer-events-none absolute inset-x-0 top-0 bottom-(--tile-size) flex items-center justify-center';
+const MISSING_CARD =
+  'max-w-[70%] rounded-panel border-2 border-teal bg-navy/94 px-8 py-6 text-center text-white shadow-panel';
+
 const CHIP =
   'flex h-[30px] items-center justify-center gap-[0.45em] rounded-card font-semibold tracking-[.04em] whitespace-nowrap uppercase';
 // The label may not wrap, so the font is sized from the strip's own width (`@container`
@@ -357,10 +363,11 @@ export function Board() {
   const lastKnown = useRef(new Map<string, Point>());
 
   const gameEnded = game?.gamePhase === GameState.PHASE.ENDED;
-  // `getBoard` builds the board afresh on every call, so hold one per game board. Board 0
-  // stands in until the game arrives; nothing draws it, because `#board` is not rendered.
-  const boardId = game?.boardId;
-  const board = useMemo(() => BoardBox.getBoard(boardId), [boardId]);
+  // One board per game board. `default` stands in until the game arrives; nothing draws
+  // it, because `#board` is not rendered. A name the client cannot build draws the pit
+  // placeholder rather than throwing out of render.
+  const boardName = game?.boardName ?? 'default';
+  const board = useMemo(() => BoardBox.getBoardOrPlaceholder(boardName), [boardName]);
   const columns = board.width;
   const rows = board.height;
   const showBoard = game !== undefined;
@@ -514,6 +521,19 @@ export function Board() {
       {/* `#board` is contract: the browser journey checks its position and `--tile-size`. */}
       <div id="board" ref={boardRef}>
         <Tiles rows={board.tiles} showStart={false} />
+        {board.missing ? (
+          // Over the tile rows only: the parking row below is `--tile-size` tall.
+          <div className={MISSING} role="status">
+            <div className={MISSING_CARD}>
+              <h3 className="mt-0 mb-2 text-xl">Board not available</h3>
+              <p className="m-0 text-sm text-white/78">
+                “{board.name}” is not in the catalog.
+                <br />
+                You can still read the chat, leave, or cancel the game.
+              </p>
+            </div>
+          </div>
+        ) : null}
         {/* The parking row's floor; game.css draws it. Before the robots, so they sit on it. */}
         <div className="scrapyard" aria-hidden="true" />
         <br />

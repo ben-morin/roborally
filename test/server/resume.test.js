@@ -198,6 +198,64 @@ describe('the replay attempt cap', () => {
   });
 });
 
+// A board taken out of the catalog while a game sits on it: nowhere for a robot to land,
+// so the game ends instead of being replayed, from the sweep and from the nudge alike.
+describe('a game whose board is gone', () => {
+  const GONE_LINE = 'Board gone_board is no longer available; the game has ended';
+  const chatOn = async (gameId) => (await Chat.find({ gameId }).fetchAsync()).map((c) => c.message);
+
+  it('is ended by the sweep, not replayed, and never counted as a failed replay', async () => {
+    const resume = vi.spyOn(GameState, 'resumeAsync').mockResolvedValue();
+    const game = await insertGame({
+      gamePhase: PLAY,
+      lastStepAt: ago(STALL_MS * 2),
+      boardName: 'gone_board',
+      step: 2,
+    });
+    const other = await insertGame({ gamePhase: PLAY, lastStepAt: ago(STALL_MS * 2) });
+
+    await Promise.all(await sweep());
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(resume).toHaveBeenCalledWith(other._id);
+    const ended = await Games.findOneAsync(game._id);
+    expect(ended).toMatchObject({ gamePhase: ENDED, winner: 'Nobody', boardName: 'gone_board' });
+    expect(ended.resumeAttempts).toBeUndefined();
+    expect(await chatOn(game._id)).toEqual([GONE_LINE]);
+    // Ended is not a state the sweep answers for, so the next tick leaves it alone (and
+    // still hands over the other game, which nothing has changed).
+    await Promise.all(await sweep());
+    expect(resume).toHaveBeenCalledTimes(2);
+    expect(resume).not.toHaveBeenCalledWith(game._id);
+    expect(await chatOn(game._id)).toEqual([GONE_LINE]);
+  });
+
+  it('is ended by a reconnecting player too, without a replay', async () => {
+    const BOOT = new Date('2026-08-27T12:00:00Z');
+    markBooted(BOOT.getTime());
+    try {
+      const resume = vi.spyOn(GameState, 'resumeAsync').mockResolvedValue();
+      const game = await insertGame({
+        gamePhase: PLAY,
+        lastStepAt: new Date(BOOT.getTime() - 1),
+        boardName: 'gone_board',
+      });
+      await insertPlayer(game._id, { userId: 'u1' });
+
+      await expect(nudgeGameAsync(game._id, 'u1')).resolves.toBe(false);
+
+      expect(resume).not.toHaveBeenCalled();
+      expect(await Games.findOneAsync(game._id)).toMatchObject({
+        gamePhase: ENDED,
+        winner: 'Nobody',
+      });
+      expect(await chatOn(game._id)).toEqual([GONE_LINE]);
+    } finally {
+      markBooted(0);
+    }
+  });
+});
+
 // The short circuit the sweep cannot offer: a player opening the board says "I am here"
 // before `lastStepAt` has aged STALL_MS and before the cron's next tick. It gives that up
 // only for a claim older than this process's boot, which no driver in this process can have

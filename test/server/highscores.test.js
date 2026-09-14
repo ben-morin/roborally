@@ -97,7 +97,7 @@ describe('mostWon', () => {
 describe('games nobody won', () => {
   it('excludes a game where every robot died', async () => {
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PLAY,
       playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
@@ -130,7 +130,7 @@ describe('games nobody won', () => {
   it('excludes a game whose last player left', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PROGRAM,
     });
@@ -176,7 +176,7 @@ describe('games nobody won', () => {
 describe('wins by default', () => {
   it('counts the last robot standing after the others were destroyed', async () => {
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PLAY,
       playPhase: GameState.PLAY_PHASE.CHECKPOINTS,
@@ -211,7 +211,7 @@ describe('wins by default', () => {
   it('counts a win handed over when the only opponent quits', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PROGRAM,
     });

@@ -101,6 +101,12 @@ export class Board {
 
   // Set by the recipes in board_box.ts, and shown on the board thumbnail.
   length?: 'short' | 'medium' | 'long';
+  // Set by a recipe. Keeps the board off board select and nothing else: it can still be
+  // selected by name, which is how the dev accounts reach the test boards.
+  hidden = false;
+  // Set by BoardBox.placeholder: a stand-in for a name the client cannot build. Board.tsx
+  // draws the caption over it.
+  missing = false;
 
   constructor(name: string, min_player = 2, max_player = 8, width = 12, height = 16) {
     this.name = name;

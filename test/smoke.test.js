@@ -23,7 +23,7 @@ describe('model imports outside Meteor', () => {
     expect(GameLogic.UP).toBe(0);
     expect(GameState.PHASE.IDLE).toBe('waiting');
 
-    const board = BoardBox.getBoard(1); // risky_exchange
+    const board = BoardBox.getBoard('risky_exchange');
     expect(board.title).toBe('Risky Exchange');
     expect(board.checkpoints).toHaveLength(3);
     expect(board.getTile(0, 0)).toBeInstanceOf(Tile);

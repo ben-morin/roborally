@@ -19,12 +19,32 @@ afterEach(cleanup);
 
 async function openLobby(overrides = {}) {
   // The fixture reads the document straight back, so there is always one.
-  const game = (await insertGame({ started: false, boardId: 0, userId: 'me', ...overrides }))!;
+  const game = (await insertGame({
+    started: false,
+    boardName: 'default',
+    userId: 'me',
+    ...overrides,
+  }))!;
   setRoute(`/games/${game._id}`);
   return game;
 }
 
 describe('SelectedBoard', () => {
+  it('draws the pit placeholder for a board name it cannot build', async () => {
+    await openLobby({ boardName: 'gone_board' });
+
+    const { container } = renderAt(<SelectedBoard />);
+
+    const preview = container.querySelector('.selected-board .board-thumbnail');
+    expect(preview).toHaveAttribute('id', 'gone_board');
+    expect(preview).toHaveStyle({ width: '240px', height: '320px' });
+    expect(screen.getByRole('heading', { level: 4 })).toHaveTextContent('Board not available');
+    expect(container.querySelector('.selected-board .players')).toHaveTextContent(
+      'Not in the catalog'
+    );
+    expect(container.querySelector('.selected-board .length')).toBeNull();
+  });
+
   it('draws the game’s board at preview size', async () => {
     const game = await openLobby();
     const board = game.board();

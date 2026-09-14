@@ -125,7 +125,7 @@ describe('createGame', () => {
       playPhase: GameState.PLAY_PHASE.IDLE,
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
       programRound: 0,
-      boardId: 0,
+      boardName: 'default',
       waitingForRespawn: [],
       cardsToPlay: [],
       announce: false,
@@ -149,9 +149,9 @@ describe('createGame', () => {
     const gameId = await call('createGame', { name: 'risky_exchange' });
 
     const game = await Games.findOneAsync(gameId);
-    expect(game.boardId).toBe(BoardBox.getBoardId('risky_exchange'));
-    expect(game.min_player).toBe(BoardBox.getBoard(game.boardId).min_player);
-    expect(game.max_player).toBe(BoardBox.getBoard(game.boardId).max_player);
+    expect(game.boardName).toBe('risky_exchange');
+    expect(game.min_player).toBe(BoardBox.getBoard('risky_exchange').min_player);
+    expect(game.max_player).toBe(BoardBox.getBoard('risky_exchange').max_player);
   });
 
   it('falls back to the default board when the name matches nothing', async () => {
@@ -160,8 +160,8 @@ describe('createGame', () => {
     const gameId = await call('createGame', { name: 'not a board' });
 
     const game = await Games.findOneAsync(gameId);
-    expect(game.boardId).toBe(0);
-    expect(game.max_player).toBe(BoardBox.getBoard(0).max_player);
+    expect(game.boardName).toBe('default');
+    expect(game.max_player).toBe(BoardBox.getBoard('default').max_player);
   });
 });
 
@@ -178,7 +178,7 @@ describe('joinGame', () => {
 
   it('refuses a seat in a full game and in one that already started', async () => {
     await loginAs();
-    const full = await Games.insertAsync({ boardId: 0, started: false, max_player: 2 });
+    const full = await Games.insertAsync({ boardName: 'default', started: false, max_player: 2 });
     await Players.insertAsync({ gameId: full, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
     await Players.insertAsync({ gameId: full, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
 
@@ -187,7 +187,7 @@ describe('joinGame', () => {
       reason: 'Game is full.',
     });
 
-    const started = await Games.insertAsync({ boardId: 0, started: true, max_player: 8 });
+    const started = await Games.insertAsync({ boardName: 'default', started: true, max_player: 8 });
     await expect(call('joinGame', { gameId: started })).rejects.toMatchObject({
       error: 403,
       reason: 'Game already started.',
@@ -196,7 +196,7 @@ describe('joinGame', () => {
 
   it('creates a player with three lives, off-board, and a matching Cards doc', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, started: false });
+    const gameId = await Games.insertAsync({ boardName: 'default', started: false });
 
     await call('joinGame', { gameId: gameId });
 
@@ -224,7 +224,7 @@ describe('joinGame', () => {
   it('seats a player with a single life on the dev-test board', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: BoardBox.dev_test_board_id,
+      boardName: 'dev_test',
       started: false,
     });
 
@@ -236,7 +236,7 @@ describe('joinGame', () => {
 
   it('is idempotent — joining twice does not seat a second robot', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, started: false });
+    const gameId = await Games.insertAsync({ boardName: 'default', started: false });
 
     await call('joinGame', { gameId: gameId });
     await call('joinGame', { gameId: gameId });
@@ -259,7 +259,7 @@ describe('leaveGame', () => {
   it('refuses to let a seated player quit outside the program phase', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PLAY,
     });
@@ -272,7 +272,7 @@ describe('leaveGame', () => {
   it('lets a spectator leave a running game (they hold no robot)', async () => {
     await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PLAY,
     });
@@ -283,7 +283,7 @@ describe('leaveGame', () => {
   it('returns held hand and chosen cards to the deck before removing the player', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PROGRAM,
     });
@@ -309,7 +309,7 @@ describe('leaveGame', () => {
   it("sends a leaver's option cards to the discard pile, announced in chat", async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PROGRAM,
     });
@@ -333,7 +333,7 @@ describe('leaveGame', () => {
   it('ends the game and rebuilds the highscores when one player is left', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PROGRAM,
     });
@@ -356,7 +356,7 @@ describe('leaveGame', () => {
   it("ends the game with winner 'Nobody' when the last player leaves", async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       started: true,
       gamePhase: GameState.PHASE.PROGRAM,
     });
@@ -440,7 +440,7 @@ describe('leaveGame', () => {
 
   it('leaves an unstarted game without touching the deck or ending it', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, started: false });
+    const gameId = await Games.insertAsync({ boardName: 'default', started: false });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
     await call('leaveGame', { gameId: gameId });
@@ -462,7 +462,11 @@ describe('cancelGame', () => {
 
   it('removes the game and every row that belongs to it', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, userId: user._id, started: false });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      userId: user._id,
+      started: false,
+    });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
     await Cards.insertAsync({ gameId, userId: user._id, handCards: [], chosenCards: [] });
     await Decks.insertAsync({ gameId, cards: [], optionCards: [], discardedOptionCards: [] });
@@ -479,7 +483,11 @@ describe('cancelGame', () => {
 
   it('refuses a caller who does not own the game, and removes nothing', async () => {
     await loginAs('me');
-    const gameId = await Games.insertAsync({ boardId: 0, userId: 'them', started: false });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      userId: 'them',
+      started: false,
+    });
     await Players.insertAsync({ gameId, userId: 'them', name: 'them' });
 
     await expect(call('cancelGame', { gameId })).rejects.toMatchObject({ error: 403 });
@@ -491,7 +499,11 @@ describe('cancelGame', () => {
   // render the Cancel button send a started game to its board before they render.
   it('refuses a started game — leaving is the way out of one', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, userId: user._id, started: true });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      userId: user._id,
+      started: true,
+    });
 
     await expect(call('cancelGame', { gameId })).rejects.toMatchObject({ error: 409 });
     expect(await Games.findOneAsync(gameId)).toBeDefined();
@@ -501,14 +513,14 @@ describe('cancelGame', () => {
 describe('selectBoard', () => {
   it('refuses a board name that is not in the catalog', async () => {
     const owner = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
+    const gameId = await Games.insertAsync({ boardName: 'default', userId: owner._id });
 
     await expect(
       call('selectBoard', { boardName: 'no such board', gameId: gameId })
     ).rejects.toMatchObject({
       error: 404,
     });
-    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('default');
   });
 
   it('refuses an unknown game id', async () => {
@@ -520,24 +532,28 @@ describe('selectBoard', () => {
 
   it('switches the board and copies its player limits onto the game', async () => {
     const owner = await loginAs({ profile: { name: 'Ben' } });
-    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
+    const gameId = await Games.insertAsync({ boardName: 'default', userId: owner._id });
 
     await call('selectBoard', { boardName: 'checkmate', gameId: gameId });
 
-    const boardId = BoardBox.getBoardId('checkmate');
+    const board = BoardBox.getBoard('checkmate');
     const game = await Games.findOneAsync(gameId);
     expect(game).toMatchObject({
-      boardId,
-      min_player: BoardBox.getBoard(boardId).min_player,
-      max_player: BoardBox.getBoard(boardId).max_player,
+      boardName: 'checkmate',
+      min_player: board.min_player,
+      max_player: board.max_player,
     });
     expect(await messages(gameId)).toEqual(['Ben selected board checkmate']);
   });
 
   it('refuses a caller who does not own the game, and a game already started', async () => {
     const owner = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
-    const started = await Games.insertAsync({ boardId: 0, userId: owner._id, started: true });
+    const gameId = await Games.insertAsync({ boardName: 'default', userId: owner._id });
+    const started = await Games.insertAsync({
+      boardName: 'default',
+      userId: owner._id,
+      started: true,
+    });
 
     await loginAs();
     await expect(
@@ -549,13 +565,13 @@ describe('selectBoard', () => {
       call('selectBoard', { boardName: 'checkmate', gameId: started })
     ).rejects.toMatchObject({ error: 409, reason: 'Game already started.' });
 
-    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('default');
   });
 
   it('refuses a board that seats fewer players than are already sitting down', async () => {
     const owner = await loginAs();
     // `bloodbath_chess` seats 4; nine players are already in.
-    const gameId = await Games.insertAsync({ boardId: 0, userId: owner._id });
+    const gameId = await Games.insertAsync({ boardName: 'default', userId: owner._id });
     for (let i = 0; i < 9; i++) {
       await Players.insertAsync({
         gameId,
@@ -568,7 +584,7 @@ describe('selectBoard', () => {
     await expect(
       call('selectBoard', { boardName: 'bloodbath_chess', gameId: gameId })
     ).rejects.toMatchObject({ error: 403, reason: '9 players are seated; that board seats 4.' });
-    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('default');
   });
 
   // Regression guard. selectBoard used to skip the login check every other method makes,
@@ -576,28 +592,43 @@ describe('selectBoard', () => {
   // threw a bare TypeError — a write, then the wrong error, from an unauthenticated caller.
   it('refuses an anonymous caller without touching the game', async () => {
     logout();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardName: 'default' });
 
     await expect(
       call('selectBoard', { boardName: 'checkmate', gameId: gameId })
     ).rejects.toMatchObject({ error: 401 });
-    expect((await Games.findOneAsync(gameId)).boardId).toBe(0);
+    expect((await Games.findOneAsync(gameId)).boardName).toBe('default');
   });
 });
 
 describe('startGame', () => {
   it('refuses to start with more players than the board seats', async () => {
     await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, max_player: 1 });
+    const gameId = await Games.insertAsync({ boardName: 'default', max_player: 1 });
     await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
     await Players.insertAsync({ gameId, userId: 'b', name: 'b', position: { x: -1, y: -1 } });
 
     await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({ error: 403 });
   });
 
+  it('refuses a board the catalog no longer has', async () => {
+    await loginAs();
+    const gameId = await Games.insertAsync({
+      boardName: 'gone_board',
+      min_player: 1,
+      max_player: 8,
+    });
+    await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
+
+    await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({
+      error: 409,
+      reason: 'Board not available',
+    });
+  });
+
   it('refuses to start with fewer players than the board needs', async () => {
     await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, min_player: 2, max_player: 8 });
+    const gameId = await Games.insertAsync({ boardName: 'default', min_player: 2, max_player: 8 });
     await Players.insertAsync({ gameId, userId: 'a', name: 'a', position: { x: -1, y: -1 } });
 
     await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({
@@ -609,7 +640,7 @@ describe('startGame', () => {
   it('refuses more players than any deck covers, whatever the board declares', async () => {
     await loginAs();
     // A board seating 20 would still deal off the end of the 126-card deck.
-    const gameId = await Games.insertAsync({ boardId: 0, min_player: 1, max_player: 20 });
+    const gameId = await Games.insertAsync({ boardName: 'default', min_player: 1, max_player: 20 });
     for (let i = 0; i <= CardLogic.MAX_PLAYERS; i++) {
       await Players.insertAsync({
         gameId,
@@ -626,7 +657,7 @@ describe('startGame', () => {
   });
 
   it('refuses an anonymous caller and an unknown game', async () => {
-    const gameId = await Games.insertAsync({ boardId: 0, max_player: 8 });
+    const gameId = await Games.insertAsync({ boardName: 'default', max_player: 8 });
 
     logout();
     await expect(call('startGame', { gameId: gameId })).rejects.toMatchObject({ error: 401 });
@@ -639,7 +670,7 @@ describe('startGame', () => {
     const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
     await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       max_player: 8,
       gamePhase: GameState.PHASE.IDLE,
     });
@@ -648,7 +679,7 @@ describe('startGame', () => {
 
     await call('startGame', { gameId: gameId });
 
-    const board = BoardBox.getBoard(0);
+    const board = BoardBox.getBoard('default');
     const players = await Players.find({ gameId }).fetchAsync();
     players.forEach((player, i) => {
       const start = board.startpoints[i];
@@ -713,7 +744,7 @@ describe('startGame', () => {
 describe('playCards', () => {
   it('refuses a caller who holds no robot in that game', async () => {
     await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardName: 'default' });
 
     await expect(call('playCards', { gameId, programRound: 0 })).rejects.toMatchObject({
       error: 404,
@@ -723,7 +754,7 @@ describe('playCards', () => {
   it('submits the caller’s full program and announces it', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, programRound: 2, timer: -1 });
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 2, timer: -1 });
     const playerId = await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -742,7 +773,7 @@ describe('playCards', () => {
   it('ignores a second submission from an already-submitted player', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1 });
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 1 });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben', submitted: true });
 
     await call('playCards', { gameId, programRound: 1 });
@@ -759,7 +790,7 @@ describe('playCards', () => {
   it('rejects a submission carrying a previous turn’s round number', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, programRound: 2, timer: -1 });
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 2, timer: -1 });
     await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -778,7 +809,7 @@ describe('playCards', () => {
   it('refuses an incomplete program while the timer has not expired', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1, timer: -1 });
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 1, timer: -1 });
     await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -796,7 +827,7 @@ describe('playCards', () => {
   it('random-fills an incomplete program while the expired-timer window is open', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1, timer: 0 });
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 1, timer: 0 });
     await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -813,7 +844,7 @@ describe('playCards', () => {
   it('lets a powered-down player submit an empty program regardless of the timer', async () => {
     const submit = vi.spyOn(CardLogic, 'submitCardsAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, programRound: 1, timer: -1 });
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 1, timer: -1 });
     await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -835,7 +866,7 @@ describe('respawn selection', () => {
     vi.spyOn(GameState, 'nextRespawnPhaseAsync').mockResolvedValue();
     const user = await loginAs();
     const gameId = await Games.insertAsync({
-      boardId: 0,
+      boardName: 'default',
       respawnPhase: GameState.RESPAWN_PHASE.CHOOSE_POSITION,
       step: 0,
     });
@@ -858,7 +889,7 @@ describe('respawn selection', () => {
     const respawn = vi.spyOn(GameLogic, 'respawnPlayerWithDirAsync').mockResolvedValue();
     const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardName: 'default' });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
 
     await call('selectRespawnDirection', { gameId: gameId, direction: GameLogic.LEFT });
@@ -872,7 +903,7 @@ describe('respawn selection', () => {
   // and said nothing at all.
   it('refuses an anonymous caller', async () => {
     logout();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardName: 'default' });
 
     await expect(
       call('selectRespawnPosition', { gameId: gameId, x: 3, y: 4 })
@@ -888,7 +919,7 @@ describe('respawn selection', () => {
 
   it('refuses a caller who holds no robot in that game', async () => {
     await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0 });
+    const gameId = await Games.insertAsync({ boardName: 'default' });
 
     await expect(
       call('selectRespawnPosition', { gameId: gameId, x: 3, y: 4 })
@@ -909,7 +940,10 @@ describe('togglePowerDown', () => {
     ['DOWN', GameLogic.DOWN, GameLogic.ON],
   ])('cycles %s to the next state and persists it', async (_label, from, to) => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
     const playerId = await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -1006,7 +1040,10 @@ describe('togglePowerDown', () => {
 
   it('refuses a caller who holds no robot in that game', async () => {
     await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
 
     await expect(call('togglePowerDown', { gameId })).rejects.toMatchObject({ error: 404 });
   });
@@ -1016,7 +1053,10 @@ describe('togglePowerDown', () => {
   // segment replay.
   it('refuses a toggle once the play phase has started', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PLAY });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      gamePhase: GameState.PHASE.PLAY,
+    });
     const playerId = await Players.insertAsync({
       gameId,
       userId: user._id,
@@ -1030,7 +1070,10 @@ describe('togglePowerDown', () => {
 
   it('refuses a toggle once the player has submitted', async () => {
     const user = await loginAs();
-    const gameId = await Games.insertAsync({ boardId: 0, gamePhase: GameState.PHASE.PROGRAM });
+    const gameId = await Games.insertAsync({
+      boardName: 'default',
+      gamePhase: GameState.PHASE.PROGRAM,
+    });
     const playerId = await Players.insertAsync({
       gameId,
       userId: user._id,

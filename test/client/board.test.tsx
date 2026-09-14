@@ -123,6 +123,28 @@ describe('the page', () => {
     ).toEqual([]);
   });
 
+  it('draws a pit and a caption for a board name it cannot build', async () => {
+    await openBoard({ game: { boardName: 'gone_board' } });
+
+    renderAt(<Board />);
+
+    const tiles = [...board().querySelectorAll<HTMLElement>('span.tile')];
+    expect(tiles).toHaveLength(12 * 16);
+    expect(tiles.filter((t) => t.style.backgroundImage.includes('void-full'))).toHaveLength(140);
+    const caption = board().querySelector('.board-missing')!;
+    expect(caption).toHaveTextContent('Board not available');
+    expect(caption).toHaveTextContent('“gone_board” is not in the catalog.');
+  });
+
+  it('draws the real board for a hidden name', async () => {
+    await openBoard({ game: { boardName: 'test' } });
+
+    renderAt(<Board />);
+
+    expect(board().querySelectorAll('span.tile')).toHaveLength(4 * 5);
+    expect(board().querySelector('.board-missing')).toBeNull();
+  });
+
   it('draws the scrapyard strip under the tiles, beneath the robots', async () => {
     await openBoard();
 

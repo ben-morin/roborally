@@ -74,7 +74,7 @@ async function takeSnapshotAsync(game: GameDoc, segment: string): Promise<Segmen
 export interface Game extends GameDoc {}
 export class Game {
   board() {
-    return BoardBox.getBoard(this.boardId);
+    return BoardBox.getBoard(this.boardName);
   }
   async playersAsync() {
     return await Players.find({ gameId: this._id }).fetchAsync();
@@ -297,7 +297,9 @@ const schema = {
   // The register counter, 1..5.
   playPhaseCount: Number,
   programRound: Number,
-  boardId: Number,
+  // The board's name, the key into `BoardBox.boards`. Not `board`: the transform's `board()`
+  // method builds the Board, and the class-plus-interface merge cannot hold both under one name.
+  boardName: String,
   min_player: Number,
   max_player: Number,
   // Player _ids, popped one at a time by the respawn phase.

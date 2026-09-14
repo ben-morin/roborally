@@ -49,7 +49,7 @@ const EXPECTED = {
       'respawnPhase',
       'playPhaseCount',
       'programRound',
-      'boardId',
+      'boardName',
       'min_player',
       'max_player',
       'waitingForRespawn',
