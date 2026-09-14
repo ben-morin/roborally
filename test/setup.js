@@ -641,7 +641,7 @@ export async function runStartup() {
   for (const fn of startupCallbacks) await fn();
 }
 
-// Captures what server/main.ts configures inside Meteor.startup. `verificationEmails`
+// Captures what server/accounts.ts configures inside Meteor.startup. `verificationEmails`
 // records userIds passed to Accounts.sendVerificationEmail.
 const accountsState = {
   validateNewUser: [],
@@ -672,7 +672,7 @@ export function resetAccounts() {
 }
 
 /**
- * Replace Meteor.settings wholesale. Call before runStartup() — server/main.ts reads
+ * Replace Meteor.settings wholesale. Call before runStartup() — server/accounts.ts reads
  * VERIFY_EMAILS / MAIL_FROM / ALLOWED_* inside its startup block, not at import time.
  */
 export function setSettings(settings = {}) {

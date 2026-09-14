@@ -28,9 +28,9 @@ Meteor.settings.public = Meteor.settings.public || {};
 Meteor.settings.public.appVersion =
   process.env.APP_VERSION || process.env.npm_package_version || 'development';
 
-// The account configuration that depends on Meteor.settings. The rest of the Accounts
-// setup — the display name every user document carries and the write rules on
-// Meteor.users — is in ./accounts.ts.
+// Boot order. Everything settings-driven or document-shaped lives in the module that owns
+// it (./accounts.ts, ./backfill.ts, ./cron.ts); this block only sequences what has to
+// happen before the first cron tick and the first client method.
 Meteor.startup(async () => {
   markBooted();
 
@@ -45,56 +45,6 @@ Meteor.startup(async () => {
   // first cron tick — with the same stall threshold, which is what keeps a booting
   // instance off a game a still-running one is driving during a rolling deploy.
   await resumeStalledTurnsAsync();
-
-  Accounts.config({
-    ambiguousErrorMessages: false,
-    sendVerificationEmail: Meteor.settings?.VERIFY_EMAILS || false,
-  });
-
-  Accounts.emailTemplates.siteName = 'RoboRally';
-  if (Meteor.settings?.MAIL_FROM) {
-    Accounts.emailTemplates.from = Meteor.settings.MAIL_FROM;
-  }
-
-  Accounts.validateNewUser((user: Meteor.User) => {
-    const email = user.emails?.[0]?.address;
-    if (!email) return true;
-
-    const allowedEmails = Meteor.settings?.ALLOWED_EMAILS || [];
-    const allowedDomains = Meteor.settings?.ALLOWED_DOMAINS || [];
-
-    if (allowedEmails.length === 0 && allowedDomains.length === 0) return true;
-
-    const domain = email.slice(email.lastIndexOf('@') + 1);
-    if (
-      allowedEmails.includes(email.toLowerCase()) ||
-      allowedDomains.includes(domain.toLowerCase())
-    ) {
-      return true;
-    }
-
-    throw new Meteor.Error(403, "Email isn't allowed to register on this server.");
-  });
-
-  Accounts.validateLoginAttempt((attempt: { allowed: boolean; user?: Meteor.User }) => {
-    if (!attempt.allowed) {
-      return false;
-    }
-
-    if (Accounts._options.sendVerificationEmail) {
-      // An allowed attempt always carries the user it authenticated; only a rejected one
-      // can be without, and those returned above.
-      const user = attempt.user!;
-      if (user.emails && !user.emails.some((email) => email.verified)) {
-        throw new Meteor.Error(
-          'email-not-verified',
-          'You must verify your email address before logging in. Please check your inbox.'
-        );
-      }
-    }
-
-    return true;
-  });
 
   console.info('Meteor.startup: main');
   startCron();

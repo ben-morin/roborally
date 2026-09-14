@@ -17,6 +17,6 @@ declare namespace Meteor {
 }
 
 declare namespace Accounts {
-  // Private, but the email-verification login gate in server/main.ts reads it.
+  // Private, but the email-verification login gate in server/accounts.ts reads it.
   const _options: { sendVerificationEmail?: boolean };
 }

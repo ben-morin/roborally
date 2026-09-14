@@ -1,8 +1,6 @@
-// Everything that keeps a user document from being readable or writable by a client that
-// has no business with it. The login-gating half of the Accounts configuration — the
-// registration allowlist and the email-verification gate — lives in server/main.ts's
-// `Meteor.startup` block, because it is settings-driven; this file is about the shape and
-// ownership of the documents themselves.
+// Everything about accounts: who may register and log in (the `Meteor.settings`-driven
+// allowlist and email-verification gate), the display name every user document carries,
+// and the write rules on Meteor.users.
 //
 // Why it matters: `Meteor.users` documents carry `services.password.bcrypt`,
 // `services.resume.loginTokens`, `services.password.reset`,
@@ -23,10 +21,63 @@ import { displayNameFromEmail } from '../both/permissions.ts';
 // matching allow rule is refused.
 Meteor.users.deny({ update: () => true });
 
+// Inside startup because the allowlist, the gate and the mail settings all read
+// `Meteor.settings`, and because `onCreateUser` permits a single registration. This runs
+// ahead of the startup block in server/main.ts — import order — and nothing here depends on
+// what that block does.
 Meteor.startup(() => {
+  Accounts.config({
+    ambiguousErrorMessages: false,
+    sendVerificationEmail: Meteor.settings?.VERIFY_EMAILS || false,
+  });
+
+  Accounts.emailTemplates.siteName = 'RoboRally';
+  if (Meteor.settings?.MAIL_FROM) {
+    Accounts.emailTemplates.from = Meteor.settings.MAIL_FROM;
+  }
+
+  Accounts.validateNewUser((user: Meteor.User) => {
+    const email = user.emails?.[0]?.address;
+    if (!email) return true;
+
+    const allowedEmails = Meteor.settings?.ALLOWED_EMAILS || [];
+    const allowedDomains = Meteor.settings?.ALLOWED_DOMAINS || [];
+
+    if (allowedEmails.length === 0 && allowedDomains.length === 0) return true;
+
+    const domain = email.slice(email.lastIndexOf('@') + 1);
+    if (
+      allowedEmails.includes(email.toLowerCase()) ||
+      allowedDomains.includes(domain.toLowerCase())
+    ) {
+      return true;
+    }
+
+    throw new Meteor.Error(403, "Email isn't allowed to register on this server.");
+  });
+
+  Accounts.validateLoginAttempt((attempt: { allowed: boolean; user?: Meteor.User }) => {
+    if (!attempt.allowed) {
+      return false;
+    }
+
+    if (Accounts._options.sendVerificationEmail) {
+      // An allowed attempt always carries the user it authenticated; only a rejected one
+      // can be without, and those returned above.
+      const user = attempt.user!;
+      if (user.emails && !user.emails.some((email) => email.verified)) {
+        throw new Meteor.Error(
+          'email-not-verified',
+          'You must verify your email address before logging in. Please check your inbox.'
+        );
+      }
+    }
+
+    return true;
+  });
+
   // Every user document gets a `profile.name` here; accounts from before this hook get
-  // theirs from the startup backfill in server/backfill.ts. Registered inside startup
-  // because Meteor permits a single registration and startup runs once.
+  // theirs from the startup backfill in server/backfill.ts.
   Accounts.onCreateUser((options, user) => {
     // `options.profile` is whatever the sign-up form sent, i.e. client-controlled, and
     // this is the one field the publication exposes to other players — so it is derived
