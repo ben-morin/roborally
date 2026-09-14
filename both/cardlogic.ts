@@ -13,7 +13,7 @@ export interface CardType {
 }
 
 // Exported so the cron watchdog can re-drive a timer the server lost — see
-// "Recover stalled programming timers" in server/main.ts. Recovery deliberately reuses
+// "Recover stalled programming timers" in server/cron.ts. Recovery deliberately reuses
 // this exact function rather than reimplementing it, so the two cannot drift; the guard
 // below is what makes calling it a second time safe.
 export async function autoSubmitIfTimedOut(gameId: string, expectedStart: Date) {
