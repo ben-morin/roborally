@@ -395,7 +395,7 @@ export class Area {
       this.addLaser(5, 3, 'd', 5);
       this.addLaser(6, 4, 'd', 5);
       this.addLaser(4, 5, 'r', 5);
-      this.addLaser(3, 4, 'r', 5);
+      this.addLaser(3, 6, 'r', 5);
     },
 
     chess() {
