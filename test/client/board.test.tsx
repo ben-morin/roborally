@@ -437,6 +437,20 @@ describe('lasers', () => {
     });
   });
 
+  // The game ends inside the checkpoints phase and the game-over write leaves `playPhase`
+  // there, so a finished game used to fire on every page load.
+  it('draws no beams once the game is over', async () => {
+    await openBoard({
+      game: { ...checkpoints, gamePhase: GameState.PHASE.ENDED, winner: 'them' },
+      player: { direction: GameLogic.UP, position: { x: 1, y: 1 }, shotDistance: 3 },
+    });
+
+    renderAt(<Board />);
+
+    expect(document.querySelector('.laser')).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
   it('skips powered-down and destroyed robots', async () => {
     const { game } = await openBoard({
       game: checkpoints,

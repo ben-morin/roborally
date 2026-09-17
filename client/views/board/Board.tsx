@@ -452,8 +452,12 @@ export function Board() {
   const playerCnt = players.length;
   const you = (player: Player) => (player.userId === userId ? 'You' : player.name);
 
+  // A game ends inside the checkpoints phase and the game-over write leaves `playPhase`
+  // there, so without the `gameEnded` check a finished game fired on every page load.
   const shooters =
-    game.playPhase === GameState.PLAY_PHASE.CHECKPOINTS ? players.filter(firesThisRound) : [];
+    !gameEnded && game.playPhase === GameState.PLAY_PHASE.CHECKPOINTS
+      ? players.filter(firesThisRound)
+      : [];
 
   // The pickers show for the player whose robot is re-entering, and only in the two
   // phases that have something to pick. The server clears `selectOptions` to null while
