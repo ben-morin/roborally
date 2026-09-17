@@ -523,21 +523,18 @@ async function checkRespawnsAndUpdateDb(player: Player, cleanups?: Cleanup[]) {
 async function removePlayerWithDelay(player: Player) {
   await new Promise((resolve) => Meteor.setTimeout(resolve, _CARD_PLAY_DELAY));
   const board = await player.boardAsync();
-  // Park players waiting to respawn at the bottom-right; permanently
-  // eliminated players (out of lives) line up along the bottom-left in
-  // elimination order so multiple eliminations don't stack on the same tile.
+  // Both lines fill in death order so robots never stack on one tile. Waiting robots
+  // line up from the bottom-right; they re-enter in death order too, so the far-right
+  // one is always next, and closeParkingGapAsync keeps it there as robots leave.
+  // Eliminated robots (out of lives) line up from the bottom-left.
   player.position.y = board.height;
-  if (player.lives > 0) {
-    player.position.x = board.width - 1;
-  } else {
-    const parkedCount = await Players.find({
-      gameId: player.gameId,
-      lives: { $lte: 0 },
-      'position.y': board.height,
-      _id: { $ne: player._id },
-    }).countAsync();
-    player.position.x = parkedCount;
-  }
+  const parkedCount = await Players.find({
+    gameId: player.gameId,
+    lives: player.lives > 0 ? { $gt: 0 } : { $lte: 0 },
+    'position.y': board.height,
+    _id: { $ne: player._id },
+  }).countAsync();
+  player.position.x = player.lives > 0 ? board.width - 1 - parkedCount : parkedCount;
   player.direction = GameLogic.UP;
   player.optionCards = {};
 
@@ -564,6 +561,29 @@ async function respawnPlayerAtPosAsync(player: Player, x: number, y: number) {
   player.position.y = y;
   console.log('respawning player', player.name, 'at', x, ',', y);
   await player.saveAsync();
+  await closeParkingGapAsync(player);
+}
+
+// Slide the robots still waiting to re-enter back against the right edge, keeping their
+// order, so the next one to re-enter is always far right. Written from the current order
+// rather than as a +1 step: a recovery sweep re-runs the respawn step, and a second pass
+// over an already-packed row writes the same positions.
+async function closeParkingGapAsync(leaver: Player) {
+  const board = await leaver.boardAsync();
+  const waiting = await Players.find({
+    gameId: leaver.gameId,
+    lives: { $gt: 0 },
+    needsRespawn: true,
+    'position.y': board.height,
+    _id: { $ne: leaver._id },
+  }).fetchAsync();
+  waiting.sort((a, b) => b.position.x - a.position.x);
+  for (const [i, player] of waiting.entries()) {
+    const x = board.width - 1 - i;
+    if (player.position.x === x) continue;
+    player.position.x = x;
+    await player.saveAsync();
+  }
 }
 
 async function respawnPlayerWithDirAsync(player: Player, dir: number) {

@@ -379,6 +379,83 @@ describe('playCard: falling off the board / into a void', () => {
   });
 });
 
+describe('the waiting line on the parking row', () => {
+  const waiting = (game, x, board, extra = {}) =>
+    insertPlayer(game._id, {
+      position: { x, y: board.height },
+      lives: 2,
+      needsRespawn: true,
+      ...extra,
+    });
+
+  it('a second robot waiting to re-enter parks left of the first', async () => {
+    vi.useFakeTimers();
+    const board = stubBoard();
+    board.getTile(3, 1).type = Tile.VOID;
+    const game = await insertGame();
+    const first = await waiting(game, board.width - 1, board);
+    const second = await insertPlayer(game._id, {
+      direction: GameLogic.RIGHT,
+      position: { x: 2, y: 1 },
+      lives: 3,
+    });
+    await insertCards(second._id, game._id, { handCards: [] });
+    await insertDeck(game._id, { cards: [] });
+
+    const cardPromise = GameLogic.playCard(second, CARD.STEP_FORWARD);
+    await vi.advanceTimersByTimeAsync(2000);
+    await cardPromise;
+
+    expect((await Players.findOneAsync(first._id)).position).toEqual({
+      x: board.width - 1,
+      y: board.height,
+    });
+    expect((await Players.findOneAsync(second._id)).position).toEqual({
+      x: board.width - 2,
+      y: board.height,
+    });
+    vi.useRealTimers();
+  });
+
+  it('re-entering slides the rest of the line right, so the next robot is far right', async () => {
+    const board = stubBoard();
+    const game = await insertGame();
+    const next = await waiting(game, board.width - 1, board);
+    const second = await waiting(game, board.width - 2, board);
+    const third = await waiting(game, board.width - 3, board);
+
+    await GameLogic.respawnPlayerAtPosAsync(await Players.findOneAsync(next._id), 1, 1);
+
+    expect((await Players.findOneAsync(next._id)).position).toEqual({ x: 1, y: 1 });
+    expect((await Players.findOneAsync(second._id)).position).toEqual({
+      x: board.width - 1,
+      y: board.height,
+    });
+    expect((await Players.findOneAsync(third._id)).position).toEqual({
+      x: board.width - 2,
+      y: board.height,
+    });
+  });
+
+  // A recovery sweep re-runs the respawn step; a packed line must read back unchanged.
+  it('re-running the re-entry over a packed line writes nothing', async () => {
+    const board = stubBoard();
+    const game = await insertGame();
+    const next = await waiting(game, board.width - 1, board);
+    const second = await waiting(game, board.width - 2, board);
+    await GameLogic.respawnPlayerAtPosAsync(await Players.findOneAsync(next._id), 1, 1);
+    const writes = vi.spyOn(Players, 'updateAsync');
+
+    await GameLogic.respawnPlayerAtPosAsync(await Players.findOneAsync(next._id), 1, 1);
+
+    expect(writes.mock.calls.map(([id]) => id)).toEqual([next._id]);
+    expect((await Players.findOneAsync(second._id)).position).toEqual({
+      x: board.width - 1,
+      y: board.height,
+    });
+  });
+});
+
 describe('executeRollers', () => {
   it('moves a robot one tile in the roller direction and applies its rotate', async () => {
     const board = stubBoard();

@@ -50,9 +50,9 @@ export async function joinGameAsync(gameId: string, user: Meteor.User | null) {
     if ((await Players.find({ gameId }).countAsync()) >= game.max_player) {
       throw new Meteor.Error(403, 'Game is full.');
     }
-    // The dev-test board is meant for exercising elimination flows quickly,
-    // so seat players with a single life instead of the standard three.
-    const startingLives = game.boardName === 'dev_test' ? 1 : 3;
+    // The dev-test board is meant for exercising death and elimination flows quickly,
+    // so seat players with two lives instead of the standard three: one respawn, then out.
+    const startingLives = game.boardName === 'dev_test' ? 2 : 3;
     playerId = await Players.insertAsync({
       gameId,
       userId: user!._id,

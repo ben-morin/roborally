@@ -213,7 +213,7 @@ describe('joinGame', () => {
     expect(cards.chosenCards).toEqual(Array(GameLogic.CARD_SLOTS).fill(CardLogic.EMPTY));
   });
 
-  it('seats a player with a single life on the dev-test board', async () => {
+  it('seats a player with two lives on the dev-test board', async () => {
     const user = await loginAs();
     const gameId = await Games.insertAsync({
       boardName: 'dev_test',
@@ -223,7 +223,7 @@ describe('joinGame', () => {
     await call('joinGame', { gameId: gameId });
 
     const player = await Players.findOneAsync({ gameId, userId: user._id });
-    expect(player.lives).toBe(1);
+    expect(player.lives).toBe(2);
   });
 
   it('is idempotent — joining twice does not seat a second robot', async () => {
