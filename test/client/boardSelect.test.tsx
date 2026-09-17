@@ -67,7 +67,7 @@ describe('BoardSelect', () => {
     expect(screen.getAllByRole('tab').map((el) => el.textContent)).toEqual(
       TABS.map((group) => group.label)
     );
-    expect(tab('Dev boards')).toBeVisible();
+    expect(tab('Dev')).toBeVisible();
   });
 
   it('renders no dev tab outside development', async () => {
@@ -82,7 +82,7 @@ describe('BoardSelect', () => {
     expect(screen.getAllByRole('tab').map((el) => el.textContent)).toEqual(
       TABS.filter((group) => !group.devOnly).map((group) => group.label)
     );
-    expect(screen.queryByRole('tab', { name: 'Dev boards' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Dev' })).toBeNull();
   });
 
   it('opens the first tab for a game on a dev board outside development', async () => {
@@ -94,7 +94,7 @@ describe('BoardSelect', () => {
       Meteor.isDevelopment = true;
     }
 
-    expect(tab('Beginner courses')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Beginner')).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryAllByRole('button', { current: true })).toHaveLength(0);
   });
 
@@ -103,7 +103,7 @@ describe('BoardSelect', () => {
 
     renderAt(<BoardSelect />);
 
-    expect(tab('Expert courses')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Expert')).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryAllByRole('button', { current: true })).toHaveLength(0);
   });
 
@@ -121,38 +121,38 @@ describe('BoardSelect', () => {
     await openSelect('default');
     renderAt(<BoardSelect />);
 
-    await userEvent.click(tab('Custom courses'));
+    await userEvent.click(tab('Custom'));
 
-    expect(tab('Custom courses')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Beginner courses')).toHaveAttribute('aria-selected', 'false');
+    expect(tab('Custom')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Beginner')).toHaveAttribute('aria-selected', 'false');
     expect(choices()).toHaveLength(CUSTOM_CNT);
   });
 
   it('moves between tabs with the arrow keys, wrapping at both ends', async () => {
     await openSelect('default');
     renderAt(<BoardSelect />);
-    tab('Beginner courses').focus();
+    tab('Beginner').focus();
 
     await userEvent.keyboard('{ArrowRight}');
-    expect(tab('Expert courses')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Expert courses')).toHaveFocus();
+    expect(tab('Expert')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Expert')).toHaveFocus();
     expect(choices()).toHaveLength(EXPERT_CNT);
 
     await userEvent.keyboard('{ArrowLeft}{ArrowLeft}');
-    expect(tab('Dev boards')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Dev boards')).toHaveFocus();
+    expect(tab('Dev')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Dev')).toHaveFocus();
 
     await userEvent.keyboard('{ArrowRight}');
-    expect(tab('Beginner courses')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Beginner')).toHaveAttribute('aria-selected', 'true');
   });
 
   it('keeps one tab stop: only the open tab is reachable by Tab', async () => {
     await openSelect('default');
     renderAt(<BoardSelect />);
 
-    expect(tab('Beginner courses')).toHaveAttribute('tabindex', '0');
-    expect(tab('Expert courses')).toHaveAttribute('tabindex', '-1');
-    expect(tab('Custom courses')).toHaveAttribute('tabindex', '-1');
+    expect(tab('Beginner')).toHaveAttribute('tabindex', '0');
+    expect(tab('Expert')).toHaveAttribute('tabindex', '-1');
+    expect(tab('Custom')).toHaveAttribute('tabindex', '-1');
   });
 
   it('sends the clicked board to the server and returns to the game page', async () => {
@@ -198,7 +198,7 @@ describe('BoardSelect', () => {
     renderAt(<BoardSelect />);
 
     expect(screen.getAllByRole('tab')).toHaveLength(TABS.length);
-    expect(tab('Beginner courses')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Beginner')).toHaveAttribute('aria-selected', 'true');
     expect(choices()).toHaveLength(0);
   });
 });

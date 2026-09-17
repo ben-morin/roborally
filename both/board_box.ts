@@ -16,7 +16,7 @@ export class BoardBox {
   static GROUPS: readonly BoardGroup[] = [
     {
       id: 'beginner',
-      label: 'Beginner courses',
+      label: 'Beginner',
       boards: [
         'default',
         'risky_exchange',
@@ -33,7 +33,7 @@ export class BoardBox {
     },
     {
       id: 'expert',
-      label: 'Expert courses',
+      label: 'Expert',
       // The course manual gives the last eight of these special rules; none are implemented.
       boards: [
         'vault_assault',
@@ -56,12 +56,12 @@ export class BoardBox {
     },
     {
       id: 'custom',
-      label: 'Custom courses',
+      label: 'Custom',
       boards: ['custom_made', 'quarter_pounder'],
     },
     {
       id: 'dev',
-      label: 'Dev boards',
+      label: 'Dev',
       devOnly: true,
       boards: ['test', 'dev_test'],
     },
