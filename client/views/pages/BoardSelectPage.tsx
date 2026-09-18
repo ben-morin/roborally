@@ -24,7 +24,7 @@ export function BoardSelectPage() {
   if (game.started) return <Navigate to={paths.board(gameId)} replace />;
 
   return (
-    <div className="cols">
+    <div className="cols cols-wide">
       <Panel>
         <BoardSelect />
       </Panel>

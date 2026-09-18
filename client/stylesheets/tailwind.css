@@ -78,6 +78,11 @@
     gap: 24px;
     align-items: start;
   }
+  /* Board select's variant: three 268px board choices need more than the 736px the 2fr
+     column leaves inside its panel, and the thumbnail size is shared with the lobby. */
+  .cols-wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  }
   .stack {
     display: flex;
     flex-direction: column;

@@ -20,11 +20,11 @@ const TAB =
   'h-9 cursor-pointer rounded-full border-0 px-[18px] text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const TAB_ACTIVE = 'bg-teal text-navy';
 const TAB_IDLE = 'bg-transparent text-white/70 hover:bg-raised-hover hover:text-white';
-// The design's three columns need an 836px panel; the Blaze layout's `col-lg-8` gives 743,
-// so the track count comes off the width and becomes three when step 9 widens the panel.
+// Three 268px choices with this gap need 828px; the page's `cols-wide` column gives the panel
+// 832 inside. The track count still comes off the width, so a narrower window drops to two.
 // `justify-items-center` sizes each choice to its own thumbnail rather than to the track.
 const GRID =
-  'grid grid-cols-[repeat(auto-fill,minmax(268px,1fr))] justify-items-center gap-x-4 gap-y-5 [&_h4]:text-base [&_h4]:font-semibold [&_span]:text-[13px] [&_span]:text-muted';
+  'grid grid-cols-[repeat(auto-fill,minmax(268px,1fr))] justify-items-center gap-x-3 gap-y-5 [&_h4]:text-base [&_h4]:font-semibold [&_span]:text-[13px] [&_span]:text-muted';
 const CHOICE =
   'boardchoice cursor-pointer rounded-panel border-[2px] p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const CHOICE_SELECTED = 'border-teal [&_h4]:text-teal';
