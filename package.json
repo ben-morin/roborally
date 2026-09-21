@@ -24,7 +24,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,ts,tsx,json,html,css,md}\"",
-    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,html,css,md}\""
+    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,html,css,md}\"",
+    "deck:shuffle": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/tools/deck-shuffle.mts"
   },
   "dependencies": {
     "@babel/runtime": "^8.0.7",
