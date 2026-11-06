@@ -1163,21 +1163,21 @@ describe('resendVerificationEmail', () => {
 });
 
 describe('isEmailAvailable', () => {
-  it('is true in development even without EMAIL_URL, false in production without it', async () => {
-    const previous = process.env.EMAIL_URL;
-    delete process.env.EMAIL_URL;
+  it('is true in development even without MAIL_URL, false in production without it', async () => {
+    const previous = process.env.MAIL_URL;
+    delete process.env.MAIL_URL;
     try {
       await expect(call('isEmailAvailable')).resolves.toBe(true);
 
       Meteor.isDevelopment = false;
       await expect(call('isEmailAvailable')).resolves.toBe(false);
 
-      process.env.EMAIL_URL = 'smtp://localhost';
+      process.env.MAIL_URL = 'smtp://localhost';
       await expect(call('isEmailAvailable')).resolves.toBe(true);
     } finally {
       Meteor.isDevelopment = true;
-      if (previous === undefined) delete process.env.EMAIL_URL;
-      else process.env.EMAIL_URL = previous;
+      if (previous === undefined) delete process.env.MAIL_URL;
+      else process.env.MAIL_URL = previous;
     }
   });
 });

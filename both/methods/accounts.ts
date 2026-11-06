@@ -20,7 +20,7 @@ export const isEmailAvailable = createMethod({
   // No `validate`, and none is required: `run` takes no argument, so there is nothing to
   // check. The package only insists on a validator when `run.length !== 0`.
   run() {
-    return !!process.env.EMAIL_URL || Meteor.isDevelopment;
+    return !!process.env.MAIL_URL || Meteor.isDevelopment;
   },
 });
 
