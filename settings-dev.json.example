@@ -1,4 +1,5 @@
 {
+  "ADMIN_EMAILS": [],
   "ALLOWED_EMAILS": [],
   "ALLOWED_DOMAINS": [],
   "VERIFY_EMAILS": false,

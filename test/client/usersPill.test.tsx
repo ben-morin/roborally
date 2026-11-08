@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The footer's presence strip. The `onlineUsers` publication sends `profile.name` and
 // presence and nothing else, so the label has no address to fall back on — that is what
-// getUsername is here for.
+// getUsername is here for. Only online users get a pill, whatever else the client holds.
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -35,6 +35,8 @@ describe('UsersPill', () => {
 
     expect(screen.getByText('Ben')).toHaveClass('users-pill');
     expect(container.querySelectorAll('.users-pill')).toHaveLength(2);
+    // The name alone, no dot in front of it.
+    expect(screen.getByText('Ben').childElementCount).toBe(0);
   });
 
   it('falls back to the id for a user the backfill has not reached', async () => {
@@ -63,11 +65,20 @@ describe('UsersPill', () => {
     expect(screen.getByText('active')).toHaveAttribute('title', 'online');
   });
 
-  it('treats a user with no presence at all as active', async () => {
-    await Meteor.users.insertAsync({ _id: 'ghost', profile: { name: 'ghost' } });
+  // Whatever else puts a user document in the client — an offline one, or one that never
+  // logged in and so carries no presence at all — it gets no pill.
+  it('leaves out every user the client holds who is not online', async () => {
+    await Meteor.users.insertAsync({
+      _id: 'offline',
+      profile: { name: 'offline' },
+      status: { online: false },
+    });
+    await Meteor.users.insertAsync({ _id: 'never', profile: { name: 'never' } });
 
-    render(<UsersPill />);
+    const { container } = render(<UsersPill />);
 
-    expect(screen.getByText('ghost')).toHaveAttribute('title', 'online');
+    expect(screen.queryByText('offline')).not.toBeInTheDocument();
+    expect(screen.queryByText('never')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('.users-pill')).toHaveLength(1);
   });
 });

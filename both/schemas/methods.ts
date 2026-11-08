@@ -54,6 +54,9 @@ export const checkArgsWith =
 // Six methods and the three game publications all take nothing but a game id.
 export const gameIdOnly = { gameId: String };
 
+// The admin actions that need nothing but the account they act on.
+const userIdOnly = { userId: String };
+
 export const schemas = {
   createGame: { name: String },
   joinGame: gameIdOnly,
@@ -70,5 +73,12 @@ export const schemas = {
   selectCard: { gameId: String, card: Number, index: Number },
   deselectCard: { gameId: String, index: Number },
   deselectAllCards: gameIdOnly,
-  // `isEmailAvailable` takes no arguments, so it has no shape here.
+  adminUpdateUser: { userId: String, name: String, email: String, verified: Boolean },
+  adminSetPassword: { userId: String, password: String },
+  adminSendResetEmail: userIdOnly,
+  adminSendVerificationEmail: userIdOnly,
+  adminLogoutUser: userIdOnly,
+  adminDeleteUser: userIdOnly,
+  adminCreateUser: { email: String, password: String, verified: Boolean },
+  // `isEmailAvailable` and `isAdmin` take no arguments, so they have no shape here.
 };

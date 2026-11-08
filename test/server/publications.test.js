@@ -1,10 +1,10 @@
 // Publications are cursor factories, so these run the real handler with `this.userId`
-// bound the way the DDP layer binds it and assert on what the cursor yields. Two of them
-// are security-relevant and both are pinned here: `cards` is the only publication scoped
-// to the subscriber, and `onlineUsers` is the only one that hands out documents belonging
-// to somebody else — so it is the only one whose *fields* have to be asserted, not just
-// which documents come back.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// bound the way the DDP layer binds it and assert on what the cursor yields. Three of them
+// are security-relevant and all are pinned here: `cards` is the only publication scoped
+// to the subscriber, and `onlineUsers` and `adminUsers` are the only ones that hand out
+// documents belonging to somebody else — so they are the ones whose *fields* have to be
+// asserted, not just which documents come back.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import {
   loginAs,
@@ -12,6 +12,7 @@ import {
   registeredPublications,
   resetFakeCollections,
   runPublication,
+  setSettings,
 } from '../setup.js';
 import { Cards } from '../../collections/cards.ts';
 import { Chat } from '../../collections/chat.ts';
@@ -31,6 +32,7 @@ const flushNudge = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('publication registration', () => {
   it('registers every publication the client subscribes to', () => {
     expect(registeredPublications()).toEqual([
+      'adminUsers',
       'cards',
       'chat',
       'games',
@@ -196,6 +198,130 @@ describe('onlineUsers', () => {
     // waiting rather than leaving it hanging.
     expect(await runPublication('onlineUsers', { ready })).toBeUndefined();
     expect(ready).toHaveBeenCalled();
+  });
+});
+
+describe('adminUsers', () => {
+  const ADMIN = { _id: 'admin', emails: [{ address: 'admin@example.com', verified: true }] };
+
+  // As accounts-password and mizzao:user-status leave a real document, like the
+  // `onlineUsers` fixture: every secret the projection has to keep on the server.
+  const insertUser = (_id, status) =>
+    Meteor.users.insertAsync({
+      _id,
+      createdAt: new Date(0),
+      profile: { name: `Player ${_id}` },
+      emails: [{ address: `${_id}@example.com`, verified: false }],
+      ...(status ? { status } : {}),
+      services: {
+        password: {
+          bcrypt: '$2b$10$notarealhash',
+          reset: { token: 'reset-token', email: `${_id}@example.com` },
+        },
+        resume: { loginTokens: [{ hashedToken: 'resume-token' }] },
+        email: { verificationTokens: [{ token: 'verify-token' }] },
+      },
+    });
+
+  // The publication relays the cursor under its own collection name instead of returning
+  // it, so what goes out is exactly what it hands `this.added`.
+  async function subscribe() {
+    const sent = [];
+    const ready = vi.fn();
+    const returned = await runPublication('adminUsers', {
+      added: (collection, _id, fields) => sent.push({ collection, _id, ...fields }),
+      ready,
+    });
+    return { sent, ready, returned };
+  }
+
+  beforeEach(() => setSettings({ ADMIN_EMAILS: ['admin@example.com'] }));
+  afterEach(() => setSettings());
+
+  it('sends nothing to a logged-out subscriber, and says it is ready', async () => {
+    logout();
+    await insertUser('other', { online: true });
+
+    const { sent, ready, returned } = await subscribe();
+
+    expect(returned).toBeUndefined();
+    expect(sent).toEqual([]);
+    expect(ready).toHaveBeenCalled();
+  });
+
+  it('sends nothing to a player who is not an admin', async () => {
+    await loginAs({ _id: 'player', emails: [{ address: 'player@example.com', verified: true }] });
+    await insertUser('other', { online: true });
+
+    const { sent, ready } = await subscribe();
+
+    expect(sent).toEqual([]);
+    expect(ready).toHaveBeenCalled();
+  });
+
+  it('sends every account to an admin, offline and never-logged-in ones included', async () => {
+    await loginAs(ADMIN);
+    await insertUser('on', { online: true });
+    await insertUser('off', { online: false });
+    await insertUser('never');
+
+    const { sent, ready } = await subscribe();
+
+    expect(sent.map((u) => u._id).sort()).toEqual(['admin', 'never', 'off', 'on']);
+    expect(ready).toHaveBeenCalled();
+  });
+
+  // Into `Meteor.users`, an online user's `status` from `onlineUsers` won over this one's at
+  // the merge box — which merges per top-level field — and the last-login date was lost.
+  it("sends into its own `adminUsers` collection, never into the client's Meteor.users", async () => {
+    await loginAs(ADMIN);
+    await insertUser('other', { online: true });
+
+    const { sent } = await subscribe();
+
+    expect(new Set(sent.map((u) => u.collection))).toEqual(new Set(['adminUsers']));
+  });
+
+  it('sends the address, name, dates and presence, and nothing else', async () => {
+    await loginAs(ADMIN);
+    await insertUser('other', {
+      online: true,
+      idle: true,
+      lastActivity: new Date(0),
+      lastLogin: { date: new Date(1000), ipAddr: '203.0.113.7', userAgent: 'Firefox' },
+    });
+
+    const other = (await subscribe()).sent.find((u) => u._id === 'other');
+
+    expect(other).toEqual({
+      collection: 'adminUsers',
+      _id: 'other',
+      createdAt: new Date(0),
+      profile: { name: 'Player other' },
+      emails: [{ address: 'other@example.com', verified: false }],
+      status: { online: true, idle: true, lastLogin: { date: new Date(1000) } },
+    });
+  });
+
+  it('leaks no credential material and no network details', async () => {
+    await loginAs(ADMIN);
+    await insertUser('other', {
+      online: true,
+      lastLogin: { date: new Date(0), ipAddr: '203.0.113.7', userAgent: 'Firefox' },
+    });
+
+    const published = JSON.stringify((await subscribe()).sent);
+
+    for (const secret of [
+      'notarealhash',
+      'reset-token',
+      'resume-token',
+      'verify-token',
+      '203.0.113.7',
+      'Firefox',
+    ]) {
+      expect(published).not.toContain(secret);
+    }
   });
 });
 

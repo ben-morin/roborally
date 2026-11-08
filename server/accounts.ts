@@ -10,7 +10,7 @@
 // whole documents. See the projection on `onlineUsers` in server/publications.ts — this
 // file is what makes that projection sufficient, by putting a display name somewhere
 // safe to publish.
-import { displayNameFromEmail } from '../both/permissions.ts';
+import { adminCreatingUser, adminEmails, displayNameFromEmail } from '../both/permissions.ts';
 
 // accounts-base's `setupUsersCollection` installs an allow rule that lets a logged-in
 // client update the `profile` field of its own document. Nothing in this app writes to
@@ -25,7 +25,7 @@ Meteor.users.deny({ update: () => true });
 // `Meteor.settings`, and because `onCreateUser` permits a single registration. This runs
 // ahead of the startup block in server/main.ts — import order — and nothing here depends on
 // what that block does.
-Meteor.startup(() => {
+Meteor.startup(async () => {
   Accounts.config({
     ambiguousErrorMessages: false,
     sendVerificationEmail: Meteor.settings?.VERIFY_EMAILS || false,
@@ -37,6 +37,9 @@ Meteor.startup(() => {
   }
 
   Accounts.validateNewUser((user: Meteor.User) => {
+    // The allowlist decides who may sign up. An admin adding a user has already decided.
+    if (adminCreatingUser.get()) return true;
+
     const email = user.emails?.[0]?.address;
     if (!email) return true;
 
@@ -87,4 +90,17 @@ Meteor.startup(() => {
     user.profile = { name: address ? displayNameFromEmail(address) : user._id };
     return user;
   });
+
+  // A listed address with no account yet is up for grabs: whoever registers it first is an
+  // admin, and with VERIFY_EMAILS off nothing proves they own it. `warn`, not `log`, so a
+  // production server says it too.
+  for (const address of adminEmails()) {
+    // Case-insensitive, as sign-up's own duplicate check is. @types/meteor still types it
+    // as synchronous; in Meteor 3 it returns a promise.
+    if (!(await Accounts.findUserByEmail(address))) {
+      console.warn(
+        `ADMIN_EMAILS lists ${address}, which has no account yet. Whoever registers it first becomes an admin — sign up with it now.`
+      );
+    }
+  }
 });

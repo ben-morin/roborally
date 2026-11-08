@@ -21,6 +21,8 @@
 // branch reads. That is what lets test/server/*.test.js drive the actual production
 // handlers rather than a reimplementation of them.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 }
@@ -338,6 +340,13 @@ class FakeCursor {
   observe() {
     return { stop() {} };
   }
+
+  // The initial `added` calls only, with the projection applied: enough for a publication
+  // that relays a cursor under another collection name. Nothing here ever changes later.
+  observeChanges(callbacks) {
+    for (const { _id, ...fields } of this._snapshot()) callbacks.added?.(_id, fields);
+    return { stop() {} };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -642,12 +651,15 @@ export async function runStartup() {
 }
 
 // Captures what server/accounts.ts configures inside Meteor.startup. `verificationEmails`
-// records userIds passed to Accounts.sendVerificationEmail.
+// and `resetEmails` record the userIds an email was sent for; `passwordsSet` records each
+// Accounts.setPasswordAsync call as `{ userId, password }`.
 const accountsState = {
   validateNewUser: [],
   validateLoginAttempt: [],
   onCreateUser: [],
   verificationEmails: [],
+  resetEmails: [],
+  passwordsSet: [],
   // Typed, unlike the four above, because a .tsx test calls what it finds here and an
   // untyped empty array infers as never[].
   /** @type {((token: string, done: () => void) => void)[]} */
@@ -665,6 +677,8 @@ export function resetAccounts() {
   accountsState.validateLoginAttempt.length = 0;
   accountsState.onCreateUser.length = 0;
   accountsState.verificationEmails.length = 0;
+  accountsState.resetEmails.length = 0;
+  accountsState.passwordsSet.length = 0;
   // The two link callbacks are deliberately not cleared: they are registered once, at
   // module import, so a reset would erase a fact nothing can re-establish.
   globalThis.Accounts._options = {};
@@ -731,6 +745,19 @@ globals.Meteor = {
       : Promise.resolve(undefined),
   users: new FakeCollection('users'),
   bindEnvironment: (f) => f,
+  // Meteor 3's server keeps these in AsyncLocalStorage too, so a value set by `withValue`
+  // follows the awaits inside it and no code running alongside sees it.
+  EnvironmentVariable: class EnvironmentVariable {
+    constructor() {
+      this._store = new AsyncLocalStorage();
+    }
+    get() {
+      return this._store.getStore();
+    }
+    withValue(value, fn) {
+      return this._store.run(value, fn);
+    }
+  },
   Error: class MeteorError extends Error {
     constructor(c, m) {
       super(m);
@@ -760,6 +787,48 @@ globals.Accounts = {
   },
   sendVerificationEmail(userId) {
     accountsState.verificationEmails.push(userId);
+  },
+  async sendResetPasswordEmail(userId) {
+    accountsState.resetEmails.push(userId);
+  },
+  // Recorded only: the hashing and the logout are accounts-password's, not the app's.
+  async setPasswordAsync(userId, password) {
+    accountsState.passwordsSet.push({ userId, password });
+  },
+  // Rewrites the matching address the way accounts-password's positional `$set` does, so a
+  // test can read the stored result. Its duplicate check is the caller's to prove.
+  async replaceEmailAsync(userId, oldEmail, newEmail, verified = false) {
+    const user = await globalThis.Meteor.users.findOneAsync(userId);
+    const emails = user.emails.map((e) =>
+      e.address === oldEmail ? { address: newEmail, verified } : e
+    );
+    await globalThis.Meteor.users.updateAsync(userId, { $set: { emails } });
+  },
+  // Runs the hooks server/accounts.ts registered in Meteor's order — `onCreateUser`, then
+  // each `validateNewUser` — so a test proves the allowlist through the real hook. The
+  // password is only a marker; the hashing is accounts-password's.
+  async createUserAsync(options) {
+    if (options.email && (await globalThis.Accounts.findUserByEmail(options.email))) {
+      throw new globalThis.Meteor.Error(403, 'Email already exists.');
+    }
+    let user = {
+      _id: globalThis.Random.id(),
+      createdAt: new Date(),
+      services: options.password ? { password: { bcrypt: 'hashed' } } : {},
+      ...(options.email ? { emails: [{ address: options.email, verified: false }] } : {}),
+    };
+    for (const hook of accountsState.onCreateUser) user = hook(options, user);
+    for (const hook of accountsState.validateNewUser) {
+      if (!(await hook(user))) throw new globalThis.Meteor.Error(403, 'User validation failed');
+    }
+    await globalThis.Meteor.users.insertAsync(user);
+    return user._id;
+  },
+  // Case-insensitive, like accounts-base's own fallback when no exact match exists.
+  async findUserByEmail(email) {
+    const wanted = email.toLowerCase();
+    const users = await globalThis.Meteor.users.find().fetchAsync();
+    return users.find((u) => u.emails?.some((e) => e.address.toLowerCase() === wanted));
   },
   // Registered once, at the module body of client/views/accounts/accountsApi.ts, because
   // accounts-base fires these from its own Meteor.startup and ignores a later

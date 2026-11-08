@@ -14,13 +14,19 @@ import { checkArgsWith, schemas } from '../schemas/methods.ts';
 // browser. The accounts component imports these functions the way every view imports its
 // methods, and the bodies ride along as dead code exactly as the other thirteen do.
 
+// Server-only: the browser has no `process.env`. In development Meteor prints a mail it
+// cannot send to the log, which is enough to follow its link.
+export function canSendMail() {
+  return !!process.env.MAIL_URL || Meteor.isDevelopment;
+}
+
 export const isEmailAvailable = createMethod({
   name: 'isEmailAvailable',
   open: true,
   // No `validate`, and none is required: `run` takes no argument, so there is nothing to
   // check. The package only insists on a validator when `run.length !== 0`.
   run() {
-    return !!process.env.MAIL_URL || Meteor.isDevelopment;
+    return canSendMail();
   },
 });
 

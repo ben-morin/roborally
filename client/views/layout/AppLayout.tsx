@@ -5,6 +5,7 @@
 import { NavLink, Outlet } from 'react-router';
 import { useTracker } from 'meteor/react-meteor-data';
 import { AccountsMenu } from '../accounts/AccountsMenu.tsx';
+import { useIsAdmin } from '../admin/useIsAdmin.ts';
 import { paths } from '../routes.ts';
 import { Play } from '../icons/Play.tsx';
 import { UsersPill } from '../users/UsersPill.tsx';
@@ -25,6 +26,8 @@ function navClass({ isActive }: { isActive: boolean }) {
 }
 
 function Navbar({ signedIn }: { signedIn: boolean }) {
+  const admin = useIsAdmin();
+
   return (
     <nav className="absolute top-0 right-0 left-0 z-10 h-16 bg-navy shadow-[0_4px_6px_-1px_rgba(0,0,0,.1)]">
       <div className="mx-auto flex h-full max-w-[1248px] items-center justify-between px-6">
@@ -47,6 +50,13 @@ function Navbar({ signedIn }: { signedIn: boolean }) {
                   Ranking
                 </NavLink>
               </li>
+              {admin && (
+                <li>
+                  <NavLink to={paths.admin()} className={navClass}>
+                    Admin
+                  </NavLink>
+                </li>
+              )}
             </>
           )}
           {/* `login-buttons` is contract: the browser journey keys on it. Relative, so the

@@ -1,3 +1,4 @@
+import { isAdminUser } from '../both/permissions.ts';
 import { checkArgs, gameIdOnly } from '../both/schemas/methods.ts';
 import { Cards } from '../collections/cards.ts';
 import { Chat } from '../collections/chat.ts';
@@ -38,6 +39,39 @@ Meteor.publish('onlineUsers', function () {
     { 'status.online': true },
     { fields: { 'profile.name': 1, 'status.online': 1, 'status.idle': 1 } }
   );
+});
+
+// Every account, for the admin user manager. Same rule as `onlineUsers`: the projection is
+// what keeps `services` (password hash, login, reset and verification tokens) on the
+// server, and `lastLogin` is cut down to its date — the IP address and user agent stay too.
+const ADMIN_USER_FIELDS = {
+  emails: 1,
+  'profile.name': 1,
+  createdAt: 1,
+  'status.online': 1,
+  'status.idle': 1,
+  'status.lastLogin.date': 1,
+};
+
+// Sent as the client-only `adminUsers` collection, not into `Meteor.users`. Meteor merges
+// what two publications send about one document per top-level field only, so for an online
+// user `onlineUsers`' `status` won over this one's and the last-login date never arrived
+// (seen on the first screenshot, 2026-11-07). Its own collection also leaves the admin's
+// `Meteor.users` holding what every other screen expects.
+Meteor.publish('adminUsers', async function () {
+  // Not an error, the same as `onlineUsers` for a visitor: a non-admin just gets nothing.
+  if (!this.userId || !isAdminUser(await Meteor.users.findOneAsync(this.userId))) {
+    return this.ready();
+  }
+
+  // @types/meteor types it as synchronous; on Meteor 3's server it returns a promise.
+  const handle = await Meteor.users.find({}, { fields: ADMIN_USER_FIELDS }).observeChanges({
+    added: (id, fields) => this.added('adminUsers', id, fields),
+    changed: (id, fields) => this.changed('adminUsers', id, fields),
+    removed: (id) => this.removed('adminUsers', id),
+  });
+  this.onStop(() => handle.stop());
+  this.ready();
 });
 
 // Subscribing here is a browser opening /board/:id — including one reconnecting after a

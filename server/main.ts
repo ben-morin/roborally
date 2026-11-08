@@ -10,6 +10,7 @@ import '../both/easySchemaConfig.ts';
 // runs `createMethod`. See both/methods/config.ts.
 import '../both/methods/config.ts';
 import '../both/methods/accounts.ts';
+import '../both/methods/admin.ts';
 import '../both/methods/cards.ts';
 import '../both/methods/chat.ts';
 import '../both/methods/games.ts';

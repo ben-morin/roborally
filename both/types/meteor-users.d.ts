@@ -7,7 +7,8 @@ declare namespace Meteor {
     name?: string;
   }
   interface User {
-    // Presence, written by mizzao:user-status. `lastLogin` never leaves the server.
+    // Presence, written by mizzao:user-status. Of `lastLogin`, only the date ever leaves the
+    // server, and only to an admin.
     status?: {
       online: boolean;
       idle?: boolean;
@@ -19,4 +20,12 @@ declare namespace Meteor {
 declare namespace Accounts {
   // Private, but the email-verification login gate in server/accounts.ts reads it.
   const _options: { sendVerificationEmail?: boolean };
+  // accounts-password 3.x; @types/meteor predates it. The admin edit in
+  // both/methods/admin.ts uses it, so the duplicate-address check stays Meteor's.
+  function replaceEmailAsync(
+    userId: string,
+    oldEmail: string,
+    newEmail: string,
+    verified?: boolean
+  ): Promise<void>;
 }

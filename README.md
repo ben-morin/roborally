@@ -53,6 +53,7 @@ services:
 #      - DEBUG_LOG=true
       - >
         METEOR_SETTINGS={
+          "ADMIN_EMAILS": [],
           "ALLOWED_EMAILS": [],
           "ALLOWED_DOMAINS": [],
           "VERIFY_EMAILS": false,
@@ -72,6 +73,10 @@ networks:
 
 The image is a production Meteor bundle, so it reads its settings from `METEOR_SETTINGS` as above.
 `docker-compose.yml` in the repo is the same file.
+
+`ADMIN_EMAILS` lists the addresses that get the admin screens. Sign up with your address before you add
+it: whoever registers a listed address first becomes an admin, and the server logs a warning at startup
+for each listed address that has no account yet.
 
 ## development
 
