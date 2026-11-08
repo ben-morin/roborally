@@ -138,4 +138,123 @@ describe('the user list', () => {
     await open('/admin/users?user=bob');
     expect(row('bob')).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('shows no page buttons when everything fits on one page', async () => {
+    await open();
+    expect(screen.queryByRole('navigation', { name: 'User pages' })).toBeNull();
+  });
+});
+
+describe('the user list, past ten users', () => {
+  // With the three from the outer setup: admin, ann, bob, u01 … u21 — 24 accounts, sorted
+  // by name, so the pages are [admin, ann, bob, u01 … u07], [u08 … u17], [u18 … u21].
+  beforeEach(async () => {
+    for (let i = 1; i <= 21; i++) {
+      const name = `u${String(i).padStart(2, '0')}`;
+      await AdminUsers.insertAsync({
+        _id: name,
+        profile: { name },
+        emails: [{ address: `${name}@example.com`, verified: true }],
+      });
+    }
+  });
+
+  const pager = () => screen.getByRole('navigation', { name: 'User pages' });
+  const press = (label: string) =>
+    fireEvent.click(within(pager()).getByRole('button', { name: label }));
+
+  it('shows ten at a time, starting on the first page', async () => {
+    await open();
+
+    expect(names()).toEqual([
+      'admin',
+      'ann',
+      'bob',
+      'u01',
+      'u02',
+      'u03',
+      'u04',
+      'u05',
+      'u06',
+      'u07',
+    ]);
+    expect(within(pager()).getByText('Page 1 of 3')).toBeVisible();
+    expect(within(pager()).getByRole('button', { name: 'First page' })).toBeDisabled();
+    expect(within(pager()).getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    expect(screen.getByText('24 users')).toBeVisible();
+  });
+
+  it('draws the four page buttons as named, tooltipped icons', async () => {
+    await open();
+
+    for (const [label, icon] of [
+      ['First page', 'chevrons-left'],
+      ['Previous page', 'chevron-left'],
+      ['Next page', 'chevron-right'],
+      ['Last page', 'chevrons-right'],
+    ]) {
+      const button = within(pager()).getByRole('button', { name: label });
+      expect(button).toHaveAttribute('title', label);
+      expect(button.querySelector(`[data-icon="${icon}"]`)).toBeInTheDocument();
+      expect(button).toHaveTextContent('');
+    }
+  });
+
+  it('moves with First, Prev, Next and Last, and stops at either end', async () => {
+    await open();
+
+    press('Next page');
+    expect(names()[0]).toBe('u08');
+    expect(names()).toHaveLength(10);
+    expect(within(pager()).getByText('Page 2 of 3')).toBeVisible();
+
+    press('Last page');
+    expect(names()).toEqual(['u18', 'u19', 'u20', 'u21']);
+    expect(within(pager()).getByRole('button', { name: 'Next page' })).toBeDisabled();
+    expect(within(pager()).getByRole('button', { name: 'Last page' })).toBeDisabled();
+
+    press('Previous page');
+    expect(within(pager()).getByText('Page 2 of 3')).toBeVisible();
+
+    press('First page');
+    expect(names()[0]).toBe('admin');
+  });
+
+  it('searches across every page, and pages the results', async () => {
+    await open();
+    press('Last page');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Filter users' }), {
+      target: { value: 'u' },
+    });
+
+    // Only the u-accounts hold a "u", in the name or the address.
+    expect(screen.getByText('21 of 24 users')).toBeVisible();
+    expect(within(pager()).getByText('Page 1 of 3')).toBeVisible();
+    expect(names()[0]).toBe('u01');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Filter users' }), {
+      target: { value: 'u2' },
+    });
+    expect(names()).toEqual(['u20', 'u21']);
+    expect(screen.queryByRole('navigation', { name: 'User pages' })).toBeNull();
+  });
+
+  it('opens on the page that holds the user from the URL', async () => {
+    await open('/admin/users?user=u19');
+
+    expect(within(pager()).getByText('Page 3 of 3')).toBeVisible();
+    expect(row('u19')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('stays on the page the admin chose after picking a user there', async () => {
+    const router = await open();
+    press('Next page');
+
+    fireEvent.click(row('u12'));
+    press('Next page');
+
+    expect(router.state.location.search).toBe('?user=u12');
+    expect(within(pager()).getByText('Page 3 of 3')).toBeVisible();
+  });
 });

@@ -1,12 +1,17 @@
 // The user manager's list: every account the `adminUsers` publication sends into its own
-// client collection, `AdminUsers`, sorted by name, with a filter on name and address. A row
-// selects its user; the page decides what selecting means.
+// client collection, `AdminUsers`, sorted by name, with a filter on name and address, ten to a
+// page. A row selects its user; the page decides what selecting means.
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
 import { getUsername } from '../../../both/permissions.ts';
 import { formatDate } from '../../helper/datehelper.ts';
-import { matchesFilter, presenceOf, primaryEmail } from '../../lib/adminUsers.ts';
+import { matchesFilter, pageOf, paginate, presenceOf, primaryEmail } from '../../lib/adminUsers.ts';
 import type { Presence } from '../../lib/adminUsers.ts';
+import { ChevronLeft } from '../icons/ChevronLeft.tsx';
+import { ChevronRight } from '../icons/ChevronRight.tsx';
+import { ChevronsLeft } from '../icons/ChevronsLeft.tsx';
+import { ChevronsRight } from '../icons/ChevronsRight.tsx';
 import { Loading } from '../layout/Loading.tsx';
 import { AdminUsers } from './AdminUsers.ts';
 
@@ -23,6 +28,12 @@ const META = 'text-xs whitespace-nowrap text-muted';
 const EMPTY = 'text-base text-muted';
 const ADD =
   'inline-flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-control border-0 bg-brand px-4 text-sm font-semibold text-white hover:bg-[color-mix(in_srgb,var(--color-brand)_88%,white)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
+const PAGER = 'mt-4 flex items-center justify-between gap-2';
+// Square icon buttons; the label is the accessible name and the tooltip.
+const PAGE_BTN =
+  'inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-control border border-white/22 bg-transparent p-0 text-white hover:border-white/40 hover:bg-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
+const PAGE_BTN_OFF =
+  'inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-control border border-white/22 bg-transparent p-0 text-white opacity-45';
 const PILL =
   'inline-flex h-[22px] items-center rounded-full px-2.5 text-xs font-bold tracking-[.06em] whitespace-nowrap uppercase';
 const PILL_ADMIN = `${PILL} bg-brand text-white`;
@@ -46,10 +57,58 @@ export interface UserListProps {
   onAdd: () => void;
 }
 
+// One pager button, off at either end of the list.
+function PageButton({
+  label,
+  icon,
+  to,
+  off,
+  goTo,
+}: {
+  label: string;
+  icon: ReactNode;
+  to: number;
+  off: boolean;
+  goTo: (page: number) => void;
+}) {
+  return off ? (
+    <button type="button" className={PAGE_BTN_OFF} aria-label={label} title={label} disabled>
+      {icon}
+    </button>
+  ) : (
+    <button
+      type="button"
+      className={PAGE_BTN}
+      aria-label={label}
+      title={label}
+      onClick={() => goTo(to)}
+    >
+      {icon}
+    </button>
+  );
+}
+
 export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: UserListProps) {
   const [filter, setFilter] = useState('');
+  // The page the admin chose, and the selection it was chosen under. A selection made
+  // anywhere else — a shared link, a just-added account — opens on that user's page instead;
+  // derived here rather than set from an effect, so the list never renders the wrong page first.
+  const [chosen, setChosen] = useState<{ page: number; selection: string | null }>({
+    page: 1,
+    selection: null,
+  });
   const users = useFind(() => AdminUsers.find({}, { sort: { 'profile.name': 1 } })) ?? [];
   const shown = users.filter((user) => matchesFilter(user, filter));
+  const selectedIndex = selectedId ? shown.findIndex((user) => user._id === selectedId) : -1;
+  const wanted =
+    chosen.selection !== selectedId && selectedIndex >= 0 ? pageOf(selectedIndex) : chosen.page;
+  const { items, page, pageCount } = paginate(shown, wanted);
+
+  const goTo = (target: number) => setChosen({ page: target, selection: selectedId });
+  const pick = (userId: string) => {
+    setChosen({ page, selection: userId });
+    onSelect(userId);
+  };
 
   return (
     <>
@@ -62,7 +121,10 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
           aria-label="Filter users"
           placeholder="Filter by name or email"
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            goTo(1);
+          }}
         />
         <button type="button" className={ADD} onClick={onAdd}>
           Add user
@@ -82,7 +144,7 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
               : `${shown.length} of ${users.length} users`}
           </p>
           <ul className="m-0 list-none space-y-2 p-0">
-            {shown.map((user) => {
+            {items.map((user) => {
               const selected = user._id === selectedId;
               const email = primaryEmail(user);
               const presence = presenceOf(user);
@@ -96,11 +158,11 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
                     aria-pressed={selected}
                     data-user={user._id}
                     className={selected ? ROW_SELECTED : ROW}
-                    onClick={() => onSelect(user._id)}
+                    onClick={() => pick(user._id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        onSelect(user._id);
+                        pick(user._id);
                       }
                     }}
                   >
@@ -126,6 +188,45 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
               );
             })}
           </ul>
+          {pageCount > 1 && (
+            <nav aria-label="User pages" className={PAGER}>
+              <div className="flex gap-2">
+                <PageButton
+                  label="First page"
+                  icon={<ChevronsLeft size={18} />}
+                  to={1}
+                  off={page === 1}
+                  goTo={goTo}
+                />
+                <PageButton
+                  label="Previous page"
+                  icon={<ChevronLeft size={18} />}
+                  to={page - 1}
+                  off={page === 1}
+                  goTo={goTo}
+                />
+              </div>
+              <span className={META} aria-live="polite">
+                Page {page} of {pageCount}
+              </span>
+              <div className="flex gap-2">
+                <PageButton
+                  label="Next page"
+                  icon={<ChevronRight size={18} />}
+                  to={page + 1}
+                  off={page === pageCount}
+                  goTo={goTo}
+                />
+                <PageButton
+                  label="Last page"
+                  icon={<ChevronsRight size={18} />}
+                  to={pageCount}
+                  off={page === pageCount}
+                  goTo={goTo}
+                />
+              </div>
+            </nav>
+          )}
         </>
       )}
     </>
