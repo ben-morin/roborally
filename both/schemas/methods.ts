@@ -70,6 +70,7 @@ export const schemas = {
   togglePowerDown: gameIdOnly,
   addMessage: { message: String, gameId: String },
   resendVerificationEmail: { email: String },
+  updateProfile: { name: String, email: String, password: String },
   selectCard: { gameId: String, card: Number, index: Number },
   deselectCard: { gameId: String, index: Number },
   deselectAllCards: gameIdOnly,
@@ -79,6 +80,6 @@ export const schemas = {
   adminSendVerificationEmail: userIdOnly,
   adminLogoutUser: userIdOnly,
   adminDeleteUser: userIdOnly,
-  adminCreateUser: { email: String, password: String, verified: Boolean },
+  adminCreateUser: { name: String, email: String, password: String, verified: Boolean },
   // `isEmailAvailable` and `isAdmin` take no arguments, so they have no shape here.
 };

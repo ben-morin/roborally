@@ -10,7 +10,14 @@
 // whole documents. See the projection on `onlineUsers` in server/publications.ts — this
 // file is what makes that projection sufficient, by putting a display name somewhere
 // safe to publish.
-import { adminCreatingUser, adminEmails, displayNameFromEmail } from '../both/permissions.ts';
+import {
+  adminCreatingUser,
+  adminEmails,
+  checkNameAsync,
+  displayNameFromEmail,
+  getUsername,
+  isAllowedEmail,
+} from '../both/permissions.ts';
 
 // accounts-base's `setupUsersCollection` installs an allow rule that lets a logged-in
 // client update the `profile` field of its own document. Nothing in this app writes to
@@ -41,22 +48,16 @@ Meteor.startup(async () => {
     if (adminCreatingUser.get()) return true;
 
     const email = user.emails?.[0]?.address;
-    if (!email) return true;
-
-    const allowedEmails = Meteor.settings?.ALLOWED_EMAILS || [];
-    const allowedDomains = Meteor.settings?.ALLOWED_DOMAINS || [];
-
-    if (allowedEmails.length === 0 && allowedDomains.length === 0) return true;
-
-    const domain = email.slice(email.lastIndexOf('@') + 1);
-    if (
-      allowedEmails.includes(email.toLowerCase()) ||
-      allowedDomains.includes(domain.toLowerCase())
-    ) {
-      return true;
-    }
-
+    if (!email || isAllowedEmail(email)) return true;
     throw new Meteor.Error(403, "Email isn't allowed to register on this server.");
+  });
+
+  // The username rule, for every new account — signed up or added by an admin. Its own hook,
+  // so the admin's allowlist skip above can never skip it. `onCreateUser` below has already
+  // put the name on the document by the time this runs.
+  Accounts.validateNewUser(async (user: Meteor.User) => {
+    await checkNameAsync(user.profile?.name ?? '', user._id);
+    return true;
   });
 
   Accounts.validateLoginAttempt((attempt: { allowed: boolean; user?: Meteor.User }) => {
@@ -82,12 +83,16 @@ Meteor.startup(async () => {
   // Every user document gets a `profile.name` here; accounts from before this hook get
   // theirs from the startup backfill in server/backfill.ts.
   Accounts.onCreateUser((options, user) => {
-    // `options.profile` is whatever the sign-up form sent, i.e. client-controlled, and
-    // this is the one field the publication exposes to other players — so it is derived
-    // from the (server-validated) address instead of accepted. `_id` is already assigned
-    // by the time this hook runs.
+    // `options.profile` is whatever the sign-up form sent, so only the chosen name is taken
+    // from it, and the username hook above checks that like any other; nothing else in it is
+    // copied. Without a chosen name, the address gives one. `_id` is already assigned by the
+    // time this hook runs.
+    // @types/meteor types `options.profile` as `{}`; read the one key this hook wants.
+    const profile: { name?: unknown } | undefined = options.profile;
+    const chosen = profile?.name;
     const address = user.emails?.[0]?.address;
-    user.profile = { name: address ? displayNameFromEmail(address) : user._id };
+    const derived = address ? displayNameFromEmail(address) : user._id;
+    user.profile = { name: typeof chosen === 'string' ? chosen.trim() : derived };
     return user;
   });
 
@@ -100,6 +105,24 @@ Meteor.startup(async () => {
     if (!(await Accounts.findUserByEmail(address))) {
       console.warn(
         `ADMIN_EMAILS lists ${address}, which has no account yet. Whoever registers it first becomes an admin — sign up with it now.`
+      );
+    }
+  }
+
+  // Usernames have been unique since 2026-11. A repeat from before stays until an admin
+  // renames it on the user manager; this names each one.
+  const holders = new Map<string, number>();
+  const users = await Meteor.users
+    .find({}, { fields: { 'profile.name': 1, emails: 1 } })
+    .fetchAsync();
+  for (const user of users) {
+    const key = getUsername(user).toLowerCase();
+    holders.set(key, (holders.get(key) ?? 0) + 1);
+  }
+  for (const [name, count] of holders) {
+    if (count > 1) {
+      console.warn(
+        `The username "${name}" belongs to ${count} accounts. Usernames are unique now: rename all but one on the admin screen.`
       );
     }
   }

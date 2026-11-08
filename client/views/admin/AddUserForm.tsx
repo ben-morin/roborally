@@ -3,8 +3,10 @@
 // own; that needs mail, so without it a password is required.
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { adminCreateUser } from '../../../both/methods/admin.ts';
+import { NAME_MAX } from '../../../both/displayName.ts';
+import { adminCreateUser, MAX_PASSWORD_LENGTH } from '../../../both/methods/admin.ts';
 import { modalAlert } from '../../helper/modalDialogs.ts';
+import { validateUsername } from '../../lib/accounts.ts';
 
 const EYEBROW = 'mb-2 block text-xs font-semibold tracking-[.08em] text-muted uppercase';
 const INPUT =
@@ -22,18 +24,25 @@ export interface AddUserFormProps {
 }
 
 export function AddUserForm({ mailAvailable, onCreated, onCancel }: AddUserFormProps) {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verified, setVerified] = useState(false);
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    // The server refuses this too; saying it here spares a round trip.
+    // The server refuses both of these too; saying it here spares a round trip. An empty
+    // username is allowed: the server derives one from the email, and says if it cannot.
+    const badName = username.trim() ? validateUsername(username) : null;
+    if (badName) {
+      modalAlert(badName);
+      return;
+    }
     if (!password && !mailAvailable) {
       modalAlert('Email is not set up on this server. Type a password instead.');
       return;
     }
-    adminCreateUser({ email, password, verified }).then(
+    adminCreateUser({ name: username, email, password, verified }).then(
       (userId) => {
         onCreated(userId);
         return modalAlert(
@@ -54,7 +63,21 @@ export function AddUserForm({ mailAvailable, onCreated, onCancel }: AddUserFormP
       </h2>
       <hr className="star-well mt-3 mb-7" />
 
-      <label className={EYEBROW} htmlFor="admin-new-email">
+      <label className={EYEBROW} htmlFor="admin-new-username">
+        Username
+      </label>
+      <input
+        id="admin-new-username"
+        type="text"
+        autoComplete="off"
+        maxLength={NAME_MAX}
+        className={INPUT}
+        value={username}
+        onChange={(event) => setUsername(event.target.value)}
+      />
+      <p className={NOTE}>Leave it empty to use the part of the email before the @.</p>
+
+      <label className={`${EYEBROW} mt-4`} htmlFor="admin-new-email">
         Email
       </label>
       <input
@@ -74,6 +97,7 @@ export function AddUserForm({ mailAvailable, onCreated, onCancel }: AddUserFormP
         type="password"
         autoComplete="new-password"
         required={!mailAvailable}
+        maxLength={MAX_PASSWORD_LENGTH}
         className={INPUT}
         value={password}
         onChange={(event) => setPassword(event.target.value)}

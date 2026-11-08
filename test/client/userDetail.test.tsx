@@ -91,16 +91,18 @@ describe('the detail panel', () => {
     await open('ann');
 
     expect(screen.getByRole('heading', { name: /ann/ })).toBeVisible();
-    expect(screen.getByLabelText('Name')).toHaveValue('ann');
+    expect(screen.getByLabelText('Username')).toHaveValue('ann');
     expect(screen.getByLabelText('Email')).toHaveValue('ann@example.com');
     expect(screen.getByLabelText('Email verified')).not.toBeChecked();
+    expect(screen.getByLabelText('Username')).toHaveAttribute('maxlength', '20');
+    expect(screen.getByLabelText('New password')).toHaveAttribute('maxlength', '256');
   });
 
   // The changed row is the answer; only a refusal gets a dialog.
   it('saves the name, address and verified flag, with no dialog', async () => {
     await open('ann');
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Annie' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'Annie' } });
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'annie@example.com' } });
     fireEvent.click(screen.getByLabelText('Email verified'));
     fireEvent.click(button('Save'));
@@ -115,10 +117,10 @@ describe('the detail panel', () => {
   it("shows the server's refusal as it is worded", async () => {
     await open('ann');
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  ' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: '  ' } });
     fireEvent.click(button('Save'));
 
-    await vi.waitFor(() => expect(modalAlert).toHaveBeenCalledWith('Name is required.'));
+    await vi.waitFor(() => expect(modalAlert).toHaveBeenCalledWith('Username is required.'));
     expect((await stored('ann'))!.profile!.name).toBe('ann');
   });
 

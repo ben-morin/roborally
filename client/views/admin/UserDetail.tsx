@@ -5,6 +5,7 @@
 // again; what this hides is only what the server would refuse.
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { NAME_MAX } from '../../../both/displayName.ts';
 import {
   adminDeleteUser,
   adminLogoutUser,
@@ -12,6 +13,7 @@ import {
   adminSendVerificationEmail,
   adminSetPassword,
   adminUpdateUser,
+  MAX_PASSWORD_LENGTH,
 } from '../../../both/methods/admin.ts';
 import { getUsername } from '../../../both/permissions.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.ts';
@@ -117,10 +119,11 @@ export function UserDetail({
 
       <form className={SECTION} onSubmit={onSave} aria-label="Details">
         <label className={EYEBROW} htmlFor="admin-user-name">
-          Name
+          Username
         </label>
         <input
           id="admin-user-name"
+          maxLength={NAME_MAX}
           className={INPUT}
           value={nameField}
           onChange={(event) => setNameField(event.target.value)}
@@ -156,6 +159,7 @@ export function UserDetail({
           id="admin-user-password"
           type="password"
           autoComplete="new-password"
+          maxLength={MAX_PASSWORD_LENGTH}
           className={INPUT}
           value={password}
           onChange={(event) => setPassword(event.target.value)}

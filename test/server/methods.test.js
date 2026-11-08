@@ -63,6 +63,7 @@ describe('method registration', () => {
       'selectRespawnPosition',
       'startGame',
       'togglePowerDown',
+      'updateProfile',
     ]);
   });
 

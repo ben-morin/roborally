@@ -9,6 +9,7 @@ import {
   panelReducer,
   validateEmail,
   validatePassword,
+  validateUsername,
 } from '../../client/lib/accounts.ts';
 
 describe('validateEmail', () => {
@@ -20,6 +21,16 @@ describe('validateEmail', () => {
   it('rejects an address with no @', () => {
     expect(validateEmail('ben')).toBe('Invalid email');
     expect(validateEmail('')).toBe('Invalid email');
+  });
+});
+
+describe('validateUsername', () => {
+  // The server's own shape rule; that it is free is the server's to say.
+  it('passes 3 to 20 characters and refuses the rest, in the server wording', () => {
+    expect(validateUsername('Ben')).toBeNull();
+    expect(validateUsername('ab')).toBe('Username must be 3 to 20 characters long.');
+    expect(validateUsername('   ')).toBe('Username is required.');
+    expect(validateUsername('Nobody')).toBe('That username is reserved.');
   });
 });
 

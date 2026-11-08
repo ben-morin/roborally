@@ -817,12 +817,25 @@ globals.Accounts = {
       services: options.password ? { password: { bcrypt: 'hashed' } } : {},
       ...(options.email ? { emails: [{ address: options.email, verified: false }] } : {}),
     };
+    // With no hook registered (no startup run), accounts-base's default copies
+    // `options.profile` across; with one, the hook decides.
+    if (accountsState.onCreateUser.length === 0 && options.profile) {
+      user.profile = options.profile;
+    }
     for (const hook of accountsState.onCreateUser) user = hook(options, user);
     for (const hook of accountsState.validateNewUser) {
       if (!(await hook(user))) throw new globalThis.Meteor.Error(403, 'User validation failed');
     }
     await globalThis.Meteor.users.insertAsync(user);
     return user._id;
+  },
+  // A test stores the password it means in `services.password.plain`; the real check
+  // compares a hash, and resolves the same way: with `error` set on a mismatch.
+  async _checkPasswordAsync(user, password) {
+    const ok = password !== '' && user.services?.password?.plain === password;
+    return ok
+      ? { userId: user._id }
+      : { userId: user._id, error: new globalThis.Meteor.Error(403, 'Incorrect password') };
   },
   // Case-insensitive, like accounts-base's own fallback when no exact match exists.
   async findUserByEmail(email) {

@@ -8,10 +8,14 @@
 
 import { describeError } from '../../lib/accounts.ts';
 
-// The two account methods, imported like every other view imports its methods and
-// re-exported so the component has a single "talks to the server" import. Both are
-// `serverOnly` through both/methods/config.ts, so the browser registers no stub for them.
-export { isEmailAvailable, resendVerificationEmail } from '../../../both/methods/accounts.ts';
+// The account methods, imported like every other view imports its methods and re-exported
+// so the component has a single "talks to the server" import. All are `serverOnly` through
+// both/methods/config.ts, so the browser registers no stub for them.
+export {
+  isEmailAvailable,
+  resendVerificationEmail,
+  updateProfile,
+} from '../../../both/methods/accounts.ts';
 
 // A Meteor callback reports failure through its single argument; anything falsy is success.
 type Done = (error?: unknown) => void;
@@ -24,8 +28,10 @@ const promisify = (call: (done: Done) => void): Promise<void> =>
 export const loginWithPassword = (email: string, password: string) =>
   promisify((done) => Meteor.loginWithPassword({ email }, password, done));
 
-export const createUser = (email: string, password: string) =>
-  promisify((done) => Accounts.createUser({ email, password }, done));
+// The chosen username rides in `profile.name`; the server takes it from there, trims it and
+// checks it, and copies nothing else out of `profile`.
+export const createUser = (email: string, password: string, username: string) =>
+  promisify((done) => Accounts.createUser({ email, password, profile: { name: username } }, done));
 
 export const forgotPassword = (email: string) =>
   promisify((done) => Accounts.forgotPassword({ email }, done));

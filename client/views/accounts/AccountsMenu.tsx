@@ -14,8 +14,10 @@ import {
   panelReducer,
   validateEmail,
   validatePassword,
+  validateUsername,
 } from '../../lib/accounts.ts';
 import type { Panel, PanelAction } from '../../lib/accounts.ts';
+import { NAME_MAX } from '../../../both/displayName.ts';
 import { getUsername } from '../../../both/permissions.ts';
 import {
   changePassword,
@@ -28,11 +30,15 @@ import {
   resendVerificationEmail,
   resetPassword,
   resetToken,
+  updateProfile,
 } from './accountsApi.ts';
 import type { Notice, ResetRequest } from './accountsApi.ts';
 
 const ACCOUNT_CREATED =
   'Account created! Please check your inbox and verify your email before logging in.';
+const PROFILE_SAVED_VERIFY =
+  'Profile saved. Check your inbox to verify your new email before you sign in again.';
+const NEEDS_PASSWORD = 'Type your current password to change your email.';
 
 // The panel sits in the navbar's uppercase display-font list, so it resets all of that.
 const PANEL =
@@ -78,6 +84,7 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
   // dance existed to do.
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
 
   const signIn = async () => {
     const invalid = validateEmail(email) ?? validatePassword(password);
@@ -93,13 +100,16 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
   };
 
   const signUp = async () => {
-    const invalid = validateEmail(email) ?? validatePassword(password);
+    // In the order the fields are on screen. Only the server can say a name is taken; that
+    // refusal comes back as any other sign-up error does.
+    const invalid =
+      validateUsername(username) ?? validateEmail(email) ?? validatePassword(password);
     if (invalid) {
       dispatch({ type: 'error', message: invalid });
       return;
     }
     try {
-      await createUser(email, password);
+      await createUser(email, password, username);
     } catch (error) {
       const described = describeError(error);
       if (!described.needsEmailVerification) {
@@ -165,6 +175,22 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
         void submit();
       }}
     >
+      {isSignUp && (
+        <div className="mb-3">
+          <label className={LABEL} htmlFor="login-username">
+            Username
+          </label>
+          <input
+            id="login-username"
+            className={INPUT}
+            type="text"
+            autoComplete="username"
+            maxLength={NAME_MAX}
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </div>
+      )}
       <div className="mb-3">
         <label className={LABEL} htmlFor="login-email">
           Email
@@ -244,6 +270,110 @@ function SignInPanel({ panel, dispatch }: PanelProps) {
   );
 }
 
+// Edit profile: the Change password form's shape, with the username and the email. The
+// password field appears only while the email differs from the stored one, since only a new
+// address needs it. The server checks everything again; this only spares a round trip.
+function EditProfileForm({ panel, dispatch }: PanelProps) {
+  const user = useTracker(() => Meteor.user());
+  // What the server compares against: an unchanged name is not checked again there, so a
+  // name from before today's rule never blocks an email change — and not here either.
+  const storedName = user?.profile?.name;
+  const storedEmail = user?.emails?.[0]?.address ?? '';
+  const [username, setUsername] = useState(user ? getUsername(user) : '');
+  const [email, setEmail] = useState(storedEmail);
+  const [password, setPassword] = useState('');
+  const emailChanged = email.trim().toLowerCase() !== storedEmail.toLowerCase();
+
+  const save = async () => {
+    const invalid =
+      (username.trim() !== storedName ? validateUsername(username) : null) ??
+      (emailChanged ? validateEmail(email) : null) ??
+      (emailChanged && !password ? NEEDS_PASSWORD : null);
+    if (invalid) {
+      dispatch({ type: 'error', message: invalid });
+      return;
+    }
+    try {
+      const { verificationSent } = await updateProfile({
+        name: username,
+        email,
+        password: emailChanged ? password : '',
+      });
+      dispatch({ type: 'mode', mode: 'message' });
+      dispatch({
+        type: 'info',
+        message: verificationSent ? PROFILE_SAVED_VERIFY : 'Profile saved',
+      });
+    } catch (error) {
+      dispatch({ type: 'error', message: describeError(error).message });
+    }
+  };
+
+  return (
+    <form
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <div className="mb-3">
+        <label className={LABEL} htmlFor="login-profile-username">
+          Username
+        </label>
+        <input
+          id="login-profile-username"
+          className={INPUT}
+          type="text"
+          autoComplete="username"
+          maxLength={NAME_MAX}
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+      </div>
+      <div className="mb-3">
+        <label className={LABEL} htmlFor="login-profile-email">
+          Email
+        </label>
+        <input
+          id="login-profile-email"
+          className={INPUT}
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+      </div>
+      {emailChanged && (
+        <div className="mb-3">
+          <label className={LABEL} htmlFor="login-profile-password">
+            Current password
+          </label>
+          <input
+            id="login-profile-password"
+            className={INPUT}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </div>
+      )}
+      <Messages panel={panel} />
+      <button type="submit" className={`${PRIMARY} mt-3`}>
+        Save profile
+      </button>
+      <button
+        type="button"
+        className={`${GHOST} mt-2`}
+        onClick={() => dispatch({ type: 'mode', mode: 'menu' })}
+      >
+        Cancel
+      </button>
+    </form>
+  );
+}
+
 function UserMenu({ panel, dispatch }: PanelProps) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -266,6 +396,8 @@ function UserMenu({ panel, dispatch }: PanelProps) {
   // The message-only flow: the panel is down to that one line, and the way out of it is
   // closing the panel.
   if (panel.mode === 'message') return <Messages panel={panel} />;
+
+  if (panel.mode === 'editProfile') return <EditProfileForm panel={panel} dispatch={dispatch} />;
 
   if (panel.mode === 'changePassword') {
     return (
@@ -323,6 +455,13 @@ function UserMenu({ panel, dispatch }: PanelProps) {
       <button
         type="button"
         className={`${GHOST}${panel.error || panel.info ? ' mt-3' : ''}`}
+        onClick={() => dispatch({ type: 'mode', mode: 'editProfile' })}
+      >
+        Edit profile
+      </button>
+      <button
+        type="button"
+        className={`${GHOST} mt-2`}
         onClick={() => dispatch({ type: 'mode', mode: 'changePassword' })}
       >
         Change password

@@ -63,6 +63,33 @@ describe('Add user', () => {
 
     expect(router.state.location.search).toBe('?user=new');
     expect(screen.getByRole('form', { name: 'Add user' })).toBeVisible();
+    expect(screen.getByLabelText('Username')).toHaveAttribute('maxlength', '20');
+    expect(screen.getByLabelText('Password')).toHaveAttribute('maxlength', '256');
+  });
+
+  it('stores a typed username', async () => {
+    await open('/admin/users?user=new');
+
+    fill('Username', 'Newcomer');
+    fill('Email', 'new@example.com');
+    fill('Password', 'secret1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await vi.waitFor(async () => expect((await createdUser())?.profile?.name).toBe('Newcomer'));
+  });
+
+  it('stops a typed username of the wrong shape before the round trip', async () => {
+    await open('/admin/users?user=new');
+
+    fill('Username', 'ab');
+    fill('Email', 'new@example.com');
+    fill('Password', 'secret1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await vi.waitFor(() =>
+      expect(modalAlert).toHaveBeenCalledWith('Username must be 3 to 20 characters long.')
+    );
+    expect(await createdUser()).toBeUndefined();
   });
 
   it('creates the account with a password and opens it', async () => {

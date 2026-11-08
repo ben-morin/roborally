@@ -1,6 +1,6 @@
 // The user manager's list: every account the `adminUsers` publication sends into its own
-// client collection, `AdminUsers`, sorted by name, with a filter on name and address, ten to a
-// page. A row selects its user; the page decides what selecting means.
+// client collection, `AdminUsers`, sorted by username, with a filter on username and address,
+// ten to a page. A row selects its user; the page decides what selecting means.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
@@ -119,7 +119,7 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
           type="search"
           className={INPUT}
           aria-label="Filter users"
-          placeholder="Filter by name or email"
+          placeholder="Filter by username or email"
           value={filter}
           onChange={(event) => {
             setFilter(event.target.value);

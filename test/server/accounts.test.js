@@ -16,18 +16,21 @@ import {
   setSettings,
 } from '../setup.js';
 
-// Re-runs the startup block against a fresh settings document and hands back the single
-// validator of each kind it registered.
+// Re-runs the startup block against a fresh settings document and hands back the hooks it
+// registered: the allowlist and the username rule (two `validateNewUser`s, in that order),
+// the login gate and `onCreateUser`. The username rule has its own tests in
+// test/server/usernames.test.js.
 async function configure(settings = {}) {
   resetAccounts();
   setSettings(settings);
   await runStartup();
   const hooks = accountsHooks();
-  expect(hooks.validateNewUser).toHaveLength(1);
+  expect(hooks.validateNewUser).toHaveLength(2);
   expect(hooks.validateLoginAttempt).toHaveLength(1);
   expect(hooks.onCreateUser).toHaveLength(1);
   return {
     newUser: hooks.validateNewUser[0],
+    newName: hooks.validateNewUser[1],
     login: hooks.validateLoginAttempt[0],
     createUser: hooks.onCreateUser[0],
   };
@@ -196,10 +199,9 @@ describe('onCreateUser — the display name every user document carries', () => 
     expect(user.profile).toEqual({ name: 'ben.morin' });
   });
 
-  // ALLOWED_DOMAINS is plural, so this is reachable, and it is accepted: nothing keys off
-  // the display name. Every statistic groups on the account's userId — see
-  // test/server/highscores.test.js — so the only cost is two identical-looking rows.
-  it('gives two accounts on different domains the same name', async () => {
+  // ALLOWED_DOMAINS is plural, so two addresses can derive one name. This hook does not
+  // mind; the username rule after it refuses the second account (usernames.test.js).
+  it('derives the same name for two addresses on different domains', async () => {
     const { createUser } = await configure();
 
     const one = createUser({}, { _id: 'u1', emails: [{ address: 'user@domain1.com' }] });
@@ -209,18 +211,26 @@ describe('onCreateUser — the display name every user document carries', () => 
     expect(two.profile.name).toBe('user');
   });
 
-  // profile.name is the one field of somebody else's user document this app publishes,
-  // and `options` is whatever the sign-up form sent. Honouring it would let a new account
-  // pick any display name — including one already in use in the chat and the rankings.
-  it('ignores a client-supplied profile', async () => {
+  // `options` is whatever the sign-up form sent. The chosen name is taken — the username
+  // rule checks it next — and nothing else in `profile` is.
+  it('takes only the chosen name from a client-supplied profile, trimmed', async () => {
     const { createUser } = await configure();
 
     const user = createUser(
-      { profile: { name: 'Ben', admin: true } },
-      { _id: 'u1', emails: [{ address: 'impostor@example.com' }] }
+      { profile: { name: '  Ben  ', admin: true } },
+      { _id: 'u1', emails: [{ address: 'someone@example.com' }] }
     );
 
-    expect(user.profile).toEqual({ name: 'impostor' });
+    expect(user.profile).toEqual({ name: 'Ben' });
+  });
+
+  it('derives the name when none was chosen, or the choice is not a string', async () => {
+    const { createUser } = await configure();
+    const account = () => ({ _id: 'u1', emails: [{ address: 'someone@example.com' }] });
+
+    expect(createUser({}, account()).profile).toEqual({ name: 'someone' });
+    expect(createUser({ profile: {} }, account()).profile).toEqual({ name: 'someone' });
+    expect(createUser({ profile: { name: 7 } }, account()).profile).toEqual({ name: 'someone' });
   });
 
   it('falls back to the id for an account with no address', async () => {

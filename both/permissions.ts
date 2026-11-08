@@ -3,15 +3,47 @@ export function ownsDocument(userId: string, doc: { userId?: string } | null | u
   return doc && doc.userId === userId;
 }
 
-// The display-name rule, in one place: the local part of the address, lowercased, exactly
-// as written. `Accounts.onCreateUser` in server/accounts.ts stores the result as
-// `profile.name` so the name — and only the name — is what leaves the server.
-//
-// It is NOT unique: two accounts on different allowlisted domains (ALLOWED_DOMAINS is
-// plural) derive the same name. Nothing keys off it — every statistic aggregates on the
-// account's `userId` — so a duplicate is a legibility problem, not a correctness one.
+import { nameProblem } from './displayName.ts';
+
+// The fallback username: the local part of the address, lowercased, exactly as written.
+// `Accounts.onCreateUser` in server/accounts.ts uses it when no name was chosen, and the
+// result still has to pass `checkNameAsync` below like any other.
 export function displayNameFromEmail(address: string) {
   return address.split('@')[0].toLowerCase();
+}
+
+// Every write of a username goes through here: the shape from ./displayName.ts, then free
+// across every other account, ignoring case — the name is what chat, the player lists and
+// the rankings show, so two alike would let one player pass as another. Returns the trimmed
+// name to store. Reads every account's name; fine at this app's size.
+export async function checkNameAsync(name: string, exceptUserId?: string) {
+  const problem = nameProblem(name);
+  if (problem) throw new Meteor.Error(400, problem);
+  const trimmed = name.trim();
+  const others = await Meteor.users
+    .find(exceptUserId ? { _id: { $ne: exceptUserId } } : {}, {
+      fields: { 'profile.name': 1, emails: 1 },
+    })
+    .fetchAsync();
+  if (others.some((user) => getUsername(user).toLowerCase() === trimmed.toLowerCase())) {
+    throw new Meteor.Error(409, 'That username is taken.');
+  }
+  return trimmed;
+}
+
+// The sign-up allowlist (`ALLOWED_EMAILS` / `ALLOWED_DOMAINS`), also asked of a user's own
+// email change so the gate cannot be walked around afterwards. Both lists empty lets anyone
+// in. The address is lowercased and the settings compared as written, so an uppercase entry
+// in settings never matches; the domain is what follows the last @, so an address holding
+// two cannot smuggle an allowed one in. Private settings: on the client this says yes.
+export function isAllowedEmail(address: string) {
+  const allowedEmails: unknown[] = Meteor.settings?.ALLOWED_EMAILS || [];
+  const allowedDomains: unknown[] = Meteor.settings?.ALLOWED_DOMAINS || [];
+  if (allowedEmails.length === 0 && allowedDomains.length === 0) return true;
+  const domain = address.slice(address.lastIndexOf('@') + 1);
+  return (
+    allowedEmails.includes(address.toLowerCase()) || allowedDomains.includes(domain.toLowerCase())
+  );
 }
 
 // `ADMIN_EMAILS` from settings, lowercased. A single string is taken as a one-item list,

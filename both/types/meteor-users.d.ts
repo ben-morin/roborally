@@ -20,8 +20,14 @@ declare namespace Meteor {
 declare namespace Accounts {
   // Private, but the email-verification login gate in server/accounts.ts reads it.
   const _options: { sendVerificationEmail?: boolean };
-  // accounts-password 3.x; @types/meteor predates it. The admin edit in
-  // both/methods/admin.ts uses it, so the duplicate-address check stays Meteor's.
+  // Private: accounts-password's own check of a plain-text password against the stored hash,
+  // resolving with `error` set on a mismatch. A user's own email change asks for it.
+  function _checkPasswordAsync(
+    user: Meteor.User,
+    password: string
+  ): Promise<{ userId: string; error?: Meteor.Error }>;
+  // accounts-password 3.x; @types/meteor predates it. The admin edit and a user's own email
+  // change use it, so the duplicate-address check stays Meteor's.
   function replaceEmailAsync(
     userId: string,
     oldEmail: string,

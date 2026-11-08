@@ -1,6 +1,13 @@
 import './config.ts';
 import { createMethod } from 'meteor/jam:method';
-import { adminCreatingUser, getUsername, isAdminUser, requireAdminAsync } from '../permissions.ts';
+import {
+  adminCreatingUser,
+  checkNameAsync,
+  displayNameFromEmail,
+  getUsername,
+  isAdminUser,
+  requireAdminAsync,
+} from '../permissions.ts';
 import type { Doc } from '../schemas/infer.ts';
 import { checkArgsWith, schemas } from '../schemas/methods.ts';
 import { Games } from '../../collections/games.ts';
@@ -15,7 +22,7 @@ import { canSendMail } from './accounts.ts';
 const MIN_PASSWORD_LENGTH = 6;
 // accounts-password's default `passwordMaxLength`. Past it, `setPasswordAsync` fails a
 // `check` and the admin would see a bare 500 instead of a reason.
-const MAX_PASSWORD_LENGTH = 256;
+export const MAX_PASSWORD_LENGTH = 256;
 
 function checkPassword(password: string) {
   if (password.length < MIN_PASSWORD_LENGTH) {
@@ -23,6 +30,22 @@ function checkPassword(password: string) {
   }
   if (password.length > MAX_PASSWORD_LENGTH) {
     throw new Meteor.Error(400, `Password must be at most ${MAX_PASSWORD_LENGTH} characters long`);
+  }
+}
+
+// The admin's typed username, or — left empty — the one the address gives, as sign-up used
+// to. A derived name that fails says so, since the admin never typed it.
+async function usernameForNewAccountAsync(name: string, address: string) {
+  if (name.trim()) return checkNameAsync(name);
+  const derived = displayNameFromEmail(address);
+  try {
+    return await checkNameAsync(derived);
+  } catch (error) {
+    if (!(error instanceof Meteor.Error)) throw error;
+    throw new Meteor.Error(
+      error.error,
+      `The username "${derived}" from the email cannot be used: ${error.reason} Type one instead.`
+    );
   }
 }
 
@@ -72,11 +95,11 @@ export const adminUpdateUser = createMethod({
     const admin = await requireAdminAsync();
     const user = await findUserAsync(userId);
 
-    const newName = name.trim();
+    // An unchanged name is not checked again, so an older one that breaks today's rule does
+    // not block an email change. A change of case is a change, and is checked.
+    const newName =
+      name.trim() === user.profile?.name ? name.trim() : await checkNameAsync(name, userId);
     const newAddress = email.trim();
-    if (!newName) {
-      throw new Meteor.Error(400, 'Name is required.');
-    }
     if (!newAddress.includes('@')) {
       throw new Meteor.Error(400, 'Invalid email');
     }
@@ -215,7 +238,7 @@ export const adminDeleteUser = createMethod({
 export const adminCreateUser = createMethod({
   name: 'adminCreateUser',
   validate: checkArgsWith(schemas.adminCreateUser),
-  async run({ email, password, verified }: Doc<typeof schemas.adminCreateUser>) {
+  async run({ name, email, password, verified }: Doc<typeof schemas.adminCreateUser>) {
     await requireAdminAsync();
     const address = email.trim().toLowerCase();
     if (!address.includes('@')) {
@@ -231,10 +254,14 @@ export const adminCreateUser = createMethod({
     if (await Accounts.findUserByEmail(address)) {
       throw new Meteor.Error(409, 'An account with that email address already exists.');
     }
+    const username = await usernameForNewAccountAsync(name, address);
 
-    // `onCreateUser` still derives the display name from the address.
+    // `onCreateUser` takes the name from `profile`, and the username hook checks it once more.
+    const profile = { name: username };
     const userId = await adminCreatingUser.withValue(true, () =>
-      Accounts.createUserAsync(password ? { email: address, password } : { email: address })
+      Accounts.createUserAsync(
+        password ? { email: address, password, profile } : { email: address, profile }
+      )
     );
     if (verified) {
       await Meteor.users.updateAsync(userId, { $set: { 'emails.0.verified': true } });

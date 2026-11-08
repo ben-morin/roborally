@@ -3,7 +3,9 @@
 // client/views/accounts/ is wiring over this.
 //
 // Thresholds and wording are the ones the Blaze widget this replaces used, kept
-// verbatim so nobody has to relearn them.
+// verbatim so nobody has to relearn them. The username rule is newer and is the server's own
+// shape check (both/displayName.ts, itself free of Meteor), so the two can never disagree.
+import { nameProblem } from '../../both/displayName.ts';
 
 /** `null` when the field passes, otherwise the message to show. */
 export function validateEmail(email: string): string | null {
@@ -13,6 +15,11 @@ export function validateEmail(email: string): string | null {
 /** `null` when the field passes, otherwise the message to show. */
 export function validatePassword(password: string): string | null {
   return password.length >= 6 ? null : 'Password must be at least 6 characters long';
+}
+
+/** `null` when the name has the right shape; whether it is free only the server knows. */
+export function validateUsername(name: string): string | null {
+  return nameProblem(name);
 }
 
 // What a rejected accounts call has to say for itself. A `Meteor.Error` carries `error`
@@ -40,7 +47,8 @@ export function describeError(error: unknown): {
   };
 }
 
-export type Mode = 'signIn' | 'signUp' | 'forgot' | 'menu' | 'changePassword' | 'message';
+export type Mode =
+  'signIn' | 'signUp' | 'forgot' | 'menu' | 'changePassword' | 'editProfile' | 'message';
 
 export interface Panel {
   open: boolean;

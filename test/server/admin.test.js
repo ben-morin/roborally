@@ -279,6 +279,36 @@ describe('adminUpdateUser', () => {
     expect((await stored('ann')).emails[0].verified).toBe(false);
   });
 
+  it('refuses a username another account holds, in any case, and writes nothing', async () => {
+    await expect(update({ name: 'ADMIN', verified: true })).rejects.toMatchObject({
+      error: 409,
+      reason: 'That username is taken.',
+    });
+    const ann = await stored('ann');
+    expect(ann.profile.name).toBe('ann');
+    expect(ann.emails[0].verified).toBe(false);
+  });
+
+  it('refuses a username of the wrong shape', async () => {
+    await expect(update({ name: 'Nobody' })).rejects.toMatchObject({ error: 400 });
+    await expect(update({ name: 'an' })).rejects.toMatchObject({ error: 400 });
+    await expect(update({ name: 'x'.repeat(21) })).rejects.toMatchObject({ error: 400 });
+  });
+
+  it('checks a change of case, and lets it through when it clashes with nobody else', async () => {
+    await update({ name: 'Ann' });
+    expect((await stored('ann')).profile.name).toBe('Ann');
+  });
+
+  // An older name can break today's rule; saving the account must not demand a rename.
+  it('does not check an unchanged name, so an old short one still saves', async () => {
+    await Meteor.users.updateAsync('ann', { $set: { 'profile.name': 'an' } });
+
+    await update({ name: 'an', email: 'annie@example.com' });
+
+    expect((await stored('ann')).emails[0].address).toBe('annie@example.com');
+  });
+
   it('refuses an address without an @', async () => {
     await expect(update({ email: 'annie' })).rejects.toMatchObject({ error: 400 });
     expect((await stored('ann')).emails[0].address).toBe('ann@example.com');
@@ -302,7 +332,7 @@ describe('adminUpdateUser', () => {
       });
 
     it('refuses an address outside ADMIN_EMAILS and writes nothing', async () => {
-      await expect(updateSelf({ email: 'me@example.com', name: 'me' })).rejects.toMatchObject({
+      await expect(updateSelf({ email: 'me@example.com', name: 'myself' })).rejects.toMatchObject({
         error: 409,
       });
 
@@ -568,6 +598,7 @@ describe('adminDeleteUser', () => {
 describe('adminCreateUser', () => {
   const create = (fields) =>
     call('adminCreateUser', {
+      name: '',
       email: 'new@example.com',
       password: 'secret1',
       verified: false,
@@ -589,6 +620,38 @@ describe('adminCreateUser', () => {
     await expect(create()).rejects.toMatchObject({ error: 403 });
 
     expect(await byEmail('new@example.com')).toBeUndefined();
+  });
+
+  it('stores a typed username, trimmed', async () => {
+    await asAdminWith();
+    const id = await create({ name: '  Newcomer ' });
+    expect((await stored(id)).profile.name).toBe('Newcomer');
+  });
+
+  it('refuses a typed username of the wrong shape or taken, and creates nothing', async () => {
+    await asAdminWith();
+    await insertAnn();
+
+    await expect(create({ name: 'ab' })).rejects.toMatchObject({ error: 400 });
+    await expect(create({ name: 'Nobody' })).rejects.toMatchObject({ error: 400 });
+    await expect(create({ name: 'ANN' })).rejects.toMatchObject({
+      error: 409,
+      reason: 'That username is taken.',
+    });
+    expect(await byEmail('new@example.com')).toBeUndefined();
+  });
+
+  it('says so when the username from the email cannot be used', async () => {
+    await asAdminWith();
+    await insertAnn();
+
+    await expect(create({ email: 'ann@elsewhere.org' })).rejects.toMatchObject({
+      error: 409,
+      reason:
+        'The username "ann" from the email cannot be used: That username is taken. Type one instead.',
+    });
+    await expect(create({ email: 'ab@example.com' })).rejects.toMatchObject({ error: 400 });
+    expect(await byEmail('ann@elsewhere.org')).toBeUndefined();
   });
 
   it('creates the account with its password and returns its id', async () => {

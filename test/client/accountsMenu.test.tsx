@@ -21,6 +21,7 @@ import {
   resendVerificationEmail,
   resetPassword,
   resetToken,
+  updateProfile,
 } from '../../client/views/accounts/accountsApi.ts';
 import { accountsHooks, loginAs, resetFakeCollections, setLoggingIn } from '../setup.js';
 
@@ -37,6 +38,7 @@ vi.mock('../../client/views/accounts/accountsApi.ts', () => ({
   resendVerificationEmail: vi.fn(),
   resetPassword: vi.fn(),
   changePassword: vi.fn(),
+  updateProfile: vi.fn(),
   verifyEmail: vi.fn(),
   resetToken: { get: vi.fn(() => null), set: vi.fn() },
   notice: { get: vi.fn(() => null), set: vi.fn() },
@@ -44,6 +46,7 @@ vi.mock('../../client/views/accounts/accountsApi.ts', () => ({
 
 const EMAIL = 'ben@example.com';
 const PASSWORD = 'a-good-password';
+const USERNAME = 'Ben';
 const ACCOUNT_CREATED =
   'Account created! Please check your inbox and verify your email before logging in.';
 
@@ -68,6 +71,13 @@ async function fillCredentials(email = EMAIL, password = PASSWORD) {
 
 const submitButton = () => screen.getByRole('button', { name: /Sign in|Create account|Reset/ });
 
+/** The sign-up form, from the open panel, with every field filled. */
+async function fillSignUp(username = USERNAME) {
+  await userEvent.click(screen.getByRole('link', { name: 'Create account' }));
+  await userEvent.type(screen.getByLabelText('Username'), username);
+  await fillCredentials();
+}
+
 beforeEach(() => {
   resetFakeCollections();
   vi.mocked(loginWithPassword).mockResolvedValue(undefined);
@@ -77,6 +87,7 @@ beforeEach(() => {
   vi.mocked(isEmailAvailable).mockResolvedValue(true);
   vi.mocked(resetPassword).mockResolvedValue(undefined);
   vi.mocked(changePassword).mockResolvedValue(undefined);
+  vi.mocked(updateProfile).mockResolvedValue({ verificationSent: false });
   vi.mocked(resetToken.get).mockReturnValue(null);
   vi.mocked(notice.get).mockReturnValue(null);
 });
@@ -200,20 +211,51 @@ describe('AccountsMenu sign-up', () => {
     expect(submitButton()).toHaveTextContent('Create account');
   });
 
-  it('creates the account the form describes', async () => {
+  it('asks for a username on sign-up only', async () => {
     await openPanel();
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('link', { name: 'Create account' }));
-    await fillCredentials();
+    expect(screen.getByLabelText('Username')).toHaveAttribute('autocomplete', 'username');
+    expect(screen.getByLabelText('Username')).toHaveAttribute('maxlength', '20');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+  });
+
+  it('creates the account the form describes, with the chosen username', async () => {
+    await openPanel();
+    await fillSignUp();
     await userEvent.click(submitButton());
 
-    expect(createUser).toHaveBeenCalledWith(EMAIL, PASSWORD);
+    expect(createUser).toHaveBeenCalledWith(EMAIL, PASSWORD, USERNAME);
+  });
+
+  it('stops a username of the wrong shape before the round trip', async () => {
+    await openPanel();
+    await fillSignUp('ab');
+    await userEvent.click(submitButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Username must be 3 to 20 characters long.'
+    );
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("shows the server's refusal of a taken username", async () => {
+    vi.mocked(createUser).mockRejectedValue(new Meteor.Error(409, 'That username is taken.'));
+    await openPanel();
+    await fillSignUp();
+    await userEvent.click(submitButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That username is taken.');
+    expect(submitButton()).toHaveTextContent('Create account');
   });
 
   it('lands back on sign-in with the account-created notice and no password', async () => {
     vi.mocked(createUser).mockRejectedValue(unverified());
     await openPanel();
-    await userEvent.click(screen.getByRole('link', { name: 'Create account' }));
-    await fillCredentials();
+    await fillSignUp();
     await userEvent.click(submitButton());
 
     expect(await screen.findByRole('alert')).toHaveTextContent(ACCOUNT_CREATED);
@@ -226,8 +268,7 @@ describe('AccountsMenu sign-up', () => {
   it('shows the reason for any other sign-up failure', async () => {
     vi.mocked(createUser).mockRejectedValue(new Meteor.Error(403, 'Email already exists.'));
     await openPanel();
-    await userEvent.click(screen.getByRole('link', { name: 'Create account' }));
-    await fillCredentials();
+    await fillSignUp();
     await userEvent.click(submitButton());
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Email already exists.');
@@ -318,6 +359,7 @@ describe('AccountsMenu, logged in', () => {
     await signedIn();
     await userEvent.click(screen.getByRole('link', { name: 'ben' }));
 
+    expect(screen.getByRole('button', { name: 'Edit profile' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change password' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
@@ -375,6 +417,122 @@ describe('AccountsMenu change password', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect password');
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
+  });
+});
+
+describe('AccountsMenu edit profile', () => {
+  const BEN = {
+    profile: { name: 'ben' },
+    emails: [{ address: 'ben@example.com', verified: true }],
+  };
+
+  async function profileForm(user: Partial<Meteor.User> = BEN) {
+    await loginAs(user);
+    render(<AccountsMenu />);
+    await userEvent.click(screen.getByRole('link', { name: user.profile?.name ?? 'ben' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit profile' }));
+  }
+
+  const retype = async (label: string, value: string) => {
+    await userEvent.clear(screen.getByLabelText(label));
+    if (value) await userEvent.type(screen.getByLabelText(label), value);
+  };
+  const save = () => userEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+
+  it('opens on the current username and email, with no password field', async () => {
+    await profileForm();
+
+    expect(screen.getByLabelText('Username')).toHaveValue('ben');
+    expect(screen.getByLabelText('Username')).toHaveAttribute('maxlength', '20');
+    expect(screen.getByLabelText('Email')).toHaveValue('ben@example.com');
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  it('asks for the password only while the email differs, ignoring case', async () => {
+    await profileForm();
+
+    await retype('Email', 'benjamin@example.com');
+    expect(screen.getByLabelText('Current password')).toHaveAttribute('type', 'password');
+
+    await retype('Email', 'BEN@example.com');
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+  });
+
+  it('saves a rename and says so', async () => {
+    await profileForm();
+    await retype('Username', 'Benjamin');
+    await save();
+
+    expect(updateProfile).toHaveBeenCalledWith({
+      name: 'Benjamin',
+      email: 'ben@example.com',
+      password: '',
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Profile saved');
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+  });
+
+  it('saves a new email with the password, and tells the user to verify it', async () => {
+    vi.mocked(updateProfile).mockResolvedValue({ verificationSent: true });
+    await profileForm();
+    await retype('Email', 'benjamin@example.com');
+    await userEvent.type(screen.getByLabelText('Current password'), 'secret1');
+    await save();
+
+    expect(updateProfile).toHaveBeenCalledWith({
+      name: 'ben',
+      email: 'benjamin@example.com',
+      password: 'secret1',
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Profile saved. Check your inbox to verify your new email before you sign in again.'
+    );
+  });
+
+  it('stops before the round trip: a bad new username, a new email with no password', async () => {
+    await profileForm();
+    await retype('Username', 'ab');
+    await save();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Username must be 3 to 20 characters long.'
+    );
+
+    await retype('Username', 'ben');
+    await retype('Email', 'benjamin@example.com');
+    await save();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Type your current password to change your email.'
+    );
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  // The server does not check an unchanged name; neither does the form.
+  it('lets an old short username through when only the email changes', async () => {
+    await profileForm({ ...BEN, profile: { name: 'be' } });
+    await retype('Email', 'benjamin@example.com');
+    await userEvent.type(screen.getByLabelText('Current password'), 'secret1');
+    await save();
+
+    expect(updateProfile).toHaveBeenCalledWith(expect.objectContaining({ name: 'be' }));
+  });
+
+  it("shows the server's refusal and keeps the form", async () => {
+    vi.mocked(updateProfile).mockRejectedValue(new Meteor.Error(409, 'That username is taken.'));
+    await profileForm();
+    await retype('Username', 'Ann');
+    await save();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That username is taken.');
+    expect(screen.getByLabelText('Username')).toHaveValue('Ann');
+  });
+
+  it('goes back to the menu on Cancel', async () => {
+    await profileForm();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('button', { name: 'Edit profile' })).toBeInTheDocument();
+    expect(updateProfile).not.toHaveBeenCalled();
   });
 });
 

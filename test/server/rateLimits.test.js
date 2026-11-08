@@ -4,7 +4,7 @@
 // silently unlimits it), and how the buckets are keyed.
 //
 // The rules used to live in one server-side table that this test imported and read back,
-// so it could not disagree with them. They are now a `rateLimit:` line on five
+// so it could not disagree with them. They are now a `rateLimit:` line on six
 // `createMethod` definitions in four files, so the numbers below are a literal instead:
 // this test is what stops one drifting where nothing else would notice.
 import { describe, expect, it } from 'vitest';
@@ -15,16 +15,17 @@ import { registeredMethods } from '../setup.js';
 // Sized against what a player can legitimately do. `playCards` is once per turn plus the
 // occasional retry after a reconnect; `createGame`/`joinGame` are deliberate clicks;
 // `addMessage` is typing; `resendVerificationEmail` is one click by somebody whose mail
-// has not arrived. Meteor rate-limits its own login and account methods and leaves the
-// rest to the app, so these five — the three that insert documents, the one that drives
-// the phase machine and the one that sends mail — are the ones a client could otherwise
-// drive in a loop.
+// has not arrived; `updateProfile` is a rare save. Meteor rate-limits its own login and
+// account methods and leaves the rest to the app, so these six — the three that insert
+// documents, the one that drives the phase machine, the one that sends mail and the one
+// that checks a password — are the ones a client could otherwise drive in a loop.
 const RATE_LIMITS = [
   { name: 'addMessage', requests: 5, intervalMs: 5000 },
   { name: 'createGame', requests: 3, intervalMs: 10000 },
   { name: 'joinGame', requests: 5, intervalMs: 10000 },
   { name: 'playCards', requests: 5, intervalMs: 5000 },
   { name: 'resendVerificationEmail', requests: 2, intervalMs: 60000 },
+  { name: 'updateProfile', requests: 5, intervalMs: 60000 },
 ];
 
 describe('method rate limits', () => {
@@ -44,7 +45,14 @@ describe('method rate limits', () => {
       registeredRateLimits()
         .map((r) => r.matcher.name)
         .sort()
-    ).toEqual(['addMessage', 'createGame', 'joinGame', 'playCards', 'resendVerificationEmail']);
+    ).toEqual([
+      'addMessage',
+      'createGame',
+      'joinGame',
+      'playCards',
+      'resendVerificationEmail',
+      'updateProfile',
+    ]);
   });
 
   it('limits methods that actually exist', () => {

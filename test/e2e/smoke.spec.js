@@ -73,6 +73,7 @@ test('a new player signs up, creates a game and plays a register', async ({ page
   await test.step('sign up', async () => {
     await page.locator('#login-sign-in-link').click();
     await page.locator('#signup-link').click();
+    await page.locator('#login-username').fill(displayName);
     await page.locator('#login-email').fill(email);
     await page.locator('#login-password').fill('e2e-password');
     // Reads CREATE ACCOUNT in the sign-up flow; same button, same id, as SIGN IN.
