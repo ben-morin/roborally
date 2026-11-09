@@ -104,7 +104,7 @@ export function UserDetail({
   };
 
   const onDelete = async () => {
-    const question = `Delete ${name}? Their finished games and their rankings stay. This cannot be undone.`;
+    const question = `Delete ${name}? They leave the rankings, but their finished games stay. This cannot be undone.`;
     if (!(await modalConfirm(question))) return;
     adminDeleteUser({ userId: user._id }).then(onDeleted, report);
   };

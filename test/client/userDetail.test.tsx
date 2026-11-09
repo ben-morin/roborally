@@ -199,7 +199,11 @@ describe('the detail panel', () => {
 
       fireEvent.click(button('Delete user'));
 
-      await vi.waitFor(() => expect(modalConfirm).toHaveBeenCalled());
+      await vi.waitFor(() =>
+        expect(modalConfirm).toHaveBeenCalledWith(
+          'Delete ann? They leave the rankings, but their finished games stay. This cannot be undone.'
+        )
+      );
       expect(await stored('ann')).toBeDefined();
     });
 
