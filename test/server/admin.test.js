@@ -260,6 +260,21 @@ describe('adminUpdateUser', () => {
     expect(ann.emails).toEqual([{ address: 'ann@example.com', verified: true }]);
   });
 
+  it('shows the new username in the rankings at once', async () => {
+    const game = await insertGame({ name: 'old game', winner: 'ann', winnerUserId: 'ann' });
+    await insertPlayer(game._id, { userId: 'ann', name: 'ann' });
+    await buildHighscores();
+
+    await update({ name: 'Annie' });
+
+    expect(await Highscores.find().fetchAsync()).toEqual([
+      expect.objectContaining({ type: 'mostWon', name: 'Annie' }),
+      expect.objectContaining({ type: 'mostPlayed', name: 'Annie' }),
+    ]);
+    // The game keeps the name it was played under.
+    expect((await Games.findOneAsync(game._id)).winner).toBe('ann');
+  });
+
   it('replaces the address with its verified flag, and leaves the name alone', async () => {
     await update({ email: ' annie@example.com ', verified: true });
 
@@ -563,35 +578,24 @@ describe('adminDeleteUser', () => {
     expect(await Players.find({ userId: 'ann' }).countAsync()).toBe(2);
   });
 
-  it('keeps the rankings, falling back to the name stamped on the games', async () => {
-    // Renamed after playing: the rankings show the account's name until it is gone.
-    await insertAnn({ profile: { name: 'Annie' } });
+  // No `buildHighscores()` after the delete: the method rebuilds the rankings itself.
+  it('drops the user from the rankings at once, and the next one moves up', async () => {
+    await insertAnn();
+    await Meteor.users.insertAsync({ _id: 'bob', profile: { name: 'bob' } });
     await finishedGame('ann', 'ann');
+    await finishedGame('ann', 'ann');
+    await finishedGame('bob', 'bob');
     await buildHighscores();
-    expect(await ranking('mostWon')).toEqual([{ name: 'Annie', value: 1 }]);
-
-    await remove();
-    await buildHighscores();
-
-    expect(await ranking('mostWon')).toEqual([{ name: 'ann', value: 1 }]);
-    expect(await ranking('mostPlayed')).toEqual([{ name: 'ann', value: 1 }]);
-  });
-
-  it('keeps two deleted users who shared a name as two ranking rows', async () => {
-    await Meteor.users.insertAsync({ _id: 'ann1', emails: [{ address: 'ann@a.com' }] });
-    await Meteor.users.insertAsync({ _id: 'ann2', emails: [{ address: 'ann@b.com' }] });
-    await finishedGame('ann1', 'ann');
-    await finishedGame('ann1', 'ann');
-    await finishedGame('ann2', 'ann');
-
-    await remove('ann1');
-    await remove('ann2');
-    await buildHighscores();
-
     expect(await ranking('mostWon')).toEqual([
       { name: 'ann', value: 2 },
-      { name: 'ann', value: 1 },
+      { name: 'bob', value: 1 },
     ]);
+
+    await remove();
+
+    expect(await ranking('mostWon')).toEqual([{ name: 'bob', value: 1 }]);
+    expect(await ranking('mostPlayed')).toEqual([{ name: 'bob', value: 1 }]);
+    expect(await Games.find({ winnerUserId: 'ann' }).countAsync()).toBe(2);
   });
 });
 

@@ -340,6 +340,7 @@ describe('leaveGame', () => {
       gamePhase: GameState.PHASE.PROGRAM,
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'ben' });
+    await Meteor.users.insertAsync({ _id: 'other', profile: { name: 'survivor' } });
     await Players.insertAsync({ gameId, userId: 'other', name: 'survivor' });
 
     await call('leaveGame', { gameId: gameId });

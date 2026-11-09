@@ -4,23 +4,20 @@ import { Games } from '../collections/games.ts';
 import { Highscores } from '../collections/highscores.ts';
 import { Players } from '../collections/players.ts';
 
-// What both `$group` stages below produce, field for field. `rawCollection()` is the npm
-// driver, so `aggregate<T>()` hands the rows back as `T` and this is their only
-// description. `_id` is the group key and `stampedName` is a `$last` of a display name;
-// Mongo yields null for either when the field it reads is absent, which is what the
-// fallbacks in addToHighscores are for.
+// How many rows each list shows.
+const LIST_LENGTH = 10;
+
+// What both `$group` stages below produce. `rawCollection()` is the npm driver, so
+// `aggregate<T>()` hands the rows back as `T` and this is their only description. `_id` is
+// the group key; Mongo yields null for it when the field it reads is absent.
 interface RankingRow {
   _id: string | null;
   count: number;
-  stampedName: string | null;
 }
 
-// Both lists group on the account's `userId`, never on a display name. `profile.name` is
-// the local part of an email address, so two accounts on different allowlisted domains
-// share one — and grouping on it silently merged their wins and their games played into a
-// single ranking row. The consequence of the fix is that the same name can now appear
-// twice in a list, once per account, with nothing on screen to tell them apart. That is
-// accepted for now: two indistinguishable rows are honest, one merged row was not.
+// Both lists group on the account's `userId`, never on a name: a username can change, and
+// accounts older than the unique-username rule can share one. Two rows that look alike are
+// honest; one row that merged two accounts' counts was not.
 export async function buildHighscores() {
   console.log('Building Highscores');
 
@@ -34,20 +31,15 @@ export async function buildHighscores() {
       // same as reaching the last checkpoint. That is deliberate; the field records who
       // was left standing, not how.
       { $match: { winnerUserId: { $exists: true } } },
-      // `stampedName` is any one of the group's `winner` values — the display name as it
-      // was when that game ended. It is only ever used as a fallback label; see
-      // addToHighscores.
-      { $group: { _id: '$winnerUserId', count: { $sum: 1 }, stampedName: { $last: '$winner' } } },
+      { $group: { _id: '$winnerUserId', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: 10 },
     ])
     .toArray();
 
   const mostPlayed = await Players.rawCollection()
     .aggregate<RankingRow>([
-      { $group: { _id: '$userId', count: { $sum: 1 }, stampedName: { $last: '$name' } } },
+      { $group: { _id: '$userId', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: 10 },
     ])
     .toArray();
 
@@ -60,24 +52,21 @@ export async function buildHighscores() {
 // server-only module. Hand it the implementation instead.
 setBuildHighscores(buildHighscores);
 
-// The group key is a userId; the ranking page shows names. Resolving the name from the
-// account rather than reading the one stamped on the game or player document means the
-// display name follows the account — the day players can rename themselves, old rankings
-// will not keep showing the old name. The stamped name is the fallback for a userId with
-// no account behind it any more, which beats printing a placeholder.
+// The name comes from the account as it is now, so a renamed player's row follows them.
+// A deleted account drops out, and the next one moves up: the pipelines above have no
+// `$limit` so that the list stays full. Its games keep the name stamped on them.
 //
 // `Highscores` is published to everyone including logged-out visitors, so the document
 // deliberately carries the resolved name and not the userId.
-async function addToHighscores(arr: RankingRow[], type: string) {
-  for (const [i, { _id: userId, count: value, stampedName }] of arr.entries()) {
+async function addToHighscores(rows: RankingRow[], type: string) {
+  let rank = 0;
+  for (const { _id: userId, count: value } of rows) {
+    if (rank === LIST_LENGTH) return;
     const user = userId
       ? await Meteor.users.findOneAsync(userId, { fields: { 'profile.name': 1, emails: 1 } })
       : undefined;
-    await Highscores.insertAsync({
-      type,
-      name: user ? getUsername(user) : (stampedName ?? '(unknown)'),
-      value,
-      rank: i + 1,
-    });
+    if (!user) continue;
+    rank += 1;
+    await Highscores.insertAsync({ type, name: getUsername(user), value, rank });
   }
 }

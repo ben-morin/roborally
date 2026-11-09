@@ -1,6 +1,7 @@
 import './config.ts';
 import { createMethod } from 'meteor/jam:method';
-import { checkNameAsync, isAdminUser, isAllowedEmail } from '../permissions.ts';
+import { buildHighscoresAsync } from '../gamestate.ts';
+import { checkNameAsync, getUsername, isAdminUser, isAllowedEmail } from '../permissions.ts';
 import type { Doc } from '../schemas/infer.ts';
 import { checkArgsWith, schemas } from '../schemas/methods.ts';
 
@@ -116,6 +117,9 @@ export const updateProfile = createMethod({
     if (newName !== user.profile?.name) {
       await Meteor.users.updateAsync(user._id, { $set: { 'profile.name': newName } });
     }
+    // The ranking shows each account's current username; without this it would wait for a
+    // game to end or the hourly rebuild.
+    if (newName !== getUsername(user)) await buildHighscoresAsync();
 
     const verificationSent = addressChanged && verify;
     if (verificationSent) {

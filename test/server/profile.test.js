@@ -12,6 +12,9 @@ import {
   runStartup,
   setSettings,
 } from '../setup.js';
+import { Games } from '../../collections/games.ts';
+import { Highscores } from '../../collections/highscores.ts';
+import { buildHighscores } from '../../server/highscores.ts';
 
 const update = (fields) =>
   Meteor.callAsync('updateProfile', {
@@ -55,6 +58,19 @@ describe('updateProfile — the username', () => {
   it('renames without a password, trimmed', async () => {
     expect(await update({ name: '  Benjamin ' })).toEqual({ verificationSent: false });
     expect((await stored('ben')).profile.name).toBe('Benjamin');
+  });
+
+  it('shows the new username in the rankings at once', async () => {
+    const gameId = await Games.insertAsync({ winner: 'ben', winnerUserId: 'ben' });
+    await buildHighscores();
+
+    await update({ name: 'Benjamin' });
+
+    expect(await Highscores.findOneAsync({ type: 'mostWon' })).toMatchObject({
+      name: 'Benjamin',
+    });
+    // The game keeps the name it was played under.
+    expect((await Games.findOneAsync(gameId)).winner).toBe('ben');
   });
 
   it('refuses a taken name in any case, and a bad shape, writing nothing', async () => {

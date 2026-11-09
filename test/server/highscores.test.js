@@ -1,11 +1,11 @@
 // buildHighscores() is the only aggregation in the app. These run it against the
-// in-memory aggregate (see the $group/$sum/$last support in test/setup.js) rather than
-// mocking rawCollection, so the pipeline itself — match, group, sort, limit — is what is
-// under test.
+// in-memory aggregate (see the $group/$sum support in test/setup.js) rather than mocking
+// rawCollection, so the pipeline itself — match, group, sort — and the cut to ten are what
+// is under test.
 //
-// Both lists group on the account's userId, never on a display name: display names are
-// the local part of an email address and two domains produce the same one. The
-// 'accounts that share a display name' cases below are the guard on that.
+// Both lists group on the account's userId, never on a name: a username can change, and
+// accounts older than the unique-username rule can share one. The 'accounts that share a
+// display name' cases below are the guard on that.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import { loginAs, resetFakeCollections, runStartup } from '../setup.js';
@@ -21,18 +21,28 @@ const listOf = async (type) =>
     .sort((a, b) => a.rank - b.rank)
     .map(({ name, value, rank }) => ({ name, value, rank }));
 
+// The ranking counts only accounts that exist, so the helpers below seat one under the
+// name given, unless the test already did.
+async function account(userId, name) {
+  if (!(await Meteor.users.findOneAsync(userId))) {
+    await Meteor.users.insertAsync({ _id: userId, profile: { name } });
+  }
+}
+
 // A finished game carries both fields: `winner` is the display name the board and the
 // game list render, `winnerUserId` is the aggregation key. This keeps the pair consistent
-// the way every end-of-game path in the app does. With no account behind the id,
-// addToHighscores falls back to the stamped name — so these assertions still read as
-// names without every test having to seat a user document.
-const wonGame = (name, userId = `id_${name}`, extra = {}) =>
-  Games.insertAsync({ winner: name, winnerUserId: userId, started: true, ...extra });
+// the way every end-of-game path in the app does.
+const wonGame = async (name, userId = `id_${name}`, extra = {}) => {
+  await account(userId, name);
+  return Games.insertAsync({ winner: name, winnerUserId: userId, started: true, ...extra });
+};
 
 // A player of a game, as joinGame writes one: the account id it belongs to, plus the
 // display name that account resolved to at the time.
-const playedGame = (gameId, name, userId = `id_${name}`) =>
-  Players.insertAsync({ gameId, userId, name });
+const playedGame = async (gameId, name, userId = `id_${name}`) => {
+  await account(userId, name);
+  return Players.insertAsync({ gameId, userId, name });
+};
 
 beforeEach(() => resetFakeCollections());
 afterEach(() => vi.useRealTimers());
@@ -188,6 +198,7 @@ describe('wins by default', () => {
       ['ann', 3],
       ['bob', 0],
     ]) {
+      await account(name, name);
       await Players.insertAsync({
         gameId,
         userId: name,
@@ -216,6 +227,7 @@ describe('wins by default', () => {
       gamePhase: GameState.PHASE.PROGRAM,
     });
     await Players.insertAsync({ gameId, userId: user._id, name: 'quitter' });
+    await account('ann', 'ann');
     await Players.insertAsync({ gameId, userId: 'ann', name: 'ann' });
 
     await Meteor.callAsync('leaveGame', { gameId });
@@ -279,10 +291,11 @@ describe('mostPlayed', () => {
   });
 });
 
-// The reason both pipelines group on userId. `profile.name` is the local part of an
-// email address, so user@domain1.com and user@domain2.com are two accounts with one
-// name; grouping on the name added their wins together and showed a single row with a
-// total neither of them had. Two rows that look alike is the accepted cost.
+// The reason both pipelines group on userId. Before usernames were unique, sign-up named
+// an account after the local part of its address, so user@domain1.com and user@domain2.com
+// could be two accounts with one name; grouping on the name added their wins together and
+// showed a single row with a total neither of them had. Two rows that look alike is the
+// accepted cost.
 describe('accounts that share a display name', () => {
   const seat = (_id, name) => Meteor.users.insertAsync({ _id, profile: { name } });
 
@@ -315,11 +328,17 @@ describe('accounts that share a display name', () => {
       { name: 'user', value: 1, rank: 2 },
     ]);
   });
+});
 
-  // Resolved from the account at build time, not read off the game document — so the day
-  // players can rename themselves, an old game does not keep showing the old name.
+// A row follows its account: a rename shows up, and a deleted account leaves while its
+// games keep the name stamped on them.
+describe('renamed and deleted accounts', () => {
+  // Written straight to the collections: the helpers above would seat the account.
+  const orphanWin = () =>
+    Games.insertAsync({ winner: 'gone', winnerUserId: 'deleted', started: true });
+
   it('labels a row with the name the account has now', async () => {
-    await seat('u1', 'renamed');
+    await account('u1', 'renamed');
     await wonGame('name at the time', 'u1');
 
     await buildHighscores();
@@ -327,14 +346,30 @@ describe('accounts that share a display name', () => {
     expect(await listOf('mostWon')).toEqual([{ name: 'renamed', value: 1, rank: 1 }]);
   });
 
-  // Nothing in the app deletes an account, so this is the defensive branch: the name
-  // stamped on the game is a better label than a placeholder.
-  it('falls back to the stamped name when the account is gone', async () => {
-    await wonGame('vanished', 'deleted-account');
+  it('leaves out an account that no longer exists', async () => {
+    await wonGame('ann');
+    await orphanWin();
+    await orphanWin();
+    await Players.insertAsync({ gameId: 'g1', userId: 'deleted', name: 'gone' });
 
     await buildHighscores();
 
-    expect(await listOf('mostWon')).toEqual([{ name: 'vanished', value: 1, rank: 1 }]);
+    expect(await listOf('mostWon')).toEqual([{ name: 'ann', value: 1, rank: 1 }]);
+    expect(await listOf('mostPlayed')).toEqual([]);
+  });
+
+  it('fills all ten places from the accounts that remain, ranked from 1', async () => {
+    await orphanWin();
+    await orphanWin();
+    for (let i = 0; i < 11; i++) {
+      await wonGame(`player${i}`);
+    }
+
+    await buildHighscores();
+
+    const list = await listOf('mostWon');
+    expect(list.map(({ rank }) => rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(list.map(({ name }) => name)).not.toContain('gone');
   });
 });
 

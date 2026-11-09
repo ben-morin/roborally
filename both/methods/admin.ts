@@ -1,5 +1,6 @@
 import './config.ts';
 import { createMethod } from 'meteor/jam:method';
+import { buildHighscoresAsync } from '../gamestate.ts';
 import {
   adminCreatingUser,
   checkNameAsync,
@@ -144,6 +145,9 @@ export const adminUpdateUser = createMethod({
         $set: { 'profile.name': newName, 'emails.0.verified': verified },
       });
     }
+    // The ranking shows each account's current username; without this it would wait for a
+    // game to end or the hourly rebuild.
+    if (newName !== getUsername(user)) await buildHighscoresAsync();
   },
 });
 
@@ -228,10 +232,11 @@ export const adminDeleteUser = createMethod({
         `${getUsername(user)} is still in the game "${game.name}". Delete them once it is over; games with nobody online end by themselves within a few minutes.`
       );
     }
-    // Finished games keep their player rows and the names stamped on them, so the rankings
-    // keep the counts and fall back to the stamped name. Each live session watches its
-    // login token, so removing the document also logs the user out.
+    // Finished games keep their player rows and the names stamped on them; the ranking
+    // counts only accounts that exist, so the rebuild drops this one. Each live session
+    // watches its login token, so removing the document also logs the user out.
     await Meteor.users.removeAsync(userId);
+    await buildHighscoresAsync();
   },
 });
 
