@@ -28,8 +28,8 @@
     "deck:shuffle": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/tools/deck-shuffle.mts"
   },
   "dependencies": {
-    "@babel/runtime": "^8.0.10",
-    "@swc/helpers": "^0.5.17",
+    "@babel/runtime": "^8.1.0",
+    "@swc/helpers": "^0.5.24",
     "meteor-node-stubs": "^1.2.32",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
