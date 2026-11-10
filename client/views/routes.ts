@@ -8,10 +8,11 @@ export const paths = {
   board: (gameId: string) => `/board/${gameId}`,
   admin: () => '/admin',
   adminUsers: () => '/admin/users',
+  adminGames: () => '/admin/games',
 };
 
 // The route names the Blaze router used, kept for the one component that asks which page
-// it is on, each with the pattern React Router matches it by. The admin pair is new.
+// it is on, each with the pattern React Router matches it by. The admin ones are new.
 export const ROUTE_PATTERNS = {
   'gamelist.page': '/',
   'ranking.page': '/ranking',
@@ -20,6 +21,7 @@ export const ROUTE_PATTERNS = {
   'board.page': '/board/:_id',
   'admin.page': '/admin',
   'adminusers.page': '/admin/users',
+  'admingames.page': '/admin/games',
 } as const;
 
 export type RouteName = keyof typeof ROUTE_PATTERNS;

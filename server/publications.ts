@@ -74,6 +74,56 @@ Meteor.publish('adminUsers', async function () {
   this.ready();
 });
 
+// Every game, for the admin games manager, cut down to what the screen shows: never the
+// segment snapshot (several kilobytes of server bookkeeping), never the turn's cards.
+const ADMIN_GAME_FIELDS = {
+  name: 1,
+  userId: 1,
+  author: 1,
+  submitted: 1,
+  started: 1,
+  gamePhase: 1,
+  playPhase: 1,
+  programRound: 1,
+  boardName: 1,
+  min_player: 1,
+  max_player: 1,
+  lastStepAt: 1,
+  resumeAttempts: 1,
+  winner: 1,
+  winnerUserId: 1,
+  stopped: 1,
+};
+// Who sits in each game. Presence comes from `adminUsers`, which the screen also subscribes to.
+const ADMIN_PLAYER_FIELDS = { gameId: 1, userId: 1, name: 1 };
+
+// Into the client-only `adminGames` and `adminPlayers`, for the reason `adminUsers` has its
+// own: the `games` publication sends the ten newest into `games`, and a second cursor there
+// would merge into the lobby's list. Production Mongo has no oplog, so both cursors poll
+// while an admin has the screen open; 16 games and 80 player rows when measured (2026-11-09).
+Meteor.publish('adminGames', async function () {
+  if (!this.userId || !isAdminUser(await Meteor.users.findOneAsync(this.userId))) {
+    return this.ready();
+  }
+
+  // @types/meteor types it as synchronous; on Meteor 3's server it returns a promise.
+  const games = await Games.find({}, { fields: ADMIN_GAME_FIELDS }).observeChanges({
+    added: (id, fields) => this.added('adminGames', id, fields),
+    changed: (id, fields) => this.changed('adminGames', id, fields),
+    removed: (id) => this.removed('adminGames', id),
+  });
+  const players = await Players.find({}, { fields: ADMIN_PLAYER_FIELDS }).observeChanges({
+    added: (id, fields) => this.added('adminPlayers', id, fields),
+    changed: (id, fields) => this.changed('adminPlayers', id, fields),
+    removed: (id) => this.removed('adminPlayers', id),
+  });
+  this.onStop(() => {
+    games.stop();
+    players.stop();
+  });
+  this.ready();
+});
+
 // Subscribing here is a browser opening /board/:id — including one reconnecting after a
 // restart, since DDP re-sends its subscriptions. That makes this the earliest the server
 // hears that somebody is waiting on a turn which died with the last process, so it is where

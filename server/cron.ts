@@ -195,13 +195,12 @@ async function delay(ms: number) {
   return new Promise((resolve) => Meteor.setTimeout(resolve, ms));
 }
 
-// `player` is the last one standing, or null when nobody was left. Only a real winner
-// gets a `winnerUserId` — its absence is what server/highscores.ts reads as "no win here".
+// `player` is the last one standing, or null when nobody was left.
 //
-// Ending a game is a transition, so it takes the claim like every other write in the turn
-// chain. That matters because the stalled-turn sweep will happily replay a segment for a
-// game nobody is online for, and a PLAY replay runs ~30 s while this job ticks every
-// minute — so a driver is often still inside the turn when this runs. As a plain update
+// `endAsync` takes the claim, and this job is where that was learned: the stalled-turn
+// sweep will happily replay a segment for a game nobody is online for, and a PLAY replay
+// runs ~30 s while this job ticks every minute — so a driver is often still inside the
+// turn when this runs. As a plain update
 // this left `step` alone, the driver's next claim still matched, and it wrote the game back
 // to a live phase: ENDED and live at once, and never looked at again, because the query
 // above filters on a missing `winner`.
@@ -213,14 +212,7 @@ async function endGame(gameId: string, player: Player | null) {
   const game = await Games.findOneAsync(gameId);
   if (!game) return false;
 
-  const ended = await game.advanceAsync({
-    $set: {
-      gamePhase: GameState.PHASE.ENDED,
-      winner: player ? player.name : 'Nobody',
-      ...(player ? { winnerUserId: player.userId } : {}),
-      stopped: Date.now(),
-    },
-  });
+  const ended = await game.endAsync(player);
 
   if (ended) {
     console.log(`Ending abandoned game: ${gameId}`);

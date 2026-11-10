@@ -4,6 +4,7 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { AppLayout } from './layout/AppLayout.tsx';
+import { AdminGamesPage } from './pages/AdminGamesPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { AdminUsersPage } from './pages/AdminUsersPage.tsx';
 import { BoardPage } from './pages/BoardPage.tsx';
@@ -27,9 +28,10 @@ export const routes: RouteObject[] = [
         path: ROUTE_PATTERNS['admin.page'],
         Component: AdminPage,
         children: [
-          // Users is the only screen so far, so it is where `/admin` lands.
+          // Users is the first screen, so it is where `/admin` lands.
           { index: true, element: <Navigate to={paths.adminUsers()} replace /> },
           { path: ROUTE_PATTERNS['adminusers.page'], Component: AdminUsersPage },
+          { path: ROUTE_PATTERNS['admingames.page'], Component: AdminGamesPage },
         ],
       },
     ],

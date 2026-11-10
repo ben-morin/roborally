@@ -15,7 +15,10 @@ const LINK =
 const LINK_ACTIVE = `${LINK} bg-teal text-navy hover:text-navy`;
 const LINK_IDLE = `${LINK} bg-transparent text-white/70 hover:bg-raised-hover hover:text-white`;
 
-const SCREENS = [{ to: paths.adminUsers(), label: 'Users' }];
+const SCREENS = [
+  { to: paths.adminUsers(), label: 'Users' },
+  { to: paths.adminGames(), label: 'Games' },
+];
 
 export function AdminPage() {
   const admin = useIsAdmin();

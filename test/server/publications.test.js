@@ -3,7 +3,8 @@
 // are security-relevant and all are pinned here: `cards` is the only publication scoped
 // to the subscriber, and `onlineUsers` and `adminUsers` are the only ones that hand out
 // documents belonging to somebody else — so they are the ones whose *fields* have to be
-// asserted, not just which documents come back.
+// asserted, not just which documents come back. `adminGames` sends only to an admin, and
+// its fields are pinned too, so the turn's bookkeeping never reaches a browser.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../helpers/server.js';
 import {
@@ -32,6 +33,7 @@ const flushNudge = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('publication registration', () => {
   it('registers every publication the client subscribes to', () => {
     expect(registeredPublications()).toEqual([
+      'adminGames',
       'adminUsers',
       'cards',
       'chat',
@@ -322,6 +324,120 @@ describe('adminUsers', () => {
     ]) {
       expect(published).not.toContain(secret);
     }
+  });
+});
+
+describe('adminGames', () => {
+  const ADMIN = { _id: 'admin', emails: [{ address: 'admin@example.com', verified: true }] };
+
+  beforeEach(() => setSettings({ ADMIN_EMAILS: ['admin@example.com'] }));
+  afterEach(() => setSettings());
+
+  // A running game as the turn chain leaves it, with the bookkeeping no browser should get.
+  async function runningGame() {
+    const game = await insertGame({
+      name: 'Race',
+      userId: 'ann',
+      author: 'ann',
+      submitted: 1000,
+      lastStepAt: new Date(2000),
+      resumeAttempts: 1,
+      cardsToPlay: [{ cardId: 7, playerId: 'p' }],
+      segmentSnapshot: { segment: 'play', players: [], cards: [], deck: null },
+    });
+    await insertPlayer(game._id, {
+      userId: 'ann',
+      name: 'ann',
+      optionCards: { brakes: true },
+      cards: [1, 2, 3, 4, 5],
+    });
+    return game;
+  }
+
+  async function subscribe() {
+    const sent = [];
+    const ready = vi.fn();
+    const returned = await runPublication('adminGames', {
+      added: (collection, _id, fields) => sent.push({ collection, _id, ...fields }),
+      ready,
+    });
+    const of = (collection) => sent.filter((doc) => doc.collection === collection);
+    return { sent, ready, returned, games: of('adminGames'), players: of('adminPlayers') };
+  }
+
+  it('sends nothing to a logged-out subscriber, and says it is ready', async () => {
+    logout();
+    await runningGame();
+
+    const { sent, ready, returned } = await subscribe();
+
+    expect(returned).toBeUndefined();
+    expect(sent).toEqual([]);
+    expect(ready).toHaveBeenCalled();
+  });
+
+  it('sends nothing to a player who is not an admin', async () => {
+    await loginAs({ _id: 'player', emails: [{ address: 'player@example.com', verified: true }] });
+    await runningGame();
+
+    const { sent, ready } = await subscribe();
+
+    expect(sent).toEqual([]);
+    expect(ready).toHaveBeenCalled();
+  });
+
+  it('sends every game and every player row to an admin, under their own names', async () => {
+    await loginAs(ADMIN);
+    await runningGame();
+    await insertGame({ name: 'Old', winner: 'Nobody', gamePhase: GameState.PHASE.ENDED });
+    await insertGame({ name: 'Lobby', started: false });
+
+    const { sent, games, players, ready } = await subscribe();
+
+    expect(games.map((g) => g.name).sort()).toEqual(['Lobby', 'Old', 'Race']);
+    expect(players).toHaveLength(1);
+    expect(new Set(sent.map((d) => d.collection))).toEqual(new Set(['adminGames', 'adminPlayers']));
+    expect(ready).toHaveBeenCalled();
+  });
+
+  it('sends what the screen shows of a game, and none of the turn bookkeeping', async () => {
+    await loginAs(ADMIN);
+    const game = await runningGame();
+
+    const [sent] = (await subscribe()).games;
+
+    expect(sent).toEqual({
+      collection: 'adminGames',
+      _id: game._id,
+      name: 'Race',
+      userId: 'ann',
+      author: 'ann',
+      submitted: 1000,
+      started: true,
+      gamePhase: GameState.PHASE.PROGRAM,
+      playPhase: GameState.PLAY_PHASE.IDLE,
+      programRound: 1,
+      boardName: 'default',
+      min_player: 1,
+      max_player: 8,
+      lastStepAt: new Date(2000),
+      resumeAttempts: 1,
+    });
+  });
+
+  it("sends who sits in a game, and nothing of the robot or the player's cards", async () => {
+    await loginAs(ADMIN);
+    const game = await runningGame();
+
+    const [sent] = (await subscribe()).players;
+
+    expect(sent).toEqual({
+      collection: 'adminPlayers',
+      _id: expect.any(String),
+      gameId: game._id,
+      userId: 'ann',
+      name: 'ann',
+    });
   });
 });
 

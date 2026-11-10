@@ -71,6 +71,15 @@ async function takeSnapshotAsync(game: GameDoc, segment: string): Promise<Segmen
 // fields so `this` is typed inside the class, and `Object.create(Game.prototype)` below is
 // what joins the two at runtime — the same prototype-not-constructor shape as before.
 // `GameDoc` is declared with the schema further down, where the fields are.
+// How many failed replays a game gets before the stalled-turn sweep in server/resume.ts
+// stops picking it up. Without a cap a game whose replay cannot succeed is swept every
+// minute for as long as a player stays online — one identical chat line a minute, forever —
+// because a failed attempt has already touched `lastStepAt` on its way in. Three is enough
+// to ride out a transient failure and few enough that a permanent one gives up while the
+// players are still watching. Here rather than in server/ because the admin games screen
+// shows a game at the cap as parked.
+export const MAX_RESUME_ATTEMPTS = 3;
+
 export interface Game extends GameDoc {}
 export class Game {
   board() {
@@ -140,6 +149,21 @@ export class Game {
     const counters = this as unknown as Record<string, number | undefined>;
     for (const [field, by] of Object.entries($inc)) counters[field] = (counters[field] ?? 0) + by;
     return true;
+  }
+  // The one way a game ends with no checkpoint reached: the last player standing, or
+  // nobody. Ending is a transition, so it takes the claim like every other write in the
+  // turn chain: a driver still inside the turn would otherwise write the game back to a
+  // live phase, ENDED and live at once. Only a real winner gets a `winnerUserId` — its
+  // absence is what server/highscores.ts reads as "no win here". Returns the claim's answer.
+  async endAsync(player: Pick<PlayerDoc, 'name' | 'userId'> | null) {
+    return await this.advanceAsync({
+      $set: {
+        gamePhase: GameState.PHASE.ENDED,
+        winner: player ? player.name : 'Nobody',
+        ...(player ? { winnerUserId: player.userId } : {}),
+        stopped: Date.now(),
+      },
+    });
   }
   // Put players, cards and deck back to where the current segment started. Whole-document
   // writes, so a field the crashed run added is gone again too. A document that no longer

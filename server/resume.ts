@@ -10,7 +10,7 @@
 // never written, or a program phase where everyone has submitted and nobody drove on.
 import { BoardBox } from '../both/board_box.ts';
 import { GameState } from '../both/gamestate.ts';
-import { Games, type GameDoc } from '../collections/games.ts';
+import { Games, MAX_RESUME_ATTEMPTS, type GameDoc } from '../collections/games.ts';
 import { Players } from '../collections/players.ts';
 import { bootedAtMs } from './boot.ts';
 
@@ -19,14 +19,6 @@ import { bootedAtMs } from './boot.ts';
 // about 6 s; this is ten times that, so a live-but-slow driver is never mistaken for a
 // dead one. Exported for the tests.
 export const STALL_MS = 60_000;
-
-// How many failed replays a game gets before the sweep stops picking it up. Without a cap
-// a game whose replay cannot succeed is swept every minute for as long as a player stays
-// online — one identical chat line a minute, forever — because a failed attempt has
-// already touched `lastStepAt` on its way in. Three is enough to ride out a transient
-// failure and few enough that a permanent one gives up while the players are still
-// watching. Exported for the tests.
-export const MAX_RESUME_ATTEMPTS = 3;
 
 const RESUME_FAILED_CHAT = 'The turn could not be resumed — the server will try again shortly.';
 const RESUME_CAPPED_CHAT =
@@ -85,9 +77,7 @@ export async function resumeStalledTurnsAsync({ now = new Date() }: { now?: Date
 export async function endGameOnGoneBoardAsync(gameId: string) {
   const game = await Games.findOneAsync(gameId);
   if (!game) return false;
-  const ended = await game.advanceAsync({
-    $set: { gamePhase: GameState.PHASE.ENDED, winner: 'Nobody', stopped: Date.now() },
-  });
+  const ended = await game.endAsync(null);
   if (ended) {
     await game.chatAsync(`Board ${game.boardName} is no longer available; the game has ended`);
     console.log(`Ended game ${gameId}: board ${game.boardName} is not in the catalog`);

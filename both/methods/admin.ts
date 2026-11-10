@@ -50,6 +50,18 @@ async function usernameForNewAccountAsync(name: string, address: string) {
   }
 }
 
+async function findGameAsync(gameId: string) {
+  const game = await Games.findOneAsync(gameId);
+  if (!game) {
+    throw new Meteor.Error(404, 'Game not found.');
+  }
+  return game;
+}
+
+// A driver mid-PLAY claims every second or so, so one lost claim is ordinary; a fresh read
+// carries the new `step`, and the driver's next claim then fails and it stops.
+const END_GAME_TRIES = 3;
+
 async function findUserAsync(userId: string) {
   const user = await Meteor.users.findOneAsync(userId);
   if (!user) {
@@ -277,5 +289,50 @@ export const adminCreateUser = createMethod({
     }
     // So the screen can open the new account.
     return userId;
+  },
+});
+
+// For a game that is stuck: a parked one (its replays failed), or one the admin judges
+// dead while somebody is still online, which the abandoned-game job would leave running.
+export const adminEndGame = createMethod({
+  name: 'adminEndGame',
+  validate: checkArgsWith(schemas.adminEndGame),
+  async run({ gameId }: Doc<typeof schemas.adminEndGame>) {
+    const admin = await requireAdminAsync();
+    for (let tries = 0; tries < END_GAME_TRIES; tries++) {
+      const game = await findGameAsync(gameId);
+      if (!game.started) {
+        throw new Meteor.Error(409, 'This game has not started. Delete it instead.');
+      }
+      if (game.winner !== undefined) {
+        throw new Meteor.Error(409, 'This game is already over.');
+      }
+      // Nobody wins: picking a winner is a judgment this screen cannot make.
+      if (await game.endAsync(null)) {
+        await game.chatAsync('An admin ended the game.');
+        console.log(`Admin ${getUsername(admin)} ended game ${gameId}`);
+        return;
+      }
+    }
+    throw new Meteor.Error(409, 'The game moved while it was being ended. Try again.');
+  },
+});
+
+// A lobby, or a game that is over. A running one is ended first: removing its rows under
+// the turn chain would break the turn.
+export const adminDeleteGame = createMethod({
+  name: 'adminDeleteGame',
+  validate: checkArgsWith(schemas.adminDeleteGame),
+  async run({ gameId }: Doc<typeof schemas.adminDeleteGame>) {
+    const admin = await requireAdminAsync();
+    const game = await findGameAsync(gameId);
+    if (game.started && game.winner === undefined) {
+      throw new Meteor.Error(409, 'End the game first.');
+    }
+    await game.removeWithChildrenAsync();
+    console.log(`Admin ${getUsername(admin)} deleted game ${gameId}`);
+    // "Most played" counts the player rows of every game, a lobby's too, and "most won"
+    // counts the winner — so any delete can move either list.
+    await buildHighscoresAsync();
   },
 });

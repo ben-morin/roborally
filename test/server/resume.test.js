@@ -7,9 +7,8 @@ import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { GameState } from '../../both/gamestate.ts';
 import { Chat } from '../../collections/chat.ts';
 import { markBooted } from '../../server/boot.ts';
-import { Games } from '../../collections/games.ts';
+import { Games, MAX_RESUME_ATTEMPTS } from '../../collections/games.ts';
 import {
-  MAX_RESUME_ATTEMPTS,
   needsDriver,
   nudgeGameAsync,
   resumeStalledTurnsAsync,

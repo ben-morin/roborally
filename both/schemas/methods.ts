@@ -81,5 +81,7 @@ export const schemas = {
   adminLogoutUser: userIdOnly,
   adminDeleteUser: userIdOnly,
   adminCreateUser: { name: String, email: String, password: String, verified: Boolean },
+  adminEndGame: gameIdOnly,
+  adminDeleteGame: gameIdOnly,
   // `isEmailAvailable` and `isAdmin` take no arguments, so they have no shape here.
 };

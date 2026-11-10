@@ -95,6 +95,23 @@ describe('/admin', () => {
     );
   });
 
+  it('links to the games screen, and marks it current there', async () => {
+    await loginAs(ADMIN);
+    open('/admin/games');
+
+    const nav = await screen.findByRole('navigation', { name: 'Admin screens' });
+    expect(within(nav).getByRole('link', { name: 'Games' })).toHaveAttribute(
+      'href',
+      '/admin/games'
+    );
+    expect(within(nav).getByRole('link', { name: 'Games' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(within(nav).getByRole('link', { name: 'Users' })).not.toHaveAttribute('aria-current');
+    expect(await screen.findByRole('heading', { name: 'Games' })).toBeVisible();
+  });
+
   it('sends a player to the game list', async () => {
     await loginAs(PLAYER);
     const router = open('/admin/users');
