@@ -151,6 +151,47 @@ describe('startup backfill', () => {
     expect(deck.discardedOptionCards).toEqual(rest.slice(0, 1));
   });
 
+  // An ended game never draws again, but a pile of numbers fails the deck's own validator,
+  // and a plain `mongorestore` skips such a document.
+  it('rebuilds the option piles of an ended game too', async () => {
+    const game = await insertGame({ gamePhase: GameState.PHASE.ENDED, winner: 'ann' });
+    await insertPlayer(game._id, { optionCards: { extra_memory: true } });
+    await insertDeck(game._id, { optionCards: [2, 5], discardedOptionCards: [7] });
+
+    await runStartup();
+
+    const deck = await Decks.findOneAsync({ gameId: game._id });
+    expect(deck.optionCards).not.toContain('extra_memory');
+    expect(deck.optionCards).toHaveLength(Object.keys(CardLogic._option_cards).length - 1);
+    expect(deck.discardedOptionCards).toEqual([]);
+  });
+
+  // Games from an early build have no `programRound`, and some carry a misspelled copy of
+  // the respawn queue; either one makes the document fail its own validator.
+  it('gives early games a programRound and drops the misspelled respawn queue', async () => {
+    const early = await Games.insertAsync({
+      name: 'early',
+      started: true,
+      gamePhase: GameState.PHASE.ENDED,
+      winner: 'ann',
+      waitingForRespawn: ['p1'],
+      watingForRespawn: ['p1'],
+    });
+    const current = await insertGame({ programRound: 4 });
+    const log = vi.spyOn(console, 'log');
+
+    await runStartup();
+
+    const repaired = await Games.findOneAsync(early);
+    expect(repaired.programRound).toBe(0);
+    expect(repaired).not.toHaveProperty('watingForRespawn');
+    expect(repaired.waitingForRespawn).toEqual(['p1']);
+    expect((await Games.findOneAsync(current._id)).programRound).toBe(4);
+    const lines = log.mock.calls.map((call) => call.join(' '));
+    expect(lines).toContain('Backfilled programRound on 1 game(s)');
+    expect(lines).toContain('Dropped watingForRespawn from 1 game(s)');
+  });
+
   // Games hold their board as a position in the catalog, and a board inserted anywhere
   // but the end used to re-point every game after it. The backfill writes the name through a
   // frozen copy of that order, so the live catalog is free to change once the name is read.
