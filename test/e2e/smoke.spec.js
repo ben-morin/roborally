@@ -29,6 +29,9 @@ test('a new player signs up, creates a game and plays a register', async ({ page
   // lobby mounts) and costs a re-render, nothing else. Everything else still fails the run.
   const KNOWN_WARNINGS = [
     /Can't perform a React state update on a component that hasn't mounted yet/,
+    // The SockJS copy in Meteor's socket-stream-client adds an `unload` listener at load, even
+    // when DDP uses a plain WebSocket. Chromium 158 blocks `unload` and logs this; nothing breaks.
+    /Permissions policy violation: unload is not allowed in this document/,
   ];
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
