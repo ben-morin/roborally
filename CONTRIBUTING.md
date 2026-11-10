@@ -73,7 +73,7 @@ To develop against the Docker image instead, which mounts the source for live re
 docker compose -f docker-compose-dev.yml up --build
 ```
 
-That image is `node:24` with Meteor installed from `.meteor/release`, so the project pin is the
+That image is `node:26` with Meteor installed from `.meteor/release`, so the project pin is the
 single source of truth and a version bump touches one file. It listens on 3000 and 8080. Its
 entrypoint passes
 `--settings $SETTINGS_FILE` (default `settings-dev.json`) to `meteor run` when the file exists, so
@@ -188,7 +188,7 @@ Three GitHub Actions workflows gate a change, in `.github/workflows/` (a fourth,
 `main`):
 
 - `ci.yml` — on every push to `main` and every PR. Runs `npm ci`, `npm run lint`,
-  `npm run typecheck`, `npm run format:check` and `npm test` on Node 24. No Meteor, no Docker, no
+  `npm run typecheck`, `npm run format:check` and `npm test` on Node 26. No Meteor, no Docker, no
   MongoDB: `tsc` and the vitest suite both run under plain `npm`, so the job takes well under a
   minute.
 - `image.yml` — on every PR, builds the production `Dockerfile` for `linux/amd64` and throws the

@@ -2,7 +2,7 @@
 ### Builder
 ########################
 
-FROM node:24 AS build
+FROM node:26 AS build
 
 # allows meteor to build in docker VM with 2GB runtime memory
 # ENV TOOL_NODE_FLAGS "--max-old-space-size=1920 --optimize_for_size --gc-interval=100"
@@ -13,6 +13,10 @@ ENV METEOR_DISABLE_OPTIMISTIC_CACHING=1
 ENV METEOR_WATCH_FORCE_POLLING=true
 
 ENV CXXFLAGS=-std=gnu++17
+
+# mizzao:timesync bundles a test-only puppeteer, and Meteor 3.6's npm runs its install script
+# in the bundle rebuild: it downloads Chrome on amd64 and fails on arm64, which has none.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 
 COPY .meteor/release /tmp/meteor-release
 RUN METEOR_RELEASE="$(tr -d '[:space:]' < /tmp/meteor-release | sed 's/^METEOR@//')" \
@@ -35,7 +39,7 @@ RUN cd /tmp/app/bundle/programs/server && meteor npm install --production
 ### Runtime container
 ########################
 
-FROM node:24-slim AS app
+FROM node:26-slim AS app
 
 WORKDIR /usr/app
 
