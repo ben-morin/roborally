@@ -43,12 +43,14 @@
     "modern": true
   },
   "devDependencies": {
-    "@meteorjs/rspack": "^2.2.0",
+    "@meteorjs/rspack": "^3.0.0",
     "@playwright/test": "^1.65.0",
     "@rsdoctor/rspack-plugin": "^1.6.5",
-    "@rspack/cli": "^1.7.1",
-    "@rspack/core": "^1.7.1",
-    "@rspack/plugin-react-refresh": "^1.6.2",
+    "@rspack/cli": "^2.3.1",
+    "@rspack/core": "^2.3.1",
+    "@rspack/dev-server": "^2.2.2",
+    "@rspack/plugin-react-refresh": "^2.0.2",
+    "@swc/core": "^1.16.2",
     "@tailwindcss/postcss": "^4.3.4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
