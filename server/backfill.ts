@@ -18,6 +18,7 @@ import { endGameOnGoneBoardAsync } from './resume.ts';
 export async function backfillAsync() {
   await backfillProfileNamesAsync();
   await backfillStepAsync();
+  await repairEarlyGamesAsync();
   await backfillDeckSizeAsync();
   await backfillBoardNamesAsync();
 
@@ -73,6 +74,27 @@ async function backfillStepAsync() {
     { multi: true }
   );
   if (backfilled > 0) console.log(`Backfilled step on ${backfilled} game(s)`);
+}
+
+// Games from an early build have no `programRound`, and some carry a misspelled
+// `watingForRespawn` beside the real queue. A document that fails its own validator is one a
+// plain `mongorestore` skips, with a line that is easy to miss. The real round count is
+// lost, so the game gets the 0 that `createGame` starts from.
+async function repairEarlyGamesAsync() {
+  const rounds = await Games.updateAsync(
+    { programRound: { $exists: false } },
+    { $set: { programRound: 0 } },
+    { multi: true }
+  );
+  if (rounds > 0) console.log(`Backfilled programRound on ${rounds} game(s)`);
+
+  const dropped = await Games.updateAsync(
+    // Neither half can be checked against the document: the key is not in the schema.
+    { watingForRespawn: { $exists: true } } as Mongo.Selector<GameDoc>,
+    { $unset: { watingForRespawn: '' } } as Mongo.Modifier<GameDoc>,
+    { multi: true }
+  );
+  if (dropped > 0) console.log(`Dropped watingForRespawn from ${dropped} game(s)`);
 }
 
 // Games started before the deck size was stored derive it from their seats. One update
@@ -234,14 +256,15 @@ async function dropUnknownOptionCardsAsync() {
   }
 }
 
-// The option piles hold card names, as the hands do, but a game in flight can still be
-// carrying what an older build wrote: positions in the catalog, which any edit to it
-// re-pointed. A healthy deck spreads the catalog across the two piles and the hands
-// exactly once, so a stored entry that is not a known name, or one that appears twice, is
-// the signal to rebuild the piles from the hands.
+// The option piles hold card names, as the hands do, but a deck can still be carrying what
+// an older build wrote: positions in the catalog, which any edit to it re-pointed. A healthy
+// deck spreads the catalog across the two piles and the hands exactly once, so a stored
+// entry that is not a known name, or one that appears twice, is the signal to rebuild the
+// piles from the hands. Ended games too: they never draw again, but a pile of numbers fails
+// the deck's validator, and a plain `mongorestore` skips the deck.
 async function rebuildOptionPilesAsync() {
   const names = Object.keys(CardLogic._option_cards);
-  for (const game of await Games.find({ started: true, winner: { $exists: false } }).fetchAsync()) {
+  for (const game of await Games.find({ started: true }).fetchAsync()) {
     const deck = await Decks.findOneAsync({ gameId: game._id });
     if (!deck) continue;
 
