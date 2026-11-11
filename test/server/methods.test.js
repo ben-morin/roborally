@@ -10,6 +10,7 @@ import {
   logout,
   registeredMethods,
   resetFakeCollections,
+  unblockedMethods,
 } from '../setup.js';
 import { methodsConfig, simulatedMethods } from '../stubs/jam-method.js';
 import { insertCards, insertGame, insertPlayer } from '../helpers/fixtures.js';
@@ -817,6 +818,31 @@ describe('playCards', () => {
     expect(submit).toHaveBeenCalledTimes(1);
     expect(submit.mock.calls[0][0]._id).toBe(playerId);
     expect(await messages(gameId)).toEqual(['ben submitted cards']);
+  });
+
+  // The final submit runs the whole turn; while it holds the connection, that player's
+  // chat messages queue behind it and land only when the robots stop.
+  it('frees the connection once the submission is on record', async () => {
+    const submit = vi
+      .spyOn(CardLogic, 'submitCardsAsync')
+      .mockImplementation(async (_player, onSubmitted) => {
+        expect(unblockedMethods()).toEqual([]);
+        onSubmitted?.();
+      });
+    const user = await loginAs();
+    const gameId = await Games.insertAsync({ boardName: 'default', programRound: 1, timer: -1 });
+    await Players.insertAsync({
+      gameId,
+      userId: user._id,
+      name: 'ben',
+      submitted: false,
+      chosenCardsCnt: GameLogic.CARD_SLOTS,
+    });
+
+    await call('playCards', { gameId, programRound: 1 });
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(unblockedMethods()).toEqual(['playCards']);
   });
 
   it('ignores a second submission from an already-submitted player', async () => {

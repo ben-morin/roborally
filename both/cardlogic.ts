@@ -350,7 +350,9 @@ export class CardLogic {
     return await deck.saveAsync();
   }
 
-  static async submitCardsAsync(player: Player) {
+  // `onSubmitted` runs once `submitted: true` is written and before the turn this submit
+  // may drive, so `playCards` can free its connection without opening a double submit.
+  static async submitCardsAsync(player: Player, onSubmitted?: () => void) {
     if (player.isPoweredDown()) {
       await Players.updateAsync(player._id, {
         $set: {
@@ -369,6 +371,7 @@ export class CardLogic {
         },
       });
     }
+    onSubmitted?.();
 
     // Read as late as possible: both writes below are claims, and the `step` this read
     // carries is what they are conditional on. Two submits for the same straggler — the

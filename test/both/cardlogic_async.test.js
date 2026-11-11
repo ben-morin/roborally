@@ -356,6 +356,24 @@ describe('submitCardsAsync', () => {
     expect(gameDoc.timerStartedAt).toBeNull();
   });
 
+  it('calls onSubmitted after the submission is written and before the turn runs', async () => {
+    const game = await insertGame();
+    const player = await insertPlayer(game._id);
+    await insertCards(player._id, game._id, { handCards: [], chosenCards: [1, 2, 3, 4, 5] });
+    const nextPhase = vi.spyOn(GameState, 'nextGamePhaseAsync').mockResolvedValue();
+    const seen = [];
+
+    await CardLogic.submitCardsAsync(player, () =>
+      seen.push({
+        submitted: Players.findOne(player._id).submitted,
+        turnStarted: nextPhase.mock.calls.length > 0,
+      })
+    );
+
+    expect(seen).toEqual([{ submitted: true, turnStarted: false }]);
+    expect(nextPhase).toHaveBeenCalledWith(game._id);
+  });
+
   it('a dead (0-lives) player never counts toward playerCnt/readyPlayerCnt', async () => {
     const game = await insertGame();
     const player = await insertPlayer(game._id);

@@ -488,8 +488,9 @@ const startupCallbacks = [];
 let currentUserId = null;
 let userSeq = 0;
 let loggingIn = false;
+let unblocked = [];
 
-function methodInvocation() {
+function methodInvocation(name) {
   return {
     userId: currentUserId,
     connection: null,
@@ -497,7 +498,9 @@ function methodInvocation() {
     setUserId(id) {
       currentUserId = id;
     },
-    unblock() {},
+    unblock() {
+      unblocked.push(name);
+    },
   };
 }
 
@@ -506,6 +509,7 @@ export function resetFakeCollections() {
   currentUserId = null;
   userSeq = 0;
   loggingIn = false;
+  unblocked = [];
   writes = 0;
   armedCrash = null;
 }
@@ -543,6 +547,11 @@ export function setLoggingIn(value) {
 /** Names of every method server/ registered — handy when a rename slips through. */
 export function registeredMethods() {
   return [...methodHandlers.keys()].sort();
+}
+
+// The methods that called `this.unblock()`, in call order, since the last reset.
+export function unblockedMethods() {
+  return [...unblocked];
 }
 
 export function registeredPublications() {
@@ -656,7 +665,7 @@ globals.Meteor = {
     if (!handler) {
       return Promise.reject(new Error(`FakeMeteor: no method registered named "${name}"`));
     }
-    return Promise.resolve().then(() => handler.apply(methodInvocation(), args));
+    return Promise.resolve().then(() => handler.apply(methodInvocation(name), args));
   },
   userId: () => currentUserId,
   loggingIn: () => loggingIn,

@@ -76,10 +76,8 @@ export const playCards = createMethod({
     const player = await Players.findOneAsync({ gameId, userId: Meteor.userId()! });
     if (!game || !player) throw new Meteor.Error(404, `Game/Player not found! ${gameId}`);
 
-    // A submit can arrive a whole turn late: the final submitter's call spans the
-    // entire turn (submitCardsAsync awaits the phase machine), so a duplicate queued
-    // behind it on the same connection — or a Meteor retry after a reconnect —
-    // executes against the NEXT program phase, where `submitted` has been reset and
+    // A submit can arrive a whole turn late — a Meteor retry after a reconnect —
+    // and execute against the NEXT program phase, where `submitted` has been reset and
     // the check below passes again. The round number pins a submission to the turn
     // the client actually saw.
     if (programRound !== game.programRound) {
@@ -103,7 +101,9 @@ export const playCards = createMethod({
     }
 
     await player.chatAsync('submitted cards');
-    await CardLogic.submitCardsAsync(player);
+    // The final submit awaits the whole turn, and Meteor runs one call per connection at a
+    // time: without the unblock, this player's chat waits for the robots to stop moving.
+    await CardLogic.submitCardsAsync(player, () => this.unblock());
   },
 });
 
