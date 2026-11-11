@@ -49,7 +49,7 @@ interface GameStateSurface {
 export const GameState = { PHASE, PLAY_PHASE, RESPAWN_PHASE } as GameStateSurface;
 
 // `buildHighscores` lives in `server/highscores.ts`, which shared code cannot import: it
-// would pull server-only code (and `rawCollection`) into the client bundle. The server
+// would pull server-only code into the client bundle. The server
 // injects it as it loads. The phase machine is only ever driven from server methods, so
 // the client never reaches the call sites below and the default is never invoked.
 let buildHighscores = async () => {};

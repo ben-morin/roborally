@@ -1,10 +1,10 @@
 import { Mongo } from 'meteor/mongo';
-import { ID } from 'meteor/jam:easy-schema';
+import { ID, Optional } from 'meteor/jam:easy-schema';
 import type { Doc } from '../both/schemas/infer.ts';
 
 // The ranking lists, rebuilt from scratch every hour and whenever a game ends: the whole
 // collection is removed and re-inserted, so there is one insert site and no update site
-// at all. Every field is required.
+// at all. Every field but `reachedAt` is required.
 //
 // Published to logged-out visitors too, which is why a row carries the resolved display
 // name rather than the userId it was grouped by.
@@ -18,6 +18,9 @@ const schema = {
   value: Number,
   // 1..10, the position in its own list.
   rank: Number,
+  // When the account reached `value`, in epoch milliseconds: its latest win's end, or its
+  // latest game's creation. Absent when none of its games kept a time.
+  reachedAt: Optional(Number),
 };
 
 export type HighscoreDoc = Doc<typeof schema>;

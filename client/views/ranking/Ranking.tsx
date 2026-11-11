@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
 import { Highscores } from '../../../collections/highscores.ts';
+import { formatFullDate } from '../../helper/datehelper.ts';
 import { rankPlaces } from '../../lib/ranking.ts';
 import type { Medal } from '../../lib/ranking.ts';
 import { Crown } from '../icons/Crown.tsx';
@@ -58,8 +59,7 @@ const ROW_COUNT = 'relative tabular-nums';
 const ROW_UNIT = 'text-[13px] text-muted';
 const NOTE = 'mt-10 mb-0 text-base text-muted';
 
-// Each medal carries the whole of its own look, so places that tie stand alike: the robot,
-// the name, the count and the step.
+// Each medal carries the whole of its own look: the robot, the name, the count and the step.
 const MEDALS: Record<
   Medal,
   { robot: string; size: number; name: string; count: string; step: string }
@@ -106,6 +106,8 @@ export function Ranking() {
   );
   const places = rankPlaces(rows);
   const unit = (value: number) => (value === 1 ? list.one : list.many);
+  // A count's hover text is the day it was reached, as a relative time's is its date.
+  const reached = (at: number | undefined) => (at ? formatFullDate(at) : undefined);
 
   function onTabKeys(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
@@ -171,7 +173,10 @@ export function Ranking() {
                       className="mt-1"
                     />
                     <span className={`mt-2.5 max-w-full truncate ${medal.name}`}>{place.name}</span>
-                    <span className="mt-0.5 flex items-baseline gap-1.5">
+                    <span
+                      className="mt-0.5 flex items-baseline gap-1.5"
+                      title={reached(place.reachedAt)}
+                    >
                       <span className={`${COUNT} ${medal.count}`}>{place.value}</span>
                       <span className={UNIT}>{unit(place.value)}</span>
                     </span>
@@ -192,7 +197,7 @@ export function Ranking() {
                     />
                     <span className={ROW_RANK}>{place.rank}</span>
                     <span className={ROW_NAME}>{place.name}</span>
-                    <span className={ROW_COUNT}>
+                    <span className={ROW_COUNT} title={reached(place.reachedAt)}>
                       {place.value} <span className={ROW_UNIT}>{unit(place.value)}</span>
                     </span>
                   </li>

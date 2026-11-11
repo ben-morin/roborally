@@ -4,6 +4,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { formatFullDate } from '../../client/helper/datehelper.ts';
 import { Ranking } from '../../client/views/ranking/Ranking.tsx';
 import { Highscores } from '../../collections/highscores.ts';
 import { resetFakeCollections } from '../setup.js';
@@ -59,21 +60,15 @@ describe('Ranking', () => {
     expect(container.querySelectorAll('[data-icon="crown"]')).toHaveLength(1);
   });
 
-  it('gives a tie one rank and one medal', async () => {
-    await list('mostWon', ['ann', 5], ['bob', 5], ['cal', 3], ['dee', 3], ['eve', 1]);
+  it("numbers a tie in the server's order, one medal each", async () => {
+    await list('mostWon', ['ann', 5], ['bob', 5], ['cal', 3], ['dee', 3]);
 
     const { container } = render(<Ranking />);
 
-    expect(lists()).toEqual([
-      ['ann 5 wins 1', 'bob 5 wins 1', 'cal 3 wins 3'],
-      ['3 dee 3 wins', '5 eve 1 win'],
-    ]);
+    expect(lists()).toEqual([['ann 5 wins 1', 'bob 5 wins 2', 'cal 3 wins 3'], ['4 dee 3 wins']]);
     const robots = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'));
-    expect(robots).toEqual(['/robots/robot_0.png', '/robots/robot_0.png', '/robots/robot_7.png']);
-    expect(container.querySelectorAll('[data-icon="crown"]')).toHaveLength(2);
-    // The tied winners stand alike, the second one on a winner's robot size too.
-    const sizes = [...container.querySelectorAll('img')].map((img) => img.getAttribute('width'));
-    expect(sizes).toEqual(['120', '120', '88']);
+    expect(robots).toEqual(['/robots/robot_0.png', '/robots/robot_4.png', '/robots/robot_7.png']);
+    expect(container.querySelectorAll('[data-icon="crown"]')).toHaveLength(1);
   });
 
   it("fills each row to its share of the leader's count", async () => {
@@ -84,6 +79,27 @@ describe('Ranking', () => {
     // `!`s: the name sits in a row, and every row has one share bar, hidden from a screen reader.
     const bar = screen.getByText('dee').closest('li')!.querySelector('[aria-hidden="true"]')!;
     expect(bar).toHaveStyle({ width: '25%' });
+  });
+
+  it('gives each count the date it was reached as its hover text, when known', async () => {
+    const at = new Date(2026, 10, 10, 21, 26).getTime();
+    for (const [rank, name, reachedAt] of [
+      [1, 'ann', at],
+      [2, 'bob', undefined],
+      [3, 'cal', at],
+      [4, 'dee', at],
+    ] as const) {
+      await Highscores.insertAsync({ type: 'mostWon', name, value: 5 - rank, rank, reachedAt });
+    }
+
+    render(<Ranking />);
+
+    const count = (name: string) => screen.getByText(name).nextElementSibling;
+    expect(count('ann')).toHaveAttribute('title', formatFullDate(at));
+    expect(count('ann')).toHaveTextContent(/^4\s*wins$/);
+    expect(count('bob')).not.toHaveAttribute('title');
+    expect(count('dee')).toHaveAttribute('title', formatFullDate(at));
+    expect(count('dee')).toHaveTextContent(/^1\s*win$/);
   });
 
   it('switches lists by tab, and the arrows move between the tabs', async () => {

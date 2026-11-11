@@ -1,7 +1,5 @@
-// buildHighscores() is the only aggregation in the app. These run it against the
-// in-memory aggregate (see the $group/$sum support in test/setup.js) rather than mocking
-// rawCollection, so the pipeline itself — match, group, sort — and the cut to ten are what
-// is under test.
+// buildHighscores() counts both lists from the in-memory collections, so the counting, the
+// order of a tie and the cut to ten are what is under test.
 //
 // Both lists group on the account's userId, never on a name: a username can change, and
 // accounts older than the unique-username rule can share one. The 'accounts that share a
@@ -16,10 +14,10 @@ import { Games } from '../../collections/games.ts';
 import { Highscores } from '../../collections/highscores.ts';
 import { Players } from '../../collections/players.ts';
 
+const rowsOf = async (type) =>
+  (await Highscores.find({ type }).fetchAsync()).sort((a, b) => a.rank - b.rank);
 const listOf = async (type) =>
-  (await Highscores.find({ type }).fetchAsync())
-    .sort((a, b) => a.rank - b.rank)
-    .map(({ name, value, rank }) => ({ name, value, rank }));
+  (await rowsOf(type)).map(({ name, value, rank }) => ({ name, value, rank }));
 
 // The ranking counts only accounts that exist, so the helpers below seat one under the
 // name given, unless the test already did.
@@ -263,6 +261,110 @@ describe('wins by default', () => {
       { name: 'bob', value: 2, rank: 1 },
       { name: 'ann', value: 1, rank: 2 },
     ]);
+  });
+});
+
+// A tie goes to whoever got there first: the account whose latest win, or latest game, is
+// older, since that is when it reached the count. Reached together, in one game: whoever
+// reached the count before it first, and so on down. Equal all the way, or no times at all,
+// fall back to the name, so a tie never trades places between rebuilds.
+describe('ties', () => {
+  it('ranks first the player who reached a win count first', async () => {
+    await wonGame('bob', undefined, { stopped: 100 });
+    await wonGame('ann', undefined, { stopped: 200 });
+    await wonGame('ann', undefined, { stopped: 250 });
+    await wonGame('bob', undefined, { stopped: 300 });
+
+    await buildHighscores();
+
+    expect(await listOf('mostWon')).toEqual([
+      { name: 'ann', value: 2, rank: 1 },
+      { name: 'bob', value: 2, rank: 2 },
+    ]);
+  });
+
+  it('ranks first the player whose latest game was created first', async () => {
+    await Games.insertAsync({ _id: 'early', submitted: 100 });
+    await Games.insertAsync({ _id: 'middle', submitted: 200 });
+    await Games.insertAsync({ _id: 'late', submitted: 300 });
+    await playedGame('early', 'bob');
+    await playedGame('late', 'bob');
+    await playedGame('early', 'ann');
+    await playedGame('middle', 'ann');
+
+    await buildHighscores();
+
+    expect(await listOf('mostPlayed')).toEqual([
+      { name: 'ann', value: 2, rank: 1 },
+      { name: 'bob', value: 2, rank: 2 },
+    ]);
+  });
+
+  it('goes back a count when both reached it in the same game', async () => {
+    await Games.insertAsync({ _id: 'first', submitted: 100 });
+    await Games.insertAsync({ _id: 'second', submitted: 200 });
+    await Games.insertAsync({ _id: 'together', submitted: 300 });
+    // Both reach 2 games together; ann reached 1 game first.
+    await playedGame('second', 'ann');
+    await playedGame('first', 'zed');
+    await playedGame('together', 'ann');
+    await playedGame('together', 'zed');
+
+    await buildHighscores();
+
+    expect((await listOf('mostPlayed')).map(({ name }) => name)).toEqual(['zed', 'ann']);
+  });
+
+  it('still puts the higher count first, however late it came', async () => {
+    await wonGame('ann', undefined, { stopped: 100 });
+    await wonGame('bob', undefined, { stopped: 800 });
+    await wonGame('bob', undefined, { stopped: 900 });
+
+    await buildHighscores();
+
+    expect((await listOf('mostWon')).map(({ name }) => name)).toEqual(['bob', 'ann']);
+  });
+
+  it('falls back to the name when the times match or are missing', async () => {
+    await wonGame('cy', undefined, { stopped: 500 });
+    await wonGame('bob', undefined, { stopped: 500 });
+    await wonGame('dee');
+    await wonGame('ann');
+
+    await buildHighscores();
+
+    expect((await listOf('mostWon')).map(({ name }) => name)).toEqual(['ann', 'dee', 'bob', 'cy']);
+  });
+});
+
+// The hover text on a count: when the account reached it.
+describe('the date a count was reached', () => {
+  it("is a player's latest win, for most wins", async () => {
+    await wonGame('ann', undefined, { stopped: 300 });
+    await wonGame('ann', undefined, { stopped: 100 });
+
+    await buildHighscores();
+
+    expect((await rowsOf('mostWon'))[0].reachedAt).toBe(300);
+  });
+
+  it("is the creation of a player's latest game, for most games", async () => {
+    await Games.insertAsync({ _id: 'early', submitted: 100 });
+    await Games.insertAsync({ _id: 'late', submitted: 300 });
+    await playedGame('late', 'ann');
+    await playedGame('early', 'ann');
+
+    await buildHighscores();
+
+    expect((await rowsOf('mostPlayed'))[0].reachedAt).toBe(300);
+  });
+
+  it('is left out when no game kept a time', async () => {
+    await wonGame('ann');
+
+    await buildHighscores();
+
+    expect((await rowsOf('mostWon'))[0]).not.toHaveProperty('reachedAt');
   });
 });
 

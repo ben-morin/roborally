@@ -12,7 +12,7 @@
 // operators actually used by both/, collections/ and server/ are implemented (equality,
 // dotted paths, $gt/$gte/$lt/$lte/$ne/$exists/$not, $set/$inc/$unset/$push on write,
 // sort/skip/limit
-// and an all-inclusion or all-exclusion `fields` on find, and a four-stage aggregate) —
+// and an all-inclusion or all-exclusion `fields` on find) —
 // anything wider throws loudly rather than silently mismatching.
 //
 // The second half of this file is the server harness: Meteor.methods/publish/startup
@@ -209,66 +209,6 @@ function applyModifier(doc, modifier) {
         throw new Error(`FakeCollection: unsupported update operator "${op}"`);
     }
   }
-}
-
-// The only aggregation in the app is server/highscores.ts, which uses exactly these
-// four stages with a $sum and a $last accumulator. Anything else throws.
-function aggregate(docs, pipeline) {
-  let result = docs.map((d) => structuredClone(d));
-  for (const stage of pipeline) {
-    const [op, spec] = Object.entries(stage)[0];
-    switch (op) {
-      case '$match':
-        result = result.filter((d) => matchesSelector(d, spec));
-        break;
-      case '$group': {
-        const { _id: idSpec, ...accumulators } = spec;
-        if (typeof idSpec !== 'string' || !idSpec.startsWith('$')) {
-          throw new Error('FakeCollection: $group only supports a "$field" _id');
-        }
-        const idField = idSpec.slice(1);
-        const groups = new Map();
-        for (const doc of result) {
-          const key = getPath(doc, idField) ?? null;
-          const mapKey = JSON.stringify(key);
-          if (!groups.has(mapKey)) groups.set(mapKey, { _id: key });
-          const group = groups.get(mapKey);
-          for (const [name, accSpec] of Object.entries(accumulators)) {
-            const [accOp, accArg] = Object.entries(accSpec)[0];
-            const argValue = (fallback) =>
-              typeof accArg === 'string' && accArg.startsWith('$')
-                ? (getPath(doc, accArg.slice(1)) ?? fallback)
-                : accArg;
-            switch (accOp) {
-              case '$sum':
-                group[name] = (group[name] || 0) + (argValue(0) || 0);
-                break;
-              // Documents arrive in insertion order, so the last one to be seen wins —
-              // which is what Mongo does for an unsorted group. server/highscores.ts uses
-              // it only to carry a fallback label out of the group, so which member of the
-              // group supplies it does not matter.
-              case '$last':
-                group[name] = argValue(undefined);
-                break;
-              default:
-                throw new Error(`FakeCollection: unsupported accumulator "${accOp}"`);
-            }
-          }
-        }
-        result = [...groups.values()];
-        break;
-      }
-      case '$sort':
-        result = sortDocs(result, spec);
-        break;
-      case '$limit':
-        result = result.slice(0, spec);
-        break;
-      default:
-        throw new Error(`FakeCollection: unsupported aggregation stage "${op}"`);
-    }
-  }
-  return result;
 }
 
 // Mongo field projection, in both directions. Inclusion names what goes out — the
@@ -535,16 +475,6 @@ class FakeCollection {
 
   deny(rules) {
     this._denyRules.push(rules);
-  }
-
-  rawCollection() {
-    const docs = () => [...this._docs.values()];
-    return {
-      aggregate(pipeline) {
-        const result = aggregate(docs(), pipeline);
-        return { toArray: () => Promise.resolve(result) };
-      },
-    };
   }
 }
 

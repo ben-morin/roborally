@@ -99,9 +99,9 @@ const EXPECTED = {
     optional: ['direction', 'robotId', 'start', 'submitted', 'playedCardsCnt', 'shotDistance'],
   },
   Highscores: {
-    // Rebuilt wholesale each time, so a row is always complete.
+    // Rebuilt wholesale each time, so a row is complete but for a date none of its games kept.
     required: ['_id', 'type', 'name', 'value', 'rank'],
-    optional: [],
+    optional: ['reachedAt'],
   },
 };
 

@@ -367,7 +367,7 @@ describe('leaveGame', () => {
     expect(game.gamePhase).toBe(GameState.PHASE.ENDED);
     expect(game.winner).toBe('survivor');
     expect(game.stopped).toBeTypeOf('number');
-    // buildHighscores() ran for real against the aggregate — 'survivor' now tops mostWon.
+    // buildHighscores() ran for real — 'survivor' now tops mostWon.
     expect(await Highscores.findOneAsync({ type: 'mostWon', rank: 1 })).toMatchObject({
       name: 'survivor',
       value: 1,
