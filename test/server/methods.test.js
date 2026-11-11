@@ -17,6 +17,7 @@ import { BoardBox } from '../../both/board_box.ts';
 import { CardLogic } from '../../both/cardlogic.ts';
 import { GameLogic } from '../../both/gamelogic.ts';
 import { GameState } from '../../both/gamestate.ts';
+import { CHAT_GRACE_MS } from '../../both/methods/chat.ts';
 import { Cards } from '../../collections/cards.ts';
 import { Chat } from '../../collections/chat.ts';
 import { Decks } from '../../collections/deck.ts';
@@ -1137,6 +1138,47 @@ describe('addMessage', () => {
     const chat = await Chat.findOneAsync({ gameId: 'g1' });
     expect(chat).toMatchObject({ message: 'hello', gameId: 'g1', userId: user._id, author: 'Ben' });
     expect(chat.submitted).toBeTypeOf('number');
+  });
+
+  describe("a finished game's chat", () => {
+    const ended = (stopped) =>
+      insertGame({ gamePhase: GameState.PHASE.ENDED, winner: 'Nobody', stopped });
+    const say = (gameId) => call('addMessage', { message: 'gg', gameId });
+
+    beforeEach(() => loginAs({ profile: { name: 'Ben' } }));
+
+    it('stays open for the last words', async () => {
+      const game = await ended(Date.now() - CHAT_GRACE_MS + 10_000);
+
+      await say(game._id);
+
+      expect(await Chat.find({ gameId: game._id }).countAsync()).toBe(1);
+    });
+
+    it('closes once the grace is over', async () => {
+      const game = await ended(Date.now() - CHAT_GRACE_MS);
+
+      await expect(say(game._id)).rejects.toMatchObject({
+        error: 403,
+        reason: 'The chat for this game is closed.',
+      });
+      expect(await Chat.find({ gameId: game._id }).countAsync()).toBe(0);
+    });
+
+    it('counts as closed with no end time', async () => {
+      const game = await ended(undefined);
+
+      await expect(say(game._id)).rejects.toMatchObject({ error: 403 });
+    });
+
+    it('leaves a running game and the lobby open', async () => {
+      const game = await insertGame();
+
+      await say(game._id);
+      await say('global');
+
+      expect(await Chat.find().countAsync()).toBe(2);
+    });
   });
 });
 

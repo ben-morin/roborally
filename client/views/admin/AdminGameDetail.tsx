@@ -4,20 +4,24 @@
 // result (the pill changes, or the row leaves), and a refusal is a modal as the server worded
 // it. The server checks each one again; what this hides is only what the server would refuse.
 import { Fragment } from 'react';
+import type { ReactNode } from 'react';
 import { useFind, useSubscribe } from 'meteor/react-meteor-data';
 import { GameState } from '../../../both/gamestate.ts';
 import { adminDeleteGame, adminEndGame } from '../../../both/methods/admin.ts';
 import { MAX_RESUME_ATTEMPTS } from '../../../collections/games.ts';
 import { Chat } from '../../../collections/chat.ts';
-import { formatDate } from '../../helper/datehelper.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.ts';
-import { statusOf, wonBy } from '../../lib/adminGames.ts';
+import { hasWinner, statusOf } from '../../lib/adminGames.ts';
 import type { AdminGameDoc } from '../../lib/adminGames.ts';
 import { presenceOf } from '../../lib/adminUsers.ts';
 import type { Presence } from '../../lib/adminUsers.ts';
 import { AdminPlayers } from './AdminGames.ts';
 import { AdminUsers } from './AdminUsers.ts';
+import { ChatLines } from '../chat/ChatLines.tsx';
+import { RelativeTime } from '../layout/RelativeTime.tsx';
+import { UserName } from '../users/UserName.tsx';
 import { StatusPill } from './StatusPill.tsx';
+import { WonBy } from './WonBy.tsx';
 
 const EYEBROW = 'mb-2 block text-xs font-semibold tracking-[.08em] text-muted uppercase';
 const SECTION = 'mt-7 text-left';
@@ -36,6 +40,8 @@ const PRESENCE: Record<Presence | 'gone', string> = {
   gone: `${PILL} border border-line text-muted`,
 };
 const CHAT_LINES = 5;
+// The chat panel's message box, without its fixed height.
+const CHAT = 'rounded-control bg-raised py-1.5 text-sm leading-[1.45]';
 const DANGER =
   'inline-flex h-10 w-full cursor-pointer items-center justify-center rounded-control border-0 bg-danger px-4 text-sm font-semibold text-white hover:bg-[color-mix(in_srgb,var(--color-danger)_88%,white)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 
@@ -68,7 +74,7 @@ export function AdminGameDetail({ game, onDeleted }: AdminGameDetailProps) {
   };
 
   const onDelete = async () => {
-    const won = game.winner !== undefined && game.winner !== 'Nobody';
+    const won = hasWinner(game);
     const question =
       status === 'waiting'
         ? `Delete "${game.name}"? The players in its lobby lose their seats. This cannot be undone.`
@@ -77,23 +83,26 @@ export function AdminGameDetail({ game, onDeleted }: AdminGameDetailProps) {
     adminDeleteGame({ gameId: game._id }).then(onDeleted, report);
   };
 
-  const facts: [string, string][] = [
+  const facts: [string, ReactNode][] = [
     ['Board', game.boardName],
-    ['Owner', game.author],
-    ['Created', formatDate(game.submitted)],
+    ['Owner', <UserName userId={game.userId} name={game.author} />],
+    ['Created', <RelativeTime timestamp={game.submitted} />],
   ];
   if (running) {
     const phase =
       game.gamePhase === GameState.PHASE.PLAY ? `play, ${game.playPhase}` : game.gamePhase;
     facts.push(['Turn', `${game.programRound} · ${phase}`]);
-    facts.push(['Last move', game.lastStepAt ? formatDate(game.lastStepAt.getTime()) : 'none']);
+    facts.push([
+      'Last move',
+      game.lastStepAt ? <RelativeTime timestamp={game.lastStepAt.getTime()} /> : 'none',
+    ]);
   }
   if (game.resumeAttempts) {
     facts.push(['Failed replays', `${game.resumeAttempts} of ${MAX_RESUME_ATTEMPTS}`]);
   }
   if (status === 'ended') {
-    facts.push(['Result', wonBy(game)]);
-    if (game.stopped) facts.push(['Ended', formatDate(game.stopped)]);
+    facts.push(['Result', <WonBy game={game} />]);
+    if (game.stopped) facts.push(['Ended', <RelativeTime timestamp={game.stopped} />]);
   }
 
   return (
@@ -131,7 +140,7 @@ export function AdminGameDetail({ game, onDeleted }: AdminGameDetailProps) {
               const presence = user ? presenceOf(user) : 'gone';
               return (
                 <li key={seat._id} className={LINE}>
-                  <span className="truncate">{seat.name}</span>
+                  <UserName className="truncate" userId={seat.userId} name={seat.name} />
                   <span className={PRESENCE[presence]}>
                     {presence === 'gone' ? 'no account' : presence}
                   </span>
@@ -147,15 +156,9 @@ export function AdminGameDetail({ game, onDeleted }: AdminGameDetailProps) {
         {chat.length === 0 ? (
           <p className={NOTE}>No chat yet.</p>
         ) : (
-          <ul className="m-0 list-none space-y-1.5 p-0 text-sm leading-[1.45]">
-            {chat.map((line) => (
-              <li key={line._id} className={line.author ? undefined : 'text-muted'}>
-                <span className="text-muted">{formatDate(line.submitted)}</span>{' '}
-                {line.author && <span className="font-semibold">{`${line.author}: `}</span>}
-                {line.message}
-              </li>
-            ))}
-          </ul>
+          <div className={CHAT}>
+            <ChatLines lines={chat} />
+          </div>
         )}
       </div>
 

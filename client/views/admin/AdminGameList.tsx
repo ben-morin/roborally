@@ -2,9 +2,10 @@
 // newest first, with a filter by state and one by text, ten to a page. A row selects its
 // game; the page decides what selecting means.
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
+import { getUsername } from '../../../both/permissions.ts';
 import { MAX_RESUME_ATTEMPTS } from '../../../collections/games.ts';
-import { formatDate } from '../../helper/datehelper.ts';
 import {
   countByStatus,
   matchesGameFilter,
@@ -12,15 +13,17 @@ import {
   STATUS_LABELS,
   STATUSES,
   statusOf,
-  wonBy,
 } from '../../lib/adminGames.ts';
 import type { AdminGameDoc, AdminPlayerDoc, GameStatus } from '../../lib/adminGames.ts';
 import { Loading } from '../layout/Loading.tsx';
+import { RelativeTime } from '../layout/RelativeTime.tsx';
+import { UserName } from '../users/UserName.tsx';
 import { AdminGames, AdminPlayers } from './AdminGames.ts';
 import { AdminUsers } from './AdminUsers.ts';
 import { Pager } from './Pager.tsx';
 import { StatusPill } from './StatusPill.tsx';
 import { usePagedSelection } from './usePagedSelection.ts';
+import { WonBy } from './WonBy.tsx';
 
 const INPUT =
   'block h-11 w-full min-w-0 rounded-control border border-white/16 bg-raised px-3.5 text-sm text-white placeholder:text-muted focus:border-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
@@ -50,15 +53,33 @@ export interface AdminGameListProps {
 }
 
 // What a row says under its pill: who is there while it runs, how it ended once it is over.
-function metaOf(game: AdminGameDoc, status: GameStatus, seated: number, online: number) {
+function metaOf(game: AdminGameDoc, status: GameStatus, seated: number, online: number): ReactNode {
   if (status === 'ended') {
-    return game.stopped ? `${wonBy(game)} · ended ${formatDate(game.stopped)}` : wonBy(game);
+    if (!game.stopped) return <WonBy game={game} />;
+    return (
+      <>
+        <WonBy game={game} /> · ended <RelativeTime timestamp={game.stopped} />
+      </>
+    );
   }
   if (status === 'waiting') {
-    return `${plural(seated, 'player')} · created ${formatDate(game.submitted)}`;
+    return (
+      <>
+        {plural(seated, 'player')} · created <RelativeTime timestamp={game.submitted} />
+      </>
+    );
   }
-  const lastMove = game.lastStepAt ? ` · last move ${formatDate(game.lastStepAt.getTime())}` : '';
-  return `${plural(seated, 'player')} · ${online} online${lastMove}`;
+  return (
+    <>
+      {plural(seated, 'player')} · {online} online
+      {game.lastStepAt && (
+        <>
+          {' '}
+          · last move <RelativeTime timestamp={game.lastStepAt.getTime()} />
+        </>
+      )}
+    </>
+  );
 }
 
 export function AdminGameList({ loading, selectedId, onSelect }: AdminGameListProps) {
@@ -73,11 +94,13 @@ export function AdminGameList({ loading, selectedId, onSelect }: AdminGameListPr
     seatsOf.set(player.gameId, [...(seatsOf.get(player.gameId) ?? []), player]);
   }
   const online = new Set(users.filter((user) => user.status?.online).map((user) => user._id));
+  // The rows show each account's current name, so the filter finds it under that name too.
+  const names = new Map(users.map((user) => [user._id, getUsername(user)]));
   const counts = countByStatus(games, MAX_RESUME_ATTEMPTS);
   const shown = games.filter(
     (game) =>
       (filter === 'all' || statusOf(game, MAX_RESUME_ATTEMPTS) === filter) &&
-      matchesGameFilter(game, seatsOf.get(game._id) ?? [], text)
+      matchesGameFilter(game, seatsOf.get(game._id) ?? [], text, (userId) => names.get(userId))
   );
   const { items, page, pageCount, goTo, pick } = usePagedSelection(shown, selectedId, onSelect);
 
@@ -161,7 +184,7 @@ export function AdminGameList({ loading, selectedId, onSelect }: AdminGameListPr
                     <div className="min-w-0 text-left">
                       <div className={NAME}>{game.name}</div>
                       <div className={SUB}>
-                        {game.boardName} · {game.author}
+                        {game.boardName} · <UserName userId={game.userId} name={game.author} />
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1.5">

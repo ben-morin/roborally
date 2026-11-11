@@ -3,6 +3,7 @@ import { useFind, useSubscribe, useTracker } from 'meteor/react-meteor-data';
 import { Games } from '../../../collections/games.ts';
 import { Players } from '../../../collections/players.ts';
 import { useRouteParam } from '../useRouteParam.ts';
+import { UserName } from '../users/UserName.tsx';
 
 export function PlayerList() {
   const gameId = useRouteParam('_id');
@@ -33,7 +34,7 @@ export function PlayerList() {
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-muted">
                 {index + 1}
               </span>
-              {player.name}
+              <UserName userId={player.userId} name={player.name} />
             </li>
           ))}
         </ol>

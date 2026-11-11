@@ -20,8 +20,8 @@ Meteor.publish('chat', async function (gameId: string) {
   return Chat.find({ gameId }, { skip: size });
 });
 
-// The only publication that hands out documents belonging to somebody else, so it is the
-// one that has to say what it sends. Meteor projects fields on the *automatic*
+// One of the publications that hand out other people's accounts (with `userNames` and,
+// for an admin, `adminUsers`), so it has to say what it sends. Meteor projects fields on the *automatic*
 // publication of the current user; a custom cursor like this one publishes whole
 // documents, which for Meteor.users means the bcrypt hash, the resume login tokens, the
 // password-reset and email-verification tokens, and the IP address and user agent
@@ -39,6 +39,15 @@ Meteor.publish('onlineUsers', function () {
     { 'status.online': true },
     { fields: { 'profile.name': 1, 'status.online': 1, 'status.idle': 1 } }
   );
+});
+
+// Every account's username and nothing else, for `<UserName>`: a row stores the name it was
+// written under, and this is how a renamed or deleted account shows as it is now. To
+// signed-in users only, as `onlineUsers`; the projection keeps the rest of each account here.
+Meteor.publish('userNames', function () {
+  if (!this.userId) return this.ready();
+
+  return Meteor.users.find({}, { fields: { 'profile.name': 1 } });
 });
 
 // Every account, for the admin user manager. Same rule as `onlineUsers`: the projection is

@@ -1,7 +1,7 @@
 // Publications are cursor factories, so these run the real handler with `this.userId`
 // bound the way the DDP layer binds it and assert on what the cursor yields. Three of them
 // are security-relevant and all are pinned here: `cards` is the only publication scoped
-// to the subscriber, and `onlineUsers` and `adminUsers` are the only ones that hand out
+// to the subscriber, and `onlineUsers`, `userNames` and `adminUsers` are the only ones that hand out
 // documents belonging to somebody else — so they are the ones whose *fields* have to be
 // asserted, not just which documents come back. `adminGames` sends only to an admin, and
 // its fields are pinned too, so the turn's bookkeeping never reaches a browser.
@@ -41,6 +41,7 @@ describe('publication registration', () => {
       'highscores',
       'onlineUsers',
       'players',
+      'userNames',
     ]);
   });
 });
@@ -115,6 +116,39 @@ describe('chat', () => {
 
   it('publishes nothing for a game with no messages', async () => {
     expect((await runPublication('chat', {}, 'empty')).fetch()).toEqual([]);
+  });
+});
+
+describe('userNames', () => {
+  const account = (_id) =>
+    Meteor.users.insertAsync({
+      _id,
+      profile: { name: `Player ${_id}` },
+      emails: [{ address: `${_id}@example.com`, verified: true }],
+      status: { online: false, lastLogin: { ipAddr: '203.0.113.7' } },
+      services: { password: { bcrypt: '$2b$10$notarealhash' } },
+    });
+
+  it('sends every account, online or not, with its username and nothing else', async () => {
+    await loginAs('viewer');
+    await account('other');
+
+    const users = (await runPublication('userNames')).fetch();
+
+    expect(users.find((u) => u._id === 'other')).toEqual({
+      _id: 'other',
+      profile: { name: 'Player other' },
+    });
+    expect(users.map((u) => u._id).sort()).toEqual(['other', 'viewer']);
+  });
+
+  it('sends a logged-out subscriber nothing, and marks it ready', async () => {
+    await account('other');
+    logout();
+    const ready = vi.fn();
+
+    expect(await runPublication('userNames', { ready })).toBeUndefined();
+    expect(ready).toHaveBeenCalled();
   });
 });
 

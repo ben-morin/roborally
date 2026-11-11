@@ -3,11 +3,12 @@
 // root: the accounts menu is an ordinary child here, where the layout used to mount it by
 // hand into an empty <li>.
 import { NavLink, Outlet } from 'react-router';
-import { useTracker } from 'meteor/react-meteor-data';
+import { useSubscribe, useTracker } from 'meteor/react-meteor-data';
 import { AccountsMenu } from '../accounts/AccountsMenu.tsx';
 import { useIsAdmin } from '../admin/useIsAdmin.ts';
 import { paths } from '../routes.ts';
 import { Play } from '../icons/Play.tsx';
+import { UserNamesReady } from '../users/UserName.tsx';
 import { UsersPill } from '../users/UsersPill.tsx';
 import { Modal } from './Modal.tsx';
 
@@ -137,6 +138,9 @@ export function AppLayout() {
   // As the template's `loggingIn` helper had it: the user document, not the id, so a
   // visitor whose document has not arrived yet sees the landing card for that moment.
   const signedIn = useTracker(() => Meteor.user() != null);
+  // One subscription for every <UserName> on the page; one each would be one per chat line.
+  // Made at sign-in, so its readiness never covers a feed the server has not sent yet.
+  const namesLoading = useSubscribe(signedIn ? 'userNames' : undefined);
 
   return (
     // The page is laid out for 768px and up, as the viewport meta in client/main.html says.
@@ -144,7 +148,9 @@ export function AppLayout() {
       <Navbar signedIn={signedIn} />
       {signedIn ? (
         <main className="page">
-          <Outlet />
+          <UserNamesReady.Provider value={!namesLoading()}>
+            <Outlet />
+          </UserNamesReady.Provider>
         </main>
       ) : (
         <Landing />

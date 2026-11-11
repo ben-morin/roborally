@@ -11,9 +11,11 @@ import type { Player } from '../../../collections/players.ts';
 import { addUIData } from '../../lib/cardUI.ts';
 import { Heart } from '../icons/Heart.tsx';
 import { Power } from '../icons/Power.tsx';
+import { UserName } from '../users/UserName.tsx';
 import { Card } from './Card.tsx';
 
 export const EYEBROW = 'text-xs font-semibold tracking-[.08em] text-muted uppercase';
+const NAME = 'text-sm font-semibold wrap-anywhere';
 const PILL =
   'inline-flex h-[22px] items-center rounded-full px-2.5 text-xs font-bold tracking-[.06em] whitespace-nowrap text-white uppercase';
 const PILL_BRAND = 'bg-brand';
@@ -82,9 +84,11 @@ export function PlayerHeader({ player, own, checkpointCnt }: PlayerHeaderProps) 
             alt=""
             draggable={false}
           />
-          <span className="text-sm font-semibold wrap-anywhere">
-            {own ? 'Your robot' : player.name}
-          </span>
+          {own ? (
+            <span className={NAME}>Your robot</span>
+          ) : (
+            <UserName className={NAME} userId={player.userId} name={player.name} />
+          )}
         </span>
         <Lives lives={player.lives} />
       </div>

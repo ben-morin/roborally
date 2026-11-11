@@ -1,12 +1,14 @@
 // The lobby index: every game the `games` publication sends, split into open, active and
 // finished. Replaces the `gameList` template.
+import type { ReactNode } from 'react';
 import type { Mongo } from 'meteor/mongo';
 import { Link } from 'react-router';
 import { useFind, useSubscribe } from 'meteor/react-meteor-data';
 import { Games } from '../../../collections/games.ts';
 import type { GameDoc } from '../../../collections/games.ts';
 import { paths } from '../routes.ts';
-import { formatDate } from '../../helper/datehelper.ts';
+import { RelativeTime } from '../layout/RelativeTime.tsx';
+import { UserName } from '../users/UserName.tsx';
 
 // `{winner: null}` is Mongo's "null or missing", so a game in progress counts as open until
 // it ends. The two assertions record that: GameDoc types `winner` as an optional string, so
@@ -22,7 +24,7 @@ const TITLE = 'text-lg font-semibold';
 const META = 'text-sm text-muted';
 const EMPTY = 'text-base text-muted';
 
-function GameRows({ games, meta }: { games: GameDoc[]; meta: (game: GameDoc) => string }) {
+function GameRows({ games, meta }: { games: GameDoc[]; meta: (game: GameDoc) => ReactNode }) {
   return (
     <ul className="m-0 list-none space-y-2 p-0">
       {games.map((game) => (
@@ -55,7 +57,14 @@ export function GameList() {
         <h2 className="mt-0 text-3xl">Open games</h2>
         <hr className="star-well mt-3 mb-7" />
         {openGames.length > 0 ? (
-          <GameRows games={openGames} meta={(game) => `created ${formatDate(game.submitted)}`} />
+          <GameRows
+            games={openGames}
+            meta={(game) => (
+              <>
+                created <RelativeTime timestamp={game.submitted} />
+              </>
+            )}
+          />
         ) : (
           !loading && <p className={EMPTY}>No open games at the moment, create one at the right.</p>
         )}
@@ -64,7 +73,14 @@ export function GameList() {
         <h3 className="mt-0 text-2xl">Active games</h3>
         <hr className="star-well mt-3 mb-7" />
         {activeGames.length > 0 ? (
-          <GameRows games={activeGames} meta={(game) => `created ${formatDate(game.submitted)}`} />
+          <GameRows
+            games={activeGames}
+            meta={(game) => (
+              <>
+                created <RelativeTime timestamp={game.submitted} />
+              </>
+            )}
+          />
         ) : (
           !loading && <p className={EMPTY}>No active games at the moment</p>
         )}
@@ -75,7 +91,12 @@ export function GameList() {
         <GameRows
           games={endedGames}
           // `stopped` is written with the winner, so both are there together.
-          meta={(game) => `won by ${game.winner} ${formatDate(game.stopped!)}`}
+          meta={(game) => (
+            <>
+              won by <UserName userId={game.winnerUserId} name={game.winner ?? ''} />{' '}
+              <RelativeTime timestamp={game.stopped!} />
+            </>
+          )}
         />
       </div>
     </>

@@ -4,10 +4,10 @@
 import { useState } from 'react';
 import { useFind } from 'meteor/react-meteor-data';
 import { getUsername } from '../../../both/permissions.ts';
-import { formatDate } from '../../helper/datehelper.ts';
 import { matchesFilter, presenceOf, primaryEmail } from '../../lib/adminUsers.ts';
 import type { Presence } from '../../lib/adminUsers.ts';
 import { Loading } from '../layout/Loading.tsx';
+import { RelativeTime } from '../layout/RelativeTime.tsx';
 import { AdminUsers } from './AdminUsers.ts';
 import { Pager } from './Pager.tsx';
 import { usePagedSelection } from './usePagedSelection.ts';
@@ -35,10 +35,6 @@ const PRESENCE: Record<Presence, string> = {
   idle: `${PILL} border border-line bg-raised text-muted`,
   offline: `${PILL} border border-line text-muted`,
 };
-
-function since(date: Date | undefined) {
-  return date ? formatDate(date.getTime()) : undefined;
-}
 
 export interface UserListProps {
   adminIds: readonly string[];
@@ -92,8 +88,8 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
               const selected = user._id === selectedId;
               const email = primaryEmail(user);
               const presence = presenceOf(user);
-              const joined = since(user.createdAt);
-              const lastLogin = since(user.status?.lastLogin?.date);
+              const joined = user.createdAt;
+              const lastLogin = user.status?.lastLogin?.date;
               return (
                 <li key={user._id}>
                   <div
@@ -123,8 +119,18 @@ export function UserList({ adminIds, loading, selectedId, onSelect, onAdd }: Use
                         <span className={PRESENCE[presence]}>{presence}</span>
                       </div>
                       <div className={META}>
-                        {joined && `joined ${joined} · `}
-                        {lastLogin ? `last login ${lastLogin}` : 'never logged in'}
+                        {joined && (
+                          <>
+                            joined <RelativeTime timestamp={joined.getTime()} /> ·{' '}
+                          </>
+                        )}
+                        {lastLogin ? (
+                          <>
+                            last login <RelativeTime timestamp={lastLogin.getTime()} />
+                          </>
+                        ) : (
+                          'never logged in'
+                        )}
                       </div>
                     </div>
                   </div>

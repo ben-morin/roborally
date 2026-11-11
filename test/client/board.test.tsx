@@ -735,7 +735,7 @@ describe('game over', () => {
     renderAt(<Board />);
 
     expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Game over');
-    expect(screen.getByText('them has won the game!')).toBeVisible();
+    expect(screen.getByText('them').parentElement).toHaveTextContent('them has won the game!');
     // The notice takes the strip's place; the finished board can still be looked at.
     expect(document.querySelector('.announce-bar')).toBeNull();
     expect(board().querySelectorAll('span.tile').length).toBeGreaterThan(0);

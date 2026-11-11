@@ -14,6 +14,7 @@ import {
   setSettings,
 } from '../setup.js';
 import { adminEmails, isAdminUser } from '../../both/permissions.ts';
+import { Chat } from '../../collections/chat.ts';
 import { Games } from '../../collections/games.ts';
 import { Highscores } from '../../collections/highscores.ts';
 import { Players } from '../../collections/players.ts';
@@ -576,6 +577,41 @@ describe('adminDeleteUser', () => {
     expect(await stored('ann')).toBeUndefined();
     expect(await Games.findOneAsync(won._id)).toBeDefined();
     expect(await Players.find({ userId: 'ann' }).countAsync()).toBe(2);
+  });
+
+  // The rows still say 'ann'; the account was renamed since, and that last name is the one
+  // to keep once nothing is left to read it from.
+  it("stamps the account's last name on every row that names it, and on nobody else's", async () => {
+    await insertAnn({ profile: { name: 'Annie' } });
+    const won = await finishedGame('ann', 'ann', [
+      ['ann', 'ann'],
+      ['bob', 'bob'],
+    ]);
+    const lost = await insertGame({
+      userId: 'bob',
+      author: 'bob',
+      winner: 'bob',
+      winnerUserId: 'bob',
+    });
+    await insertPlayer(lost._id, { userId: 'ann', name: 'ann' });
+    const line = (fields) =>
+      Chat.insertAsync({ gameId: 'global', message: 'hi', submitted: 1, ...fields });
+    await line({ userId: 'ann', author: 'ann' });
+    await line({ userId: 'bob', author: 'bob' });
+    await line({ gameId: won._id, message: 'Game over' });
+
+    await remove();
+
+    const authors = (await Chat.find({}).fetchAsync()).map((c) => c.author);
+    expect(authors).toEqual(['Annie', 'bob', undefined]);
+    const seats = (await Players.find({}).fetchAsync()).map((p) => [p.userId, p.name]);
+    expect(seats).toEqual([
+      ['ann', 'Annie'],
+      ['bob', 'bob'],
+      ['ann', 'Annie'],
+    ]);
+    expect(await Games.findOneAsync(won._id)).toMatchObject({ author: 'Annie', winner: 'Annie' });
+    expect(await Games.findOneAsync(lost._id)).toMatchObject({ author: 'bob', winner: 'bob' });
   });
 
   // No `buildHighscores()` after the delete: the method rebuilds the rankings itself.

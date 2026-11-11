@@ -14,7 +14,7 @@ confusion with the original Meteor 1 and 2 versions.
 
 Goals of this project:
 
-- use the latest Meteor release (3.5 as of July 2026)
+- use the latest Meteor release (3.6 as of November 2026)
 - modernize the codebase and update dependencies
 - replace the Blaze/Bootstrap UI with React/Tailwind
 - stabilize gameplay

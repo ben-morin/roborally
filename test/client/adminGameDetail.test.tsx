@@ -177,14 +177,18 @@ describe('the game panel', () => {
     await Chat.insertAsync({ gameId: 'other', message: 'elsewhere', submitted: Date.now() });
     await openOn(game());
 
-    const lines = within(screen.getByText('Last chat').parentElement!).getAllByRole('listitem');
-    expect(lines.map((line) => line.textContent)).toEqual([
-      '7 minutes ago line 3',
-      '6 minutes ago line 4',
-      '5 minutes ago line 5',
-      '4 minutes ago line 6',
-      '3 minutes ago ann: line 7',
+    // The box after the heading; each row's parts read in order, a space between each.
+    const rows = [...screen.getByText('Last chat').nextElementSibling!.children];
+    const parts = (row: Element) => [...row.children].map((part) => part.textContent).join(' ');
+    expect(rows.map(parts)).toEqual([
+      '· line 3 7m',
+      '· line 4 6m',
+      '· line 5 5m',
+      '· line 6 4m',
+      'ann line 7 3m',
     ]);
+    // The admin is not in the game, so no name is the viewer's own.
+    expect(screen.getByText('ann', { selector: '.font-semibold' })).not.toHaveClass('text-teal');
   });
 
   it('says when the game has no chat', async () => {

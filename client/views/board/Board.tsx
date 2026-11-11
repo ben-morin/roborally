@@ -20,6 +20,7 @@ import { useRouteParam } from '../useRouteParam.ts';
 import { ArrowRightCircle } from '../icons/ArrowRightCircle.tsx';
 import { CheckCircle } from '../icons/CheckCircle.tsx';
 import { Circle } from '../icons/Circle.tsx';
+import { accountName, UserName } from '../users/UserName.tsx';
 import { Tiles } from './Tiles.tsx';
 
 // The caption over a placeholder board; `board-missing` is what the test reads.
@@ -353,6 +354,11 @@ export function Board() {
   // Unfiltered by game on purpose, as the helper this replaces was: the `players`
   // publication sends one game's seats, so the local collection is that game's.
   const players = useFind<Player>(() => Players.find()) ?? [];
+  // Each player's current name, for the robots' alt text and the announce card's label.
+  const names = useTracker(
+    () => new Map(players.map((player) => [player._id, accountName(player.userId)])),
+    [players]
+  );
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [tileSize, setTileSize] = useState(DEFAULT_TILE_SIZE);
@@ -450,7 +456,8 @@ export function Board() {
   const boardWidth = board.width * tileSize;
   const shortChipLabels = boardWidth < SHORT_CHIP_WIDTH;
   const playerCnt = players.length;
-  const you = (player: Player) => (player.userId === userId ? 'You' : player.name);
+  const you = (player: Player) =>
+    player.userId === userId ? 'You' : (names.get(player._id) ?? player.name);
 
   // A game ends inside the checkpoints phase and the game-over write leaves `playPhase`
   // there, so without the `gameEnded` check a finished game fired on every page load.
@@ -497,7 +504,9 @@ export function Board() {
         <div className="mb-7 text-center">
           <h3 className="mt-0 mb-0 text-2xl">Game over</h3>
           <hr className="star-well mt-3 mb-7" />
-          <p className="text-base">{game.winner} has won the game!</p>
+          <p className="text-base">
+            <UserName userId={game.winnerUserId} name={game.winner ?? ''} /> has won the game!
+          </p>
         </div>
       ) : (
         game.announce && (

@@ -12,6 +12,7 @@ import { Players } from '../../../collections/players.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.ts';
 import { paths } from '../routes.ts';
 import { useRouteParam } from '../useRouteParam.ts';
+import { UserName } from '../users/UserName.tsx';
 
 const BTN =
   'inline-flex items-center justify-center rounded-control px-4 font-semibold no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
@@ -88,7 +89,7 @@ export function GameActions() {
         <span className="block text-xs font-semibold tracking-[.08em] text-muted uppercase">
           Game created by
         </span>
-        <span className="block text-2xl">{game.author}</span>
+        <UserName className="block text-2xl" userId={game.userId} name={game.author} />
       </h2>
       <hr className="star-well mt-3 mb-7" />
       <div className="space-y-3">

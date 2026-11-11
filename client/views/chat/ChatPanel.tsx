@@ -1,13 +1,13 @@
 // The room's messages, the send form, and the button that leaves or closes the game.
 // Replaces the `chat` template. `ChatPanel` rather than `Chat` because the collection this
 // file reads is `Chat` — the clash `players` → `PlayerList` solved at step 4.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import type { Mongo } from 'meteor/mongo';
 import { useNavigate } from 'react-router';
 import { useFind, useSubscribe, useTracker } from 'meteor/react-meteor-data';
 import { GameState } from '../../../both/gamestate.ts';
-import { addMessage } from '../../../both/methods/chat.ts';
+import { addMessage, chatClosesAt } from '../../../both/methods/chat.ts';
 import { leaveGame } from '../../../both/methods/games.ts';
 import { Chat } from '../../../collections/chat.ts';
 import { Games } from '../../../collections/games.ts';
@@ -16,18 +16,27 @@ import type { PlayerDoc } from '../../../collections/players.ts';
 import { modalAlert, modalConfirm } from '../../helper/modalDialogs.ts';
 import { paths } from '../routes.ts';
 import { useRouteName, useRouteParam } from '../useRouteParam.ts';
+import { ChatLines } from './ChatLines.tsx';
 
 const INPUT =
   'h-12 w-full rounded-control border border-white/16 bg-raised px-3.5 text-base text-white placeholder:text-muted focus:border-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const SEND =
   'h-12 shrink-0 cursor-pointer rounded-control border-0 bg-brand px-4 text-base font-semibold text-white hover:bg-[color-mix(in_srgb,var(--color-brand)_88%,white)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
+const CLOSED = 'mt-4 flex h-12 items-center justify-center text-sm text-muted';
 const GHOST =
   'inline-flex h-10 cursor-pointer items-center justify-center rounded-control border border-white/22 bg-transparent px-4 text-sm font-semibold text-white hover:border-white/40 hover:bg-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-white/22 disabled:hover:bg-transparent';
 
-/** Unchanged from the template's own helper: a local date, then a local `h:mm`. */
-function timeToStr(time: number): string {
-  const d = new Date(time);
-  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+// Whether the time `at` has come, rendering again once when it does.
+function useReached(at: number | undefined) {
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      if (at === undefined) return () => {};
+      const timer = setTimeout(notify, Math.max(0, at - Date.now()));
+      return () => clearTimeout(timer);
+    },
+    [at]
+  );
+  return useSyncExternalStore(subscribe, () => at !== undefined && Date.now() >= at);
 }
 
 export function ChatPanel() {
@@ -58,6 +67,8 @@ export function ChatPanel() {
   }, [roomId, userId]);
 
   const gameEnded = game?.gamePhase === GameState.PHASE.ENDED;
+  // `addMessage` refuses a message from this moment on, so the form goes with it.
+  const chatClosed = useReached(game && chatClosesAt(game));
   // canLeaveActiveGame(), as it stood: the only thing that holds a player is a started game
   // that has not ended and is not in the program phase.
   const canLeave =
@@ -125,32 +136,24 @@ export function ChatPanel() {
         <h3 className="mt-0 text-2xl">Chat</h3>
         <hr className="star-well mt-3 mb-7" />
         <div ref={scroller} className="messages rounded-control bg-raised text-sm leading-[1.45]">
-          {messages.map((line) =>
-            line.author ? (
-              <div key={line._id}>
-                <span className="text-muted">[{timeToStr(line.submitted)}]</span>{' '}
-                <span className="font-semibold">{line.author}:</span> {line.message}
-              </div>
-            ) : (
-              // `system` is contract: the browser journey matches `.messages .system`.
-              <div key={line._id} className="system text-muted">
-                [{timeToStr(line.submitted)}] {line.message}
-              </div>
-            )
-          )}
+          <ChatLines lines={messages} viewerId={userId} />
         </div>
       </div>
-      <form className="mt-4 flex gap-2" onSubmit={onSubmit}>
-        <input
-          className={INPUT}
-          name="message"
-          type="text"
-          placeholder="Enter a message"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <input className={SEND} type="submit" value="Send" />
-      </form>
+      {chatClosed ? (
+        <p className={CLOSED}>Chat closed</p>
+      ) : (
+        <form className="mt-4 flex gap-2" onSubmit={onSubmit}>
+          <input
+            className={INPUT}
+            name="message"
+            type="text"
+            placeholder="Enter a message"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <input className={SEND} type="submit" value="Send" />
+        </form>
+      )}
       {exitLabel && (
         <div className="exit text-center">
           <button

@@ -4,6 +4,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { formatFullDate } from '../../client/helper/datehelper.ts';
 import { GameList } from '../../client/views/game/GameList.tsx';
 import { insertGame } from '../helpers/fixtures.js';
 import { resetFakeCollections } from '../setup.js';
@@ -51,7 +52,8 @@ describe('GameList', () => {
   });
 
   it('dates an open game and names the winner of a finished one', async () => {
-    await insertGame({ name: 'open', started: false, submitted: Date.now() - 5 * 60_000 });
+    const submitted = Date.now() - 5 * 60_000;
+    await insertGame({ name: 'open', started: false, submitted });
     await insertGame({
       name: 'done',
       started: true,
@@ -61,8 +63,12 @@ describe('GameList', () => {
 
     renderAt(<GameList />);
 
-    expect(screen.getByText('created 5 minutes ago')).toBeVisible();
-    expect(screen.getByText('won by ann 3 hours ago')).toBeVisible();
+    const created = screen.getByText('5 minutes ago');
+    expect(created.parentElement).toHaveTextContent('created 5 minutes ago');
+    expect(created).toHaveAttribute('title', formatFullDate(submitted));
+    expect(screen.getByText('3 hours ago').parentElement).toHaveTextContent(
+      'won by ann 3 hours ago'
+    );
   });
 
   it('links every row to the game’s own page', async () => {

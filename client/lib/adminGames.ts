@@ -61,15 +61,25 @@ export function countByStatus(games: readonly AdminGameDoc[], maxResumeAttempts:
   return counts;
 }
 
-/** Case-insensitive, on the game's name, its board, its owner or a player; empty matches all. */
+/**
+ * Case-insensitive, on the game's name, its board, its owner or a player, under the name the
+ * game stored or the account's name now (`nameOf`); empty matches all.
+ */
 export function matchesGameFilter(
   game: AdminGameDoc,
   players: readonly AdminPlayerDoc[],
-  filter: string
+  filter: string,
+  nameOf: (userId: string) => string | undefined = () => undefined
 ) {
   const needle = filter.trim().toLowerCase();
   if (!needle) return true;
-  const haystack = [game.name, game.boardName, game.author, ...players.map((p) => p.name)];
+  const haystack = [
+    game.name,
+    game.boardName,
+    game.author,
+    nameOf(game.userId),
+    ...players.flatMap((p) => [p.name, nameOf(p.userId)]),
+  ];
   return haystack.some((text) => (text ?? '').toLowerCase().includes(needle));
 }
 
@@ -78,7 +88,7 @@ export function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? '' : 's'}`;
 }
 
-/** Who won, as a sentence fragment: 'Nobody' is the no-winner sentinel, not a player. */
-export function wonBy(game: AdminGameDoc) {
-  return !game.winner || game.winner === 'Nobody' ? 'nobody won' : `won by ${game.winner}`;
+/** Whether a player won: 'Nobody' is the no-winner sentinel, not a player. */
+export function hasWinner(game: AdminGameDoc) {
+  return !!game.winner && game.winner !== 'Nobody';
 }

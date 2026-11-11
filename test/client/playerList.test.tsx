@@ -40,6 +40,16 @@ describe('PlayerList', () => {
     expect(seats[1]).toHaveTextContent('2spinbot');
   });
 
+  it("shows a renamed player's current name, not the one the seat stored", async () => {
+    const game = await openLobby();
+    await Meteor.users.insertAsync({ _id: 'them', profile: { name: 'Spinner' } });
+    await insertPlayer(game._id, { userId: 'them', name: 'spinbot' });
+
+    renderAt(<PlayerList />);
+
+    expect(screen.getByRole('listitem')).toHaveTextContent('1Spinner');
+  });
+
   it('says so when nobody has joined', async () => {
     await openLobby();
 

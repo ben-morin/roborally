@@ -29,11 +29,8 @@
       width: 100%;
       height: 300px;
       overflow: auto;
+      padding: 6px 0;
       text-align: left;
-
-      > div {
-        padding: 5px;
-      }
 
       .system {
         color: var(--color-muted);

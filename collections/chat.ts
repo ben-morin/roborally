@@ -4,8 +4,8 @@ import type { Doc } from '../both/schemas/infer.ts';
 
 // Four insert sites, two shapes: the two `chatAsync` transforms plus `createGame` write a
 // system line, and the `addMessage` method writes a player line. `userId` and `author`
-// are exactly that difference — a system line has no author. Nothing ever updates a chat
-// line; they are only inserted and, with their game, removed.
+// are exactly that difference — a system line has no author. The one update is an account
+// delete stamping its last name on `author`; otherwise lines are only inserted and removed.
 //
 // `gameId` is a game's `_id`, or the string 'global' for the lobby chat.
 const schema = {

@@ -2,10 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   countByStatus,
+  hasWinner,
   matchesGameFilter,
   plural,
   statusOf,
-  wonBy,
 } from '../../client/lib/adminGames.ts';
 
 const CAP = 3;
@@ -71,6 +71,14 @@ describe('matchesGameFilter', () => {
   it('matches nothing else', () => {
     expect(matchesGameFilter(game(), players, 'carl')).toBe(false);
   });
+
+  it("matches the owner's and a player's current name after a rename", () => {
+    const nameOf = (userId) => ({ ann: 'Annabel', bob: 'Robert' })[userId];
+
+    expect(matchesGameFilter(game(), players, 'annabel', nameOf)).toBe(true);
+    expect(matchesGameFilter(game(), players, 'robert', nameOf)).toBe(true);
+    expect(matchesGameFilter(game(), players, 'robert')).toBe(false);
+  });
 });
 
 describe('the wording', () => {
@@ -80,8 +88,9 @@ describe('the wording', () => {
     expect(plural(3, 'game')).toBe('3 games');
   });
 
-  it("says nobody won for the 'Nobody' sentinel", () => {
-    expect(wonBy(game({ winner: 'Nobody' }))).toBe('nobody won');
-    expect(wonBy(game({ winner: 'ann' }))).toBe('won by ann');
+  it("counts no winner for the 'Nobody' sentinel or none at all", () => {
+    expect(hasWinner(game({ winner: 'Nobody' }))).toBe(false);
+    expect(hasWinner(game())).toBe(false);
+    expect(hasWinner(game({ winner: 'ann' }))).toBe(true);
   });
 });

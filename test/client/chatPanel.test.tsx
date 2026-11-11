@@ -2,7 +2,7 @@
 // The chat panel: the room's messages, the send form, and the button that leaves or closes
 // the game. modalDialogs is mocked so the handler's own decisions are what gets asserted.
 import '@testing-library/jest-dom/vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { act, cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +13,9 @@ vi.mock('../../client/helper/modalDialogs.ts', () => ({
 
 import { ChatPanel } from '../../client/views/chat/ChatPanel.tsx';
 import { modalAlert, modalConfirm } from '../../client/helper/modalDialogs.ts';
+import { formatFullDate } from '../../client/helper/datehelper.ts';
 import { GameState } from '../../both/gamestate.ts';
+import { CHAT_GRACE_MS } from '../../both/methods/chat.ts';
 import { Chat } from '../../collections/chat.ts';
 import { insertGame, insertPlayer } from '../helpers/fixtures.js';
 import { loginAs, resetFakeCollections } from '../setup.js';
@@ -42,9 +44,16 @@ async function openGame({
   started = true,
   seated = false,
   route = '/games/',
-}: { gamePhase?: Phase; started?: boolean; seated?: boolean; route?: string } = {}) {
+  stopped,
+}: {
+  gamePhase?: Phase;
+  started?: boolean;
+  seated?: boolean;
+  route?: string;
+  stopped?: number;
+} = {}) {
   // The fixture reads the document straight back, so there is always one.
-  const game = (await insertGame({ started, gamePhase }))!;
+  const game = (await insertGame({ started, gamePhase, stopped }))!;
   if (seated) await insertPlayer(game._id, { userId: 'me', name: 'me', robotId: '0' });
   setRoute(`${route}${game._id}`);
   return game;
@@ -59,26 +68,69 @@ describe('ChatPanel', () => {
 
     const { container } = renderAt(<ChatPanel />);
 
-    expect(screen.getByText('me:')).toBeVisible();
+    expect(screen.getByText('me')).toBeVisible();
     const system = container.querySelectorAll('.messages .system');
     expect(system).toHaveLength(1);
     // `.messages .system` and the display name in it are what the browser journey matches.
     expect(system[0]).toHaveTextContent('me joined the game');
+    // A middot stands where a player line has its name.
+    expect(system[0]).toHaveTextContent(/^· me joined the game/);
   });
 
-  it('stamps each line with the local date and time', async () => {
-    await Chat.insertAsync({
-      gameId: 'global',
-      message: 'hello',
-      submitted: Date.UTC(2026, 0, 15, 12, 30),
-    });
+  it('shows the name in white and the message muted', async () => {
+    await Chat.insertAsync({ gameId: 'global', message: 'hello', submitted: 1, author: 'ann' });
+
+    renderAt(<ChatPanel />);
+
+    const name = screen.getByText('ann');
+    expect(name).toHaveClass('text-white');
+    expect(name.parentElement).toHaveClass('text-muted');
+  });
+
+  it('stamps each line with its age, and the exact date on hover', async () => {
+    const at = Date.now() - 5 * 60_000;
+    await Chat.insertAsync({ gameId: 'global', message: 'hello', submitted: at });
+
+    renderAt(<ChatPanel />);
+
+    expect(screen.getByText('5m')).toHaveAttribute('title', formatFullDate(at));
+  });
+
+  it('gives back-to-back lines from one player one name and one age', async () => {
+    const at = Date.now() - 60_000;
+    const said = (message: string, userId: string, submitted: number) =>
+      Chat.insertAsync({ gameId: 'global', message, submitted, userId, author: userId });
+    await said('hello', 'me', at);
+    await said('again', 'me', at + 1_000);
+    await said('hi', 'ann', at + 2_000);
 
     const { container } = renderAt(<ChatPanel />);
 
-    const line = container.querySelector('.messages .system')!.textContent!;
-    expect(line).not.toContain('Invalid');
-    expect(line).toContain(':');
-    expect(line).toContain('2026');
+    expect(screen.getAllByText('me')).toHaveLength(1);
+    // The name's line, then the group's text column that holds both messages.
+    expect(screen.getByText('me').parentElement!.parentElement).toHaveTextContent(
+      /me hello.*again/
+    );
+    expect(container.querySelectorAll('.messages time')).toHaveLength(2);
+    // The viewer's own name is the teal one.
+    expect(screen.getByText('me')).toHaveClass('text-teal');
+    expect(screen.getByText('ann')).not.toHaveClass('text-teal');
+  });
+
+  it("shows a renamed player's current name on lines stored under the old one", async () => {
+    await Meteor.users.insertAsync({ _id: 'ann', profile: { name: 'Annie' } });
+    await Chat.insertAsync({
+      gameId: 'global',
+      message: 'hello',
+      submitted: Date.now(),
+      userId: 'ann',
+      author: 'ann',
+    });
+
+    renderAt(<ChatPanel />);
+
+    expect(screen.getByText('Annie')).toBeVisible();
+    expect(screen.queryByText('ann')).not.toBeInTheDocument();
   });
 
   it('scrolls to the newest message', async () => {
@@ -132,6 +184,47 @@ describe('ChatPanel', () => {
 
       await vi.waitFor(() => expect(modalAlert).toHaveBeenCalledWith('You need to login'));
       expect(box).toHaveValue('hello');
+    });
+  });
+
+  describe('after the game ends', () => {
+    const endedAt = (stopped: number) => openGame({ gamePhase: GameState.PHASE.ENDED, stopped });
+    const form = () => screen.queryByPlaceholderText('Enter a message');
+
+    it('keeps the form open for the last words', async () => {
+      await endedAt(Date.now());
+
+      renderAt(<ChatPanel />);
+
+      expect(form()).toBeVisible();
+      expect(screen.queryByText('Chat closed')).not.toBeInTheDocument();
+    });
+
+    it('swaps the form for a note once the grace is over, without a reload', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        await endedAt(Date.now() - CHAT_GRACE_MS + 1_000);
+        renderAt(<ChatPanel />);
+        expect(form()).toBeVisible();
+
+        act(() => vi.advanceTimersByTime(1_000));
+
+        expect(form()).not.toBeInTheDocument();
+        expect(screen.getByText('Chat closed')).toBeVisible();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows the note at once for a game long over, and keeps the lines', async () => {
+      const game = await endedAt(Date.now() - CHAT_GRACE_MS);
+      await Chat.insertAsync({ gameId: game._id, message: 'gg', submitted: 1, author: 'ann' });
+
+      renderAt(<ChatPanel />);
+
+      expect(form()).not.toBeInTheDocument();
+      expect(screen.getByText('Chat closed')).toBeVisible();
+      expect(screen.getByText('ann')).toBeVisible();
     });
   });
 

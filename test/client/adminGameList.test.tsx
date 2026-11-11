@@ -130,7 +130,7 @@ describe('the game list', () => {
     expect(within(row('race')).getByText('Live')).toBeVisible();
     expect(within(row('stuck')).getByText('Parked')).toBeVisible();
     expect(within(row('won')).getByText('Ended')).toBeVisible();
-    expect(within(row('stuck')).getByText('exchange · ann')).toBeVisible();
+    expect(within(row('stuck')).getByText('ann').parentElement).toHaveTextContent('exchange · ann');
   });
 
   it('says who is here in a running game, and when it last moved', async () => {

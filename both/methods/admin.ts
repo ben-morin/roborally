@@ -11,6 +11,7 @@ import {
 } from '../permissions.ts';
 import type { Doc } from '../schemas/infer.ts';
 import { checkArgsWith, schemas } from '../schemas/methods.ts';
+import { Chat } from '../../collections/chat.ts';
 import { Games } from '../../collections/games.ts';
 import { Players } from '../../collections/players.ts';
 import { canSendMail } from './accounts.ts';
@@ -244,9 +245,16 @@ export const adminDeleteUser = createMethod({
         `${getUsername(user)} is still in the game "${game.name}". Delete them once it is over; games with nobody online end by themselves within a few minutes.`
       );
     }
-    // Finished games keep their player rows and the names stamped on them; the ranking
-    // counts only accounts that exist, so the rebuild drops this one. Each live session
-    // watches its login token, so removing the document also logs the user out.
+    // A row shows the account's current name over the one it stored. With the account gone
+    // only the stored name is left, so every row takes the last name first.
+    const name = getUsername(user);
+    await Chat.updateAsync({ userId }, { $set: { author: name } }, { multi: true });
+    await Players.updateAsync({ userId }, { $set: { name } }, { multi: true });
+    await Games.updateAsync({ userId }, { $set: { author: name } }, { multi: true });
+    await Games.updateAsync({ winnerUserId: userId }, { $set: { winner: name } }, { multi: true });
+    // Finished games keep their rows; the ranking counts only accounts that exist, so the
+    // rebuild drops this one. Each live session watches its login token, so removing the
+    // document also logs the user out.
     await Meteor.users.removeAsync(userId);
     await buildHighscoresAsync();
   },
