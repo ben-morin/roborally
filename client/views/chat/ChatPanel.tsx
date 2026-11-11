@@ -22,7 +22,9 @@ const INPUT =
   'h-12 w-full rounded-control border border-white/16 bg-raised px-3.5 text-base text-white placeholder:text-muted focus:border-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
 const SEND =
   'h-12 shrink-0 cursor-pointer rounded-control border-0 bg-brand px-4 text-base font-semibold text-white hover:bg-[color-mix(in_srgb,var(--color-brand)_88%,white)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal';
-const CLOSED = 'mt-4 flex h-12 items-center justify-center text-sm text-muted';
+// The form's 48px, so nothing below moves when the chat closes. The rule inside needs `w-full`:
+// a flex column's auto side margins would shrink the empty rule to nothing but its star.
+const CLOSED = 'mt-4 flex h-12 flex-col justify-center';
 const GHOST =
   'inline-flex h-10 cursor-pointer items-center justify-center rounded-control border border-white/22 bg-transparent px-4 text-sm font-semibold text-white hover:border-white/40 hover:bg-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-white/22 disabled:hover:bg-transparent';
 
@@ -140,7 +142,11 @@ export function ChatPanel() {
         </div>
       </div>
       {chatClosed ? (
-        <p className={CLOSED}>Chat closed</p>
+        <div className={CLOSED}>
+          {/* Only the rule shows; a screen reader still hears why the form went. */}
+          <hr className="star-well my-0 w-full" />
+          <p className="sr-only">Chat closed</p>
+        </div>
       ) : (
         <form className="mt-4 flex gap-2" onSubmit={onSubmit}>
           <input

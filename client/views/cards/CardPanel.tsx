@@ -80,7 +80,8 @@ function phaseLabel(game: Game, player: Player | undefined, userId: string | nul
         case GameState.PLAY_PHASE.MOVE_BOTS:
           return 'Moving bots';
         case GameState.PLAY_PHASE.MOVE_BOARD:
-          return 'Moving board elements';
+          // Not the template's "Moving board elements": two lines shook the column every register.
+          return 'Moving board';
         case GameState.PLAY_PHASE.LASERS:
           return 'Shooting lasers';
         case GameState.PLAY_PHASE.CHECKPOINTS:

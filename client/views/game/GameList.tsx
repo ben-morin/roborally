@@ -82,7 +82,7 @@ export function GameList() {
             )}
           />
         ) : (
-          !loading && <p className={EMPTY}>No active games at the moment</p>
+          !loading && <p className={EMPTY}>No active games at the moment.</p>
         )}
       </div>
       <div className="mt-10">

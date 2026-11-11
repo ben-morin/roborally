@@ -209,7 +209,7 @@ test('a new player signs up, creates a game and plays a register', async ({ page
     // Solo game: the one submit is the last submit, so the phase machine starts at once.
     const phase = page.locator('.right-panel h3').first();
     await expect(phase).toHaveText(
-      /Revealing cards|Moving bots|Moving board elements|Shooting lasers|Checkpoints|Repairing bots/
+      /Revealing cards|Moving bots|Moving board|Shooting lasers|Checkpoints|Repairing bots/
     );
     await expect(page.locator('.announce-bar')).toBeVisible();
     // Same container query, and the same blind spot: a wrapped chip doubles the row's

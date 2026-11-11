@@ -88,6 +88,6 @@ describe('GameList', () => {
     renderAt(<GameList />);
 
     expect(screen.getByText('No open games at the moment, create one at the right.')).toBeVisible();
-    expect(screen.getByText('No active games at the moment')).toBeVisible();
+    expect(screen.getByText('No active games at the moment.')).toBeVisible();
   });
 });

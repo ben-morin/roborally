@@ -45,6 +45,9 @@ const CHIP_PENDING = 'bg-white/8 text-white/60';
 const CHIP_ACTIVE = 'bg-teal text-navy';
 const CHIP_DONE = 'bg-checkpoint-visited text-white';
 const CHIP_ROW = 'm-0 grid list-none gap-1 p-0';
+// The strip's box at game over: two 30px chip rows, the 4px between them and 6px of padding.
+const WINNER_BAR =
+  'mx-auto mb-3 flex h-19 items-center justify-center rounded-control bg-navy-deep px-4 text-center';
 
 /**
  * The board width under which the chips read their short labels. The full ones need a
@@ -130,6 +133,11 @@ export function playPhaseChips(game: Game): Chip[] {
     }
     return { name, short, state: finished ? 'done' : 'pending' };
   });
+}
+
+/** The chips as they sit between registers: every one unlit. */
+function unlit(chips: Chip[]): Chip[] {
+  return chips.map((chip): Chip => ({ ...chip, state: 'pending' }));
 }
 
 function ChipRow({
@@ -499,37 +507,35 @@ export function Board() {
   return (
     <>
       {gameEnded ? (
-        // The notice sits where the strip does, over a board that stays on screen: a
-        // finished game can still be looked at, as the template had it.
-        <div className="mb-7 text-center">
-          <h3 className="mt-0 mb-0 text-2xl">Game over</h3>
-          <hr className="star-well mt-3 mb-7" />
-          <p className="text-base">
+        // The notice takes the strip's place and its box, so the board under it stays put:
+        // a finished game can still be looked at, as the template had it. The card panel's
+        // heading already says "Game over".
+        <div className={WINNER_BAR} style={{ width: `${boardWidth}px` }}>
+          <h3 className="m-0 text-2xl leading-tight">
             <UserName userId={game.winnerUserId} name={game.winner ?? ''} /> has won the game!
-          </p>
+          </h3>
         </div>
       ) : (
-        game.announce && (
-          // `announce-bar` is contract: the browser journey waits for it to be visible. The
-          // strip is as wide as the board under it.
-          <div
-            className="announce-bar @container mx-auto mb-3 flex flex-col gap-1 rounded-control bg-navy-deep p-1.5"
-            style={{ width: `${boardWidth}px` }}
-          >
-            <ChipRow
-              chips={registerChips(game)}
-              label="Registers"
-              columns="grid-cols-5"
-              short={shortChipLabels}
-            />
-            <ChipRow
-              chips={playPhaseChips(game)}
-              label="Play phases"
-              columns="grid-cols-4"
-              short={shortChipLabels}
-            />
-          </div>
-        )
+        // `announce-bar` is contract: the browser journey reads its chips. The strip is as
+        // wide as the board under it, and stays up, unlit, while the players program, so the
+        // board does not drop when a register starts.
+        <div
+          className="announce-bar @container mx-auto mb-3 flex flex-col gap-1 rounded-control bg-navy-deep p-1.5"
+          style={{ width: `${boardWidth}px` }}
+        >
+          <ChipRow
+            chips={game.announce ? registerChips(game) : unlit(registerChips(game))}
+            label="Registers"
+            columns="grid-cols-5"
+            short={shortChipLabels}
+          />
+          <ChipRow
+            chips={game.announce ? playPhaseChips(game) : unlit(playPhaseChips(game))}
+            label="Play phases"
+            columns="grid-cols-4"
+            short={shortChipLabels}
+          />
+        </div>
       )}
       {/* `#board` is contract: the browser journey checks its position and `--tile-size`. */}
       <div id="board" ref={boardRef}>

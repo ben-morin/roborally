@@ -97,7 +97,7 @@ describe('the heading', () => {
     [GameState.PLAY_PHASE.IDLE, 'Revealing cards'],
     [GameState.PLAY_PHASE.REVEAL_CARDS, 'Revealing cards'],
     [GameState.PLAY_PHASE.MOVE_BOTS, 'Moving bots'],
-    [GameState.PLAY_PHASE.MOVE_BOARD, 'Moving board elements'],
+    [GameState.PLAY_PHASE.MOVE_BOARD, 'Moving board'],
     [GameState.PLAY_PHASE.LASERS, 'Shooting lasers'],
     [GameState.PLAY_PHASE.CHECKPOINTS, 'Checkpoints'],
     [GameState.PLAY_PHASE.REPAIRS, 'Repairing bots'],

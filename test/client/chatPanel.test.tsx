@@ -202,7 +202,7 @@ describe('ChatPanel', () => {
       expect(screen.queryByText('Chat closed')).not.toBeInTheDocument();
     });
 
-    it('swaps the form for a note once the grace is over, without a reload', async () => {
+    it('swaps the form for a star line once the grace is over, without a reload', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
         await endedAt(Date.now() - CHAT_GRACE_MS + 1_000);
@@ -212,20 +212,22 @@ describe('ChatPanel', () => {
         act(() => vi.advanceTimersByTime(1_000));
 
         expect(form()).not.toBeInTheDocument();
-        expect(screen.getByText('Chat closed')).toBeVisible();
+        expect(screen.getByText('Chat closed')).toHaveClass('sr-only');
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it('shows the note at once for a game long over, and keeps the lines', async () => {
+    it('shows the star line at once for a game long over, and keeps the lines', async () => {
       const game = await endedAt(Date.now() - CHAT_GRACE_MS);
       await Chat.insertAsync({ gameId: game._id, message: 'gg', submitted: 1, author: 'ann' });
 
       renderAt(<ChatPanel />);
 
       expect(form()).not.toBeInTheDocument();
-      expect(screen.getByText('Chat closed')).toBeVisible();
+      // A star line in the form's place; the words are for a screen reader only.
+      expect(screen.getByText('Chat closed')).toHaveClass('sr-only');
+      expect(screen.getByText('Chat closed').previousElementSibling).toHaveClass('star-well');
       expect(screen.getByText('ann')).toBeVisible();
     });
   });

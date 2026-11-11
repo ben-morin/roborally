@@ -504,15 +504,22 @@ describe('lasers', () => {
 });
 
 describe('the announce strip', () => {
-  it('shows only while the game is announcing', async () => {
-    const { game } = await openBoard({ game: { announce: false } });
+  // Up the whole game, so the board under it never drops when a register starts.
+  it('stays up, every chip unlit, while the players program, and lights up to play', async () => {
+    const { game } = await openBoard({
+      game: { announce: false, playPhaseCount: 3, playPhase: GameState.PLAY_PHASE.LASERS },
+    });
     const { rerender } = renderAt(<Board />);
-    expect(document.querySelector('.announce-bar')).toBeNull();
+    expect(document.querySelector('.announce-bar')).toBeVisible();
+    const states = () => [...chips('Registers'), ...chips('Play phases')].map((c) => c.state);
+    expect(new Set(states())).toEqual(new Set(['pending']));
+    expect(document.querySelector('[aria-current="step"]')).toBeNull();
 
     await Games.updateAsync(game._id, { $set: { announce: true } });
     rerender(<Board />);
 
-    expect(document.querySelector('.announce-bar')).toBeVisible();
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent('register 3');
+    expect(states()).toContain('done');
   });
 
   it('is as wide as the board', async () => {
@@ -734,8 +741,8 @@ describe('game over', () => {
 
     renderAt(<Board />);
 
-    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Game over');
-    expect(screen.getByText('them').parentElement).toHaveTextContent('them has won the game!');
+    // The card panel's heading says "Game over"; this one names the winner.
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('them has won the game!');
     // The notice takes the strip's place; the finished board can still be looked at.
     expect(document.querySelector('.announce-bar')).toBeNull();
     expect(board().querySelectorAll('span.tile').length).toBeGreaterThan(0);
