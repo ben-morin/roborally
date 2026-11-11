@@ -2,6 +2,7 @@ import './config.ts';
 import { createMethod } from 'meteor/jam:method';
 import { BoardBox } from '../board_box.ts';
 import { CardLogic, startTimerIfLastOwingAsync } from '../cardlogic.ts';
+import { gameNameProblem } from '../gameName.ts';
 import { GameLogic } from '../gamelogic.ts';
 import { GameState, buildHighscoresAsync } from '../gamestate.ts';
 import { getUsername } from '../permissions.ts';
@@ -94,17 +95,16 @@ export const createGame = createMethod({
     const user = (await Meteor.userAsync())!;
 
     // The schema says `String`, which accepts the empty one; v1 of the schemas uses plain
-    // types only, so the name's own rule stays here.
-    if (!postAttributes.name || postAttributes.name === '') {
-      throw new Meteor.Error(400, 'Name cannot be empty.');
-    }
+    // types only, so the name's own rule stays here, shared with the forms.
+    const problem = gameNameProblem(postAttributes.name);
+    if (problem) throw new Meteor.Error(400, problem);
     const author = getUsername(user);
 
     // Every game opens on `default`; the owner picks another board from board select. The
     // name used to double as a board lookup, which was the only way onto a dev board.
     const board = BoardBox.getBoard('default');
     const game = {
-      name: postAttributes.name,
+      name: postAttributes.name.trim(),
       userId: user._id,
       author,
       submitted: new Date().getTime(),

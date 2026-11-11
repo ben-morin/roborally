@@ -20,6 +20,7 @@ const ADMIN_EMAIL = 'admin@example.com';
 const call = (name, ...args) => Meteor.callAsync(name, ...args);
 const endGame = (gameId) => call('adminEndGame', { gameId });
 const deleteGame = (gameId) => call('adminDeleteGame', { gameId });
+const renameGame = (gameId, name = 'Sunday Race') => call('adminRenameGame', { gameId, name });
 const messages = async (gameId) => (await Chat.find({ gameId }).fetchAsync()).map((c) => c.message);
 const ranking = async (type) =>
   (await Highscores.find({ type }).fetchAsync())
@@ -78,6 +79,7 @@ afterEach(() => vi.restoreAllMocks());
 describe.each([
   ['adminEndGame', endGame],
   ['adminDeleteGame', deleteGame],
+  ['adminRenameGame', renameGame],
 ])('%s', (name, action) => {
   it('refuses an anonymous caller', async () => {
     setSettings({ ADMIN_EMAILS: [ADMIN_EMAIL] });
@@ -242,5 +244,36 @@ describe('adminDeleteGame', () => {
 
     expect(await ranking('mostWon')).toEqual([{ name: 'bob', value: 2 }]);
     expect(await ranking('mostPlayed')).toEqual([{ name: 'bob', value: 2 }]);
+  });
+});
+
+describe('adminRenameGame', () => {
+  beforeEach(() => asAdmin());
+
+  it.each([
+    ['a lobby', { started: false, gamePhase: GameState.PHASE.IDLE }],
+    ['a running game', {}],
+    ['a game that is over', { gamePhase: ENDED, winner: 'ann', winnerUserId: 'ann' }],
+  ])('renames %s, trimmed, and moves nothing else', async (_, fields) => {
+    const game = await gameWithRows({ gamePhase: PROGRAM, ...fields });
+    const before = await rowsOf(game._id);
+
+    await renameGame(game._id, '  Sunday Race  ');
+
+    expect(await rowsOf(game._id)).toEqual({
+      ...before,
+      game: { ...before.game, name: 'Sunday Race' },
+    });
+  });
+
+  it.each([
+    ['an empty name', '   ', 'Name cannot be empty.'],
+    ['a name over 40 characters', 'x'.repeat(41), 'Name must be at most 40 characters long.'],
+  ])('refuses %s and keeps the old one', async (_, name, reason) => {
+    const game = await gameWithRows();
+
+    await expect(renameGame(game._id, name)).rejects.toMatchObject({ error: 400, reason });
+
+    expect((await Games.findOneAsync(game._id)).name).toBe('Race');
   });
 });

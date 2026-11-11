@@ -5,6 +5,7 @@ import type { FormEvent } from 'react';
 import type { Mongo } from 'meteor/mongo';
 import { Link, useNavigate } from 'react-router';
 import { useSubscribe, useTracker } from 'meteor/react-meteor-data';
+import { GAME_NAME_MAX } from '../../../both/gameName.ts';
 import { createGame } from '../../../both/methods/games.ts';
 import { Games } from '../../../collections/games.ts';
 import type { GameDoc } from '../../../collections/games.ts';
@@ -57,6 +58,7 @@ export function CreateGameForm() {
             className={INPUT}
             name="name"
             type="text"
+            maxLength={GAME_NAME_MAX}
             placeholder="The name of your game"
             value={name}
             onChange={(event) => setName(event.target.value)}

@@ -39,6 +39,15 @@ describe('CreateGameForm', () => {
     await vi.waitFor(() => expect(navigations_()).toEqual(['/games/new-id']));
   });
 
+  it('stops the name at 40 characters as it is typed', async () => {
+    renderAt(<CreateGameForm />);
+    const field = screen.getByPlaceholderText('The name of your game');
+
+    await userEvent.type(field, 'x'.repeat(45));
+
+    expect(field).toHaveValue('x'.repeat(40));
+  });
+
   it('reports a rejected creation instead of navigating', async () => {
     vi.spyOn(Meteor, 'callAsync').mockRejectedValue({ reason: 'Name cannot be empty.' });
 

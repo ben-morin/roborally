@@ -299,6 +299,31 @@ describe('the actions', () => {
     );
   });
 
+  it('renames the game from the name field, with nothing to dismiss', async () => {
+    await both();
+    const field = screen.getByLabelText('Name');
+    expect(field).toHaveValue('Friday Race');
+    expect(field).toHaveAttribute('maxLength', '40');
+
+    fireEvent.change(field, { target: { value: 'Sunday Race' } });
+    fireEvent.click(button('Rename')!);
+
+    await vi.waitFor(async () => expect((await stored())!.name).toBe('Sunday Race'));
+    await tick();
+    expect(modalConfirm).not.toHaveBeenCalled();
+    expect(modalAlert).not.toHaveBeenCalled();
+  });
+
+  it('shows a refused name as the server worded it', async () => {
+    await both();
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: ' ' } });
+    fireEvent.click(button('Rename')!);
+
+    await vi.waitFor(() => expect(modalAlert).toHaveBeenCalledWith('Name cannot be empty.'));
+    expect((await stored())!.name).toBe('Friday Race');
+  });
+
   it('shows a refusal as the server worded it', async () => {
     // The screen still shows it running; the server already has it over.
     await AdminGames.insertAsync(game());

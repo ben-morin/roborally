@@ -46,6 +46,7 @@ describe('method registration', () => {
       'adminDeleteUser',
       'adminEndGame',
       'adminLogoutUser',
+      'adminRenameGame',
       'adminSendResetEmail',
       'adminSendVerificationEmail',
       'adminSetPassword',
@@ -120,7 +121,21 @@ describe('createGame', () => {
   it('refuses an empty name', async () => {
     await loginAs();
     await expect(call('createGame', { name: '' })).rejects.toMatchObject({ error: 400 });
-    await expect(call('createGame', {})).rejects.toMatchObject({ error: 400 });
+    await expect(call('createGame', { name: '   ' })).rejects.toMatchObject({ error: 400 });
+    // No `{}` case: a missing name is the schema's to refuse, and the stub validates nothing.
+  });
+
+  it('refuses a name over 40 characters, and keeps one of 40 trimmed', async () => {
+    await loginAs();
+
+    await expect(call('createGame', { name: 'x'.repeat(41) })).rejects.toMatchObject({
+      error: 400,
+      reason: 'Name must be at most 40 characters long.',
+    });
+    expect(await Games.find().countAsync()).toBe(0);
+
+    const gameId = await call('createGame', { name: `  ${'x'.repeat(40)}  ` });
+    expect((await Games.findOneAsync(gameId)).name).toBe('x'.repeat(40));
   });
 
   it('creates an idle game owned by the caller and seats them', async () => {

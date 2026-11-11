@@ -1,5 +1,6 @@
 import './config.ts';
 import { createMethod } from 'meteor/jam:method';
+import { gameNameProblem } from '../gameName.ts';
 import { buildHighscoresAsync } from '../gamestate.ts';
 import {
   adminCreatingUser,
@@ -342,5 +343,20 @@ export const adminDeleteGame = createMethod({
     // "Most played" counts the player rows of every game, a lobby's too, and "most won"
     // counts the winner — so any delete can move either list.
     await buildHighscoresAsync();
+  },
+});
+
+// Any game, at any stage: nothing in the turn chain reads the name, and a `$set` of it moves
+// no `step`, so a driver mid-turn claims on as before.
+export const adminRenameGame = createMethod({
+  name: 'adminRenameGame',
+  validate: checkArgsWith(schemas.adminRenameGame),
+  async run({ gameId, name }: Doc<typeof schemas.adminRenameGame>) {
+    const admin = await requireAdminAsync();
+    const game = await findGameAsync(gameId);
+    const problem = gameNameProblem(name);
+    if (problem) throw new Meteor.Error(400, problem);
+    await Games.updateAsync(game._id, { $set: { name: name.trim() } });
+    console.log(`Admin ${getUsername(admin)} renamed game ${gameId}`);
   },
 });
