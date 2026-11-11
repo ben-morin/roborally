@@ -185,7 +185,7 @@ describe('the game panel', () => {
       '· line 4 6m',
       '· line 5 5m',
       '· line 6 4m',
-      'ann line 7 3m',
+      'ann · line 7 3m',
     ]);
     // The admin is not in the game, so no name is the viewer's own.
     expect(screen.getByText('ann', { selector: '.font-semibold' })).not.toHaveClass('text-teal');

@@ -69,6 +69,8 @@ describe('ChatPanel', () => {
     const { container } = renderAt(<ChatPanel />);
 
     expect(screen.getByText('me')).toBeVisible();
+    // A middot sits between a player's name and the message.
+    expect(screen.getByText('me').parentElement).toHaveTextContent(/^me · hello$/);
     const system = container.querySelectorAll('.messages .system');
     expect(system).toHaveLength(1);
     // `.messages .system` and the display name in it are what the browser journey matches.
@@ -109,7 +111,7 @@ describe('ChatPanel', () => {
     expect(screen.getAllByText('me')).toHaveLength(1);
     // The name's line, then the group's text column that holds both messages.
     expect(screen.getByText('me').parentElement!.parentElement).toHaveTextContent(
-      /me hello.*again/
+      /me · hello.*again/
     );
     expect(container.querySelectorAll('.messages time')).toHaveLength(2);
     // The viewer's own name is the teal one.

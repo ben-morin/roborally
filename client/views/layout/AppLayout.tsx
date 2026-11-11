@@ -83,7 +83,7 @@ function Landing() {
         {/* An h2 reading "roborally": the browser journey's first assertion. */}
         <h2 className="mt-0 mb-0 text-5xl">roborally</h2>
         <hr className={STAR} />
-        <p className="mx-auto mt-0 mb-0 max-w-[640px] text-xl leading-normal">
+        <p className="mx-auto mt-0 mb-0 max-w-[640px] text-xl leading-normal text-muted">
           A chaotic, competitive board game designed by Richard Garfield where players secretly
           program a sequence of movement cards to race their malfunctioning robots through a
           hazardous, obstacle-filled factory floor.
@@ -94,7 +94,7 @@ function Landing() {
         {hash && <p className="mt-1 mb-0 font-mono text-[13px] text-muted">{hash}</p>}
         <h3 className="mt-14 mb-0 text-2xl">Source</h3>
         <hr className={STAR} />
-        <p className="mt-0 mb-5 text-base">
+        <p className="mt-0 mb-5 text-base text-muted">
           Based on original <a href="https://github.com/marcelpanse/roborally">work</a> by Marcel
           Panse and the <a href="https://github.com/blinkingnoise/roborally">fork</a> by Tom Hlina.
         </p>

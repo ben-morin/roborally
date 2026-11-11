@@ -40,7 +40,7 @@ export function ChatLines({ lines, viewerId }: ChatLinesProps) {
                   name={head.author}
                   className={head.userId === viewerId ? OWN_AUTHOR : AUTHOR}
                 />{' '}
-                {head.message}
+                <span aria-hidden="true">·</span> {head.message}
               </div>
               {rest.map((line) => (
                 <div key={line._id} className={FOLLOW}>
