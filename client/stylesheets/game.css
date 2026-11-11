@@ -229,16 +229,6 @@
     background: #f00;
   }
 
-  .highscores {
-    text-align: left;
-    padding-left: 60px;
-    padding-right: 60px;
-
-    h2 {
-      text-align: center;
-    }
-  }
-
   @keyframes fadeInAndOut {
     0%,
     50%,

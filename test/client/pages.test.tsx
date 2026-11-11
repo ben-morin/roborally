@@ -49,11 +49,12 @@ describe('the pages', () => {
     expect(panels()).toHaveLength(3);
   });
 
-  it('/ranking is the two highscore lists, with the chat on the right', () => {
+  it('/ranking is the ranking, a tab per list, with the chat on the right', () => {
     open('/ranking');
 
-    expect(screen.getByRole('heading', { name: 'Most games played' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Most games won' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Ranking' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Most wins' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Most games' })).toBeVisible();
     expect(rightPanel()).toContainElement(screen.getByRole('heading', { name: 'Chat' }));
     expect(panels()).toHaveLength(2);
   });

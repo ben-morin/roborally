@@ -158,6 +158,10 @@
   --color-position-select: #67a50a;
   /* Readable red on navy: Bootstrap's `red` failed contrast there. */
   --color-error: #ff8a7a;
+  /* The ranking podium's medals; each clears 4.5:1 on navy as text. */
+  --color-medal-gold: #f0c24b;
+  --color-medal-silver: #c9d1d9;
+  --color-medal-bronze: #e39d63;
   /* Hairlines and the raised surface every list row, input and chip sits on. */
   --color-line: rgba(255, 255, 255, 0.12);
   --color-raised: rgba(255, 255, 255, 0.06);
